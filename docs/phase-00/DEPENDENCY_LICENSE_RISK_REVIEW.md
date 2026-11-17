@@ -20,7 +20,7 @@ The governing PRD Phase 00 requires an asset/dependency/license inventory. PRD Â
 
 .github/workflows/dependency-license-review.yml runs on demand and when dependency manifests/lockfile or audit script change. It installs the committed Bun lockfile in frozen mode, scans the installed dependency tree using @lizenz/checker, collects license texts, reconciles exact package name/version coordinates against the SBOM, generates JSON and Markdown evidence, uploads an artifact, and commits generated reports to main only when changed.
 
-A mismatch between the installed tree and SBOM fails the audit rather than silently omitting packages.
+The installed tree is not expected to contain every optional platform-specific package. The scanner reconciles the installed tree plus registry fallback evidence against the exact SBOM coordinates; missing package metadata or unresolved registry lookups fail the job rather than silently omitting packages.
 
 ## Risk triage rules
 
