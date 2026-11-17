@@ -100,7 +100,7 @@ These are not marked complete. If the connector cannot expose a configuration ca
 |---|---|---|---|
 | P00-AC-01 | PRD/Blueprint/AGENTS authority and phase sequence are explicit. | Source references and repo governance docs | PARTIAL |
 | P00-AC-02 | Repository tree and application boundaries inventoried. | Recursive tree SHA, count, path inventory | PARTIAL — structural tree captured; source-level review pending |
-| P00-AC-03 | Dependency, license-risk, environment-name, asset and design-token inventory complete. | Generated inventories, license-risk reconciliation, notice/attribution evidence, token map | PARTIAL — 1,037-package inventory exists and automated license-risk workflow is committed; package results await workflow execution; full asset metadata/usage remains pending |
+| P00-AC-03 | Dependency, license-risk, environment-name, asset and design-token inventory complete. | Generated inventories, license-risk reconciliation, notice/attribution evidence, token map | PARTIAL — 1,037-package inventory exists and automated license-risk workflow is committed; workflow reconciles all 1,037 coordinates (960 installed + 77 registry fallback); 988 license texts bundled; 26 LGPL/MPL, 5 manual and 40 missing-license-file entries remain for package-level disposition; full asset metadata/usage remains pending |
 | P00-AC-04 | Portal-to-domain-to-API ownership agreed. | This matrix plus owner sign-off and route inventory | PARTIAL — proposed boundaries documented; endpoint inventory and owner sign-off pending |
 | P00-AC-05 | Supabase schema, migration history, extensions, RLS, grants, functions, triggers, Storage and Realtime reviewed. | Read-only SQL outputs, advisor snapshots, config evidence | PARTIAL — project catalogs reviewed; configuration categories listed above open |
 | P00-AC-06 | Security Advisor findings disposition approved. | Finding, impact analysis, remediation approval/commit and re-advisor evidence | OPEN |
@@ -128,3 +128,8 @@ A targeted security fix removed the server-only Maps key fallback from `app/api/
 ## 9. Dependency/license review implementation — 2026-11-18
 
 A proportionate Dependency & License Risk Review has been added at `docs/phase-00/DEPENDENCY_LICENSE_RISK_REVIEW.md`. The automated scanner and GitHub Actions workflow are committed at `scripts/audit-dependency-licenses.mjs` and `.github/workflows/dependency-license-review.yml`. The workflow scans installed direct/transitive/development packages, reconciles exact package coordinates against the 1,037-component SBOM, records license and NOTICE/COPYING evidence, and publishes a per-package report. **The workflow has not yet been executed in this session; no license classifications or keep/replace decisions are claimed. P00-AC-03 remains PARTIAL.**
+
+
+## 10. Dependency/license automated results — 2026-11-18
+
+GitHub Actions run `44138463292` completed successfully. Exact SBOM reconciliation: 1,037/1,037 packages; 960 installed-tree packages plus 77 platform-specific registry fallbacks; zero unresolved registry lookups. Risk counts: 966 permissive/attribution-check, 26 LGPL/MPL review, 5 manual-expression review, 40 declared MIT/Apache packages without a detected package LICENSE file. 988 license texts are consolidated in `docs/phase-00/reports/THIRD_PARTY_LICENSES.generated.md`; two NOTICE files were detected and retained. See `docs/phase-00/DEPENDENCY_LICENSE_FINDINGS_2026-11-18.md` and machine report. P00-AC-03 remains PARTIAL pending review of 26/5/40 entries and attribution/distribution decisions.
