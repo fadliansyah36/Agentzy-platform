@@ -90,16 +90,22 @@ export function AIWorkforcePortalClient({
         )}
 
         {portal.activeSection === 'content-studio' && (
-          <ContentStudioView
-            artifacts={portal.contentArtifacts}
-            selectedArtifact={portal.selectedArtifact}
-            chatMessages={portal.contentChat}
-            isGenerating={portal.isGeneratingContent}
-            error={portal.contentError}
-            onSelectArtifact={portal.setSelectedArtifactId}
-            onGenerate={portal.handleGenerateContentArtifact}
-            onShowToast={portal.showToast}
-          />
+          portal.selectedArtifact ? (
+            <ContentStudioView
+              artifacts={portal.contentArtifacts}
+              selectedArtifact={portal.selectedArtifact}
+              chatMessages={portal.contentChat}
+              isGenerating={portal.isGeneratingContent}
+              error={portal.contentError}
+              onSelectArtifact={portal.setSelectedArtifactId}
+              onGenerate={portal.handleGenerateContentArtifact}
+              onShowToast={portal.showToast}
+            />
+          ) : (
+            <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">
+              Belum ada artefak tersimpan. Hubungkan Content Studio ke endpoint AI Gateway untuk mulai membuat dan menyimpan konten.
+            </div>
+          )
         )}
 
         {portal.activeSection === 'workers' && (
@@ -115,7 +121,7 @@ export function AIWorkforcePortalClient({
         )}
 
         {portal.activeSection === 'worker-detail' && (
-          <AIWorkerDetailView
+          portal.selectedWorker ? <AIWorkerDetailView
             worker={portal.selectedWorker}
             allWorkers={portal.aiWorkers}
             onSelectWorker={(id) => portal.setSelectedWorkerId(id)}
@@ -128,7 +134,7 @@ export function AIWorkforcePortalClient({
             }
             onCreateNewVersion={portal.handleCreateNewWorkerVersion}
             onRollbackVersion={portal.handleRollbackWorkerVersion}
-          />
+          /> : <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Belum ada AI Worker pada tenant ini.</div>
         )}
 
         {portal.activeSection === 'worker-studio' && (
@@ -182,7 +188,7 @@ export function AIWorkforcePortalClient({
               portal.setModal({ type: 'handoff-assign', handoffId })
             }
             onNavigate={portal.navigateTo}
-          />
+          /> : <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Belum ada workflow yang dikonfigurasi untuk tenant ini.</div>
         )}
 
         {portal.activeSection === 'human-ai-binding' && (
@@ -201,7 +207,7 @@ export function AIWorkforcePortalClient({
         )}
 
         {portal.activeSection === 'workflows' && (
-          <WorkflowCenterView
+          portal.selectedWorkflow ? <WorkflowCenterView
             workflows={portal.workflows}
             selectedWorkflowId={portal.selectedWorkflow.id}
             onSelectWorkflow={portal.setSelectedWorkflowId}
@@ -215,7 +221,7 @@ export function AIWorkforcePortalClient({
         )}
 
         {portal.activeSection === 'workflow-builder' && (
-          <WorkflowBuilderView
+          portal.selectedWorkflow ? <WorkflowBuilderView
             workflows={portal.workflows}
             selectedWorkflow={portal.selectedWorkflow}
             onSelectWorkflow={portal.setSelectedWorkflowId}
@@ -223,7 +229,7 @@ export function AIWorkforcePortalClient({
               portal.setModal({ type: 'add-workflow-node', workflowId })
             }
             onExecuteWorkflow={portal.handleExecuteWorkflow}
-          />
+          /> : <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Buat workflow pertama untuk membuka Workflow Builder.</div>
         )}
 
         {portal.activeSection === 'runs' && (
