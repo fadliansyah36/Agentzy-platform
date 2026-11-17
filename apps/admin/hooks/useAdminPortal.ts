@@ -260,7 +260,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     const canReadDirectory = auth.identity?.memberships.some((membership) =>
       membership.permissions.includes('platform.tenants.read')
     );
-    if (!accessToken || !canReadDirectory) return;
+    if (!accessToken || auth.aal !== 'aal2' || !canReadDirectory) return;
     let active = true;
     void listPlatformTenants(accessToken).then((rows) => {
       if (!active) return;
@@ -286,7 +286,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat direktori tenant.');
     });
     return () => { active = false; };
-  }, [auth.session?.access_token, auth.identity, showToast]);
+  }, [auth.session?.access_token, auth.identity, auth.aal, showToast]);
 
   const handleLogin = useCallback(
     async (email: string, password: string, mfaCode: string) => {
