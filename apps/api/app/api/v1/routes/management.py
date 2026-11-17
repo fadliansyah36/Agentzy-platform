@@ -183,3 +183,59 @@ async def invite_tenant_member(
                "request_id": request.headers.get("x-request-id"), "ip": request.client.host if request.client else None,
                "email": payload.email.strip().lower(), "role_key": role_key})
     return {**membership, "email": payload.email.strip().lower(), "role_key": role_key, "invitation_status": "sent"}
+
+
+@router.get("/roles", tags=["Access Control"])
+async def list_role_templates(
+    claims: dict = Depends(current_claims),
+    session: AsyncSession = Depends(user_session),
+):
+    user_id = UUID(claims["sub"])
+    allowed = await _has_platform_permission(session, user_id, "platform.roles.read")
+    if not allowed:
+        result = await session.execute(text("""
+            select exists (
+              select 1 from public.memberships m
+              join public.membership_roles mr on mr.membership_id=m.id
+              join public.role_permissions rp on rp.role_id=mr.role_id
+              where m.user_id=:user_id and m.status='active'
+                and rp.permission_key='corporate.organization.read'
+            )
+        """), {"user_id": user_id})
+        allowed = bool(result.scalar_one())
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
+    result = await session.execute(text("""
+        select r.id,r.key,r.name,r.description,r.is_system,
+               coalesce(array_agg(rp.permission_key) filter (where rp.permission_key is not null),'{}') as permissions
+        from public.roles r left join public.role_permissions rp on rp.role_id=r.id
+        where r.tenant_id is null
+        group by r.id order by r.key
+    """))
+    return [dict(row) for row in result.mappings().all()]
+
+
+@router.get("/tenants/{tenant_id}/memberships", tags=["Membership"])
+async def list_tenant_memberships(
+    tenant_id: UUID,
+    claims: dict = Depends(current_claims),
+    session: AsyncSession = Depends(user_session),
+):
+    user_id = UUID(claims["sub"])
+    allowed = await _has_tenant_permission(
+        session, user_id, tenant_id, ("corporate.organization.read","platform.memberships.read")
+    )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Missing tenant membership read permission.")
+    result = await session.execute(text("""
+        select m.id,m.tenant_id,m.user_id,p.display_name,m.status,m.joined_at,m.created_at,
+               coalesce(array_agg(distinct r.key) filter (where r.key is not null),'{}') as role_keys
+        from public.memberships m
+        left join public.profiles p on p.user_id=m.user_id
+        left join public.membership_roles mr on mr.membership_id=m.id
+        left join public.roles r on r.id=mr.role_id
+        where m.tenant_id=:tenant_id
+        group by m.id,p.display_name
+        order by m.created_at desc
+    """), {"tenant_id": tenant_id})
+    return [dict(row) for row in result.mappings().all()]
