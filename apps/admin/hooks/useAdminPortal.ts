@@ -135,7 +135,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [routingRules, setRoutingRules] = useState<ModelRoutingRuleRecord[]>(initial.routingRules);
   const [skills, setSkills] = useState<SkillRegistryRecord[]>(initial.skills);
   const [tools, setTools] = useState<ToolRegistryRecord[]>(initial.tools);
-  const [memoryPolicy, setMemoryPolicy] = useState<MemoryGovernancePolicy>(initial.memoryPolicy);
+  const [memoryPolicy, setMemoryPolicy] = useState<MemoryGovernancePolicy | null>(initial.memoryPolicy);
   const [memoryLayers, setMemoryLayers] = useState<MemoryLayerRecord[]>(initial.memoryLayers);
   const [knowledgeSources, setKnowledgeSources] = useState<KnowledgeSourceRecord[]>(
     initial.knowledgeSources
