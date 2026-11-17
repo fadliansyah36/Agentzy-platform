@@ -13,32 +13,44 @@ import {
   Mail,
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
-import { CORPORATE_TENANTS } from '../../lib/corporate-data';
 
 export function CorporateLoginView({
-  initialTenantId,
   onLogin,
 }: {
-  initialTenantId: string;
-  onLogin: (tenantId: string, email: string, method: 'password' | 'sso') => void;
+  onLogin: (email: string, password: string, method: 'password' | 'sso') => Promise<void>;
 }) {
-  const [selectedTenantId, setSelectedTenantId] = useState(initialTenantId);
-  const [email, setEmail] = useState('corp@isp.co.id');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const selectedTenant =
-    CORPORATE_TENANTS.find((t) => t.id === selectedTenantId) ?? CORPORATE_TENANTS[0];
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setErrorMsg('Email perusahaan dan kata sandi wajib diisi.');
       return;
     }
     setErrorMsg(null);
-    onLogin(selectedTenantId, email.trim(), 'password');
+    setIsSubmitting(true);
+    try {
+      await onLogin(email.trim(), password, 'password');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Autentikasi gagal.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSso = async () => {
+    setErrorMsg(null);
+    setIsSubmitting(true);
+    try {
+      await onLogin(email.trim(), '', 'sso');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'SSO tidak dapat dimulai.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -147,9 +159,10 @@ export function CorporateLoginView({
 
             <button
               type="submit"
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white transition hover:bg-[#0369A1]"
+              disabled={isSubmitting}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white transition hover:bg-[#0369A1] disabled:opacity-60"
             >
-              <span>Masuk</span>
+              <span>{isSubmitting ? 'Memverifikasi…' : 'Masuk'}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
@@ -162,42 +175,15 @@ export function CorporateLoginView({
 
           <button
             type="button"
-            onClick={() => onLogin(selectedTenantId, email.trim() || 'sso@isp.co.id', 'sso')}
+            onClick={handleSso}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-[#B8C9D3] bg-white text-sm font-semibold text-[#17324D] transition hover:bg-[#E6F4F9]"
           >
             <ShieldCheck className="h-4 w-4 text-[#0284C7]" />
             <span>Masuk dengan SSO</span>
           </button>
 
-          {/* Tenant / Perusahaan Selector */}
-          <div className="mt-6 border-t border-[#EAF2F6] pt-5">
-            <label
-              htmlFor="tenant-selector"
-              className="mb-2 block text-xs font-semibold text-[#172B3A]"
-            >
-              Pilih Tenant / Perusahaan
-            </label>
-            <div className="relative">
-              <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-lg bg-[#E6F4F9] text-[#0284C7]">
-                <Building2 className="h-4 w-4" />
-              </div>
-              <select
-                id="tenant-selector"
-                value={selectedTenantId}
-                onChange={(e) => setSelectedTenantId(e.target.value)}
-                className="h-14 w-full appearance-none rounded-[12px] border border-[#D8E3E9] bg-[#F5F8FA] pl-12 pr-10 text-sm font-bold text-[#17324D] outline-none transition focus:border-[#0284C7] focus:bg-white"
-              >
-                {CORPORATE_TENANTS.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} (ID: {t.code} · {t.status})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#526675]" />
-            </div>
-            <p className="mt-2 text-xs text-[#526675]">
-              {selectedTenant.legalName} · {selectedTenant.region}
-            </p>
+          <div className="mt-6 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3.5 py-3 text-xs leading-relaxed text-[#526675]">
+            Tenant dan hak akses akan ditentukan otomatis dari membership akun yang diverifikasi oleh Agentzy API.
           </div>
 
           <div className="mt-5 flex items-center justify-between text-xs text-[#526675]">
