@@ -42,6 +42,10 @@ export function AdminPortalClient({
 }) {
   const portal = useAdminPortal(initialSection);
 
+  if (portal.authLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#F5F8FA] text-sm font-medium text-[#526675]">Memverifikasi sesi Agentzy…</div>;
+  }
+
   if (!portal.isAuthenticated || portal.activeSection === 'login') {
     return (
       <AdminLoginView
