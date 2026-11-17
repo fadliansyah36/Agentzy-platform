@@ -4,6 +4,9 @@ Baseline: Master PRD v2.0 + Technical Implementation Blueprint v1.0
 Repository: `fadliansyah36/Agentzy-platform`, branch `main`
 Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_HEALTHY` on 2026-11-17. Live baseline inspection is in progress; connection does not authorize migrations.
 
+
+> **Frontend structure authority:** Use [`docs/phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md`](phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md) for the verified existing frontend folder mapping. This corrects frontend folder references only; all prescribed backend/API and platform infrastructure paths remain unchanged.
+
 ## 1. Audit findings and blockers
 
 **Phase 00 status: IN PROGRESS.** Governance artifacts are being finalized; repository/source, dependency/license, Supabase configuration and security acceptance gates remain open. See `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md`.
