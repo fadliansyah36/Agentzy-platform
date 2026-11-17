@@ -23,3 +23,14 @@ Repository implementation baseline for the Agentzy platform.
 - Follow PRD phases 00–23 and record evidence; full UAT, staging, load/security acceptance and release gate belong to Phase 22.
 
 Phase 00 governance and baseline work is in progress. Connector access is available; this is not a claim that the database or application is migration-ready.
+
+
+## Backend service
+
+- FastAPI modular monolith: `apps/api/` (Python 3.12+).
+- Supabase schema and ordered migrations: `supabase/migrations/`; canonical project config: `supabase/config.toml`.
+- Frontend Auth/session and typed API transport: `apps/web/lib/auth/` and `apps/web/lib/api-client.ts`.
+- API container build: `docker build -t agentzy-api apps/api`.
+- Required frontend variables: `NEXT_PUBLIC_AGENTZY_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- Required private API variables: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PLATFORM_BOOTSTRAP_TOKEN`, `APP_BASE_URL`, plus JWT settings. See `apps/api/README.md`.
+- First platform administrator: open `/bootstrap` after deploying the API and setting its private bootstrap token; enroll TOTP at `/mfa-setup` before Super Admin access.
