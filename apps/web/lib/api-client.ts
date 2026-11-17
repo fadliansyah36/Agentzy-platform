@@ -101,3 +101,16 @@ export type AgentzyPlatformTenant = {
 
 export const listPlatformTenants = (accessToken: string) =>
   apiRequest<AgentzyPlatformTenant[]>("/tenants/directory", { method: "GET", accessToken });
+
+
+export type UpdateTenantInput = Partial<CreateTenantInput> & { status?: 'pending' | 'active' | 'suspended' | 'archived' };
+
+export const updateTenant = (accessToken: string, tenantId: string, payload: UpdateTenantInput) =>
+  apiRequest<AgentzyPlatformTenant>(`/tenants/${encodeURIComponent(tenantId)}`, {
+    method: "PATCH", accessToken, body: JSON.stringify(payload),
+  });
+
+export const archiveTenant = (accessToken: string, tenantId: string) =>
+  apiRequest<{ id: string; name: string; slug: string; status: string }>(
+    `/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE", accessToken },
+  );
