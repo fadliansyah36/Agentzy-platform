@@ -413,3 +413,36 @@ Allowed statuses: `NOT STARTED`, `IN PROGRESS`, `BLOCKED`, `READY FOR PHASE 22`,
 Every task records: owner, priority, dependency, commit SHA, changed paths, migration and remote evidence, endpoint/OpenAPI operation, permission/RLS, UI route/API binding, event/integration, observability, checks actually run, known limitations.
 
 `DONE` requires evidence; never infer completion from UI screens, seed data, HTTP 200 or table existence.
+
+## 10. Execution re-audit update — 2026-11-18
+
+Latest verified evidence is recorded in docs/phase-00/PHASE00_REAUDIT_DELTA_2026-11-18.md. This update supersedes earlier recursive-tree counts in the backlog where they differ.
+
+- GitHub main head at audit: 71bc1920afdec076f4818dc092a9fcdd4e417a46; recursive tree: 1,302 entries (101 directories, 1,201 files), truncated=false.
+- Existing portal source remains in root app/ and apps/{admin,corporate,ai-workforce}; do not create duplicate portal folders.
+- No apps/api/, supabase/, packages/api-client/, packages/api-contracts/, packages/design-tokens/, services/, workers/, or infrastructure/ exists in the current tree.
+- Canonical Supabase project cwhjdnkotuhueeudpgeu remains ACTIVE_HEALTHY; Agentzy migration history is empty and public application relations remain absent.
+- Read-only catalog recheck: zero public/storage policies, zero Storage buckets and objects, zero auth.users, supabase_realtime publication exists with no application tables attached, and installed extensions include vector 0.8.2.
+- Security Advisor still reports two WARN findings for public.rls_auto_enable(); event trigger ensure_rls remains enabled. No database change was made.
+- Performance Advisor returned no lints.
+
+### Phase 00 task/status correction
+
+Phase 00 remains IN PROGRESS. Connector access blockers are resolved, but this does not imply implementation or migration readiness.
+
+| Gate | Current status | Remaining closure work |
+|---|---|---|
+| P00-AC-01 | PARTIAL | Final governance/sign-off evidence. |
+| P00-AC-02 | PARTIAL | Complete source-level route/action/component ownership and environment scan. |
+| P00-AC-03 | PARTIAL | Disposition 26 LGPL/MPL, 5 manual-expression and 40 missing-license-text records; verify asset dimensions/provenance/use and deployment environment names. |
+| P00-AC-04 | PARTIAL | Complete portal screen/action → domain → API ownership and owner approval. |
+| P00-AC-05 | PARTIAL | Obtain authoritative Auth/Data API/Storage configuration evidence and finish ACL/default-privilege review. |
+| P00-AC-06 | OPEN | Resolve two Security Advisor WARNs and fail-open RLS event-trigger behavior through a reviewed, evidence-backed decision. |
+| P00-AC-07 | COMPLETE | ADR register is aligned; selected future decisions remain open under their relevant phases. |
+| P00-AC-08 | PARTIAL | Complete M000–M220 reconciliation and M000 sign-off. |
+| P00-AC-09 | OPEN | Complete Phase 00 Definition of Done evidence. |
+| P00-AC-10 | OPEN | Phase 01 readiness and sign-off. |
+
+### Execution guard
+
+No Phase 01 task may be marked IN PROGRESS until Phase 00 mandatory gates are signed off. No Phase 00 migration or synthetic M000 schema may be applied. Do not modify production Supabase ACL/function/trigger state while the event-trigger privilege semantics and approved remediation are unresolved. No staging, UAT, real-world, load, security-acceptance, or production release testing is permitted before Phase 22; minimum engineering checks remain mandatory during implementation.
