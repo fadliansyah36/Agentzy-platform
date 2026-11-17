@@ -477,3 +477,38 @@ These findings are implementation requirements, not authorization to bypass phas
 Phase 01 is IN PROGRESS, not complete. Only platform identity/tenant foundations are delivered. Existing portal hooks/services still contain local INITIAL_* data and fixed authentication defaults; the typed API client is not yet wired through every screen/action. Remaining Phase 00 inventory and Supabase configuration evidence will be completed just-in-time where they affect security or the next migration, rather than used as an open-ended blocker.
 
 No staging, UAT, real-world, load, security acceptance or production release test was run. Runtime/build/lint checks have not yet been executed in this continuation. The next work is to connect the existing login/session lifecycle to Supabase Auth and FastAPI identity/tenant resolution, then replace each portal's demo service boundary with real domain APIs.
+
+
+## 13. Greenfield implementation continuation — identity, tenant and access (2026-11-18)
+
+The project owner clarified that the empty Supabase application schema, empty Auth user set and absent Storage buckets are intentional greenfield conditions. Do not repeat broad discovery as a substitute for building the system. Continue only targeted checks needed to protect each migration and permission boundary. Existing ensure_rls event-trigger remediation remains a separately tracked security decision; new application tables explicitly enable RLS in their migrations.
+
+### Supabase migrations applied
+
+| Version | Scope |
+|---|---|
+| 20261117175948 | Profiles, tenants, organizations, memberships, roles, permissions, role_permissions, membership_roles, audit_logs; explicit RLS policies and read grants. |
+| 20261117181011 | System role templates, 45 permission keys, 134 role-permission grants and Auth user profile trigger. |
+| 20261117182410 | Profile email projection and Auth profile synchronization on insert/update. |
+
+Read-only remote evidence after migration: 9/9 core tables have RLS enabled; 15 system role templates; 45 permission keys; 134 role-permission grants; Auth profile trigger present; profile email column present. Auth user count remains zero because no first administrator has been invited yet. No sample tenants or users were seeded.
+
+### Implemented backend and frontend integration
+
+- FastAPI modular monolith in apps/api/, Supabase JWT verification, transaction-local JWT claim propagation, authenticated database role for user-scoped reads, request IDs and CORS.
+- Identity API returns active memberships, role keys and effective permission keys.
+- Tenant API supports membership-scoped listing and permission-checked organization reads.
+- Management API supports platform tenant directory, create/update/archive, organization creation, role catalogue, tenant membership listing and Supabase Auth invitations. Platform-wide administrative operations require aal2.
+- One-time bootstrap endpoint and UI invite the first platform_super_admin; service-role and bootstrap secrets remain backend-only.
+- Super Admin login uses real Supabase email/password and TOTP MFA; dedicated MFA enrollment screen enforces aal2 before portal access.
+- Corporate and AI Workforce logins use Supabase sessions; tenant switchers are populated only from active membership and the relevant permission keys.
+- Corporate organization view now reads and creates organization units through FastAPI. Corporate member list/invitations use the membership API.
+- Super Admin tenant directory and create/update/archive actions use FastAPI.
+- Local INITIAL_* demo collections for Admin, Corporate and AI Workforce were removed from the portal initialization paths touched in this tranche. Unprovisioned domain areas show empty/unconfigured states rather than seeded production-like records.
+- Existing CSS and design tokens are preserved; no portal redesign was introduced.
+
+### Current phase state
+
+Phase 01 remains IN PROGRESS. The identity/tenant/RBAC foundation is implemented, but end-to-end readiness is not claimed. Remaining work includes API service deployment and secret configuration, first-admin bootstrap execution, live Supabase Auth redirect configuration for the final production domain, remaining portal domain API integration, role-catalogue wiring in all management screens, and engineering static checks.
+
+No staging, UAT, real-world acceptance, load testing, security acceptance or production release test was run. Do not mark Phase 01 complete until those implementation items and its acceptance evidence are closed. Phase 22 remains the first full staging/UAT/load/security acceptance gate.
