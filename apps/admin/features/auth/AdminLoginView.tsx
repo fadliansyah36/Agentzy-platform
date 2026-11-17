@@ -19,8 +19,10 @@ import type { SuperAdminRoleKey } from '../../lib/admin-types';
 export function AdminLoginView({
   initialRole,
   onLogin,
+  systemError,
 }: {
   initialRole: SuperAdminRoleKey;
+  systemError?: string | null;
   onLogin: (role: SuperAdminRoleKey, email: string, password: string, mfaCode: string) => Promise<void>;
 }) {
   const [role, setRole] = useState<SuperAdminRoleKey>(initialRole);
@@ -95,6 +97,7 @@ export function AdminLoginView({
             </p>
           </div>
 
+          {systemError && <p className="mt-4 rounded-[8px] border border-[#A96816]/30 bg-[#A96816]/10 px-3 py-2 text-xs font-medium text-[#A96816]">{systemError}</p>}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
               <label
