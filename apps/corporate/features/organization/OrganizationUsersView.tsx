@@ -197,13 +197,13 @@ export function OrganizationUsersView({
                       <p className="text-xs font-bold text-[#0284C7]">
                         {u.roleLabel}
                       </p>
-                      <p className="text-[11px] text-[#718391]">{u.department}</p>
+                      <p className="text-[11px] text-[#718391]">{u.department || '—'}</p>
                     </td>
                     <td className="py-3.5 px-4 text-xs text-[#526675]">
-                      {u.branchScope}
+                      {u.branchScope || '—'}
                     </td>
                     <td className="py-3.5 px-4 text-xs font-semibold text-[#247A55]">
-                      {u.mfaEnabled ? 'Aktif' : 'Belum'}
+                      {u.mfaEnabled === null ? 'Belum diketahui' : u.mfaEnabled ? 'Aktif' : 'Belum'}
                     </td>
                     <td className="py-3.5 pl-4 text-right text-xs font-bold">
                       <span
