@@ -1,19 +1,46 @@
 # Agentzy API
 
-Python 3.12+ / FastAPI modular monolith. FastAPI owns business rules and authorization; Supabase PostgreSQL is the only business database.
+Python 3.12+ / FastAPI modular monolith. FastAPI is the business and authorization authority; Supabase PostgreSQL is the sole application database.
 
 ## Local development
-1. Create a virtual environment and install: `pip install -e ".[dev]"`.
-2. Copy `.env.example` to `.env`; configure the database password and JWT settings. Never commit secrets.
-3. Run `uvicorn app.main:app --reload --port 8000` from `apps/api`.
 
-## Initial API
+1. Create a virtual environment and install the project: `pip install -e ".[dev]"`.
+2. Copy `.env.example` to `.env`.
+3. Configure `DATABASE_URL`, `SUPABASE_URL`, and the Supabase JWT verification settings.
+4. Run `uvicorn app.main:app --reload --port 8000` from `apps/api`.
+
+Never commit database passwords, JWT secrets, service-role keys or the bootstrap token.
+
+## API
+
 - `GET /health` — process liveness only.
-- `GET /api/v1/me` — verified Supabase identity and memberships.
-- `GET /api/v1/tenants` — tenants accessible to the caller.
-- `GET /api/v1/tenants/{tenant_id}/organizations` — tenant-scoped organizations.
+- `GET /api/v1/me` — verified Supabase identity, active tenant memberships, role keys and effective permission keys.
+- `GET /api/v1/tenants` — active tenants for the caller.
+- `GET /api/v1/tenants/{tenant_id}/organizations` — organizations after tenant membership, permission and RLS checks.
+- `POST /api/v1/bootstrap/platform-admin` — one-time first administrator invitation, protected by `X-Platform-Bootstrap-Token`.
 
-Business routes require a valid Supabase access token. JWT signature, issuer and audience are verified. The API sets transaction-local Postgres JWT claims and executes as the `authenticated` database role so RLS remains active. A browser-supplied tenant ID is never authorization proof.
+## First administrator bootstrap
 
-## Architecture
-`app/api` contains transport routers; `app/core` settings/auth/observability; `app/db` session; `app/domains` bounded contexts. Domain services and repositories are added per phase. Never expose provider secrets or service-role keys to the browser.
+Set the following secrets on the API service only:
+
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service-role key. Server-side only.
+- `PLATFORM_BOOTSTRAP_TOKEN`: long random one-time secret.
+- `APP_BASE_URL`: frontend origin used for the Auth invitation callback.
+
+Open `/bootstrap` in the frontend, enter the first administrator's full name and email plus the bootstrap token. The endpoint invites the user through Supabase Auth, creates the internal Agentzy Platform tenant membership, assigns the `platform_super_admin` role and writes an audit event. It refuses to run once an active platform super-admin membership exists.
+
+After accepting the email invitation and setting a password, sign in at `/admin`, open the MFA setup link, enroll a TOTP authenticator, and verify the six-digit code. Super Admin access is withheld unless the verified Supabase session has assurance level `aal2`.
+
+## Security model
+
+Business routes require a Supabase access token. JWT signature, issuer and audience are verified. User-scoped database requests run inside a transaction with transaction-local JWT claims and the `authenticated` Postgres role, preserving Supabase RLS. The backend never trusts browser tenant IDs as authorization proof. Role and permission keys are resolved from membership-role-permission relations.
+
+The service-role key is only used by the protected one-time bootstrap flow and must never be placed in Next.js public environment variables.
+
+## Deployment
+
+Build the API container with `docker build -t agentzy-api apps/api`. Deploy it to a private or managed container runtime and configure its secrets. Set `NEXT_PUBLIC_AGENTZY_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` on the frontend deployment. Configure Supabase Auth redirect URLs and Google OAuth only if SSO is enabled.
+
+## Checks and release policy
+
+Engineering checks (Python compile/import, lint/type checks, migration consistency and API contract checks) are required during implementation. No staging, UAT, load, real-world acceptance or production release test is part of the current work.
