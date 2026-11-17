@@ -12,7 +12,7 @@ import {
 } from '@/lib/corporate-compensation';
 import { adminPortalService } from '../services/admin-service';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { createTenant as createTenantApi, listPlatformTenants } from '@/apps/web/lib/api-client';
+import { createTenant as createTenantApi, listPlatformTenants, updateTenant as updateTenantApi, archiveTenant as archiveTenantApi } from '@/apps/web/lib/api-client';
 import type {
   AdminAIWorkerRecord,
   AdminCreditLedgerItem,
@@ -319,50 +319,52 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   // Tenant CRUD — persisted by FastAPI, never by browser-local state.
   const upsertTenant = useCallback(
     async (payload: Omit<AdminTenantRecord, 'id' | 'createdAt'> & { id?: string }) => {
-      if (payload.id) {
-        throw new Error('Perubahan tenant existing harus menggunakan endpoint update yang belum diaktifkan.');
-      }
       const accessToken = auth.session?.access_token;
       if (!accessToken) throw new Error('Session Super Admin tidak tersedia.');
       const slugSource = payload.domain?.split('.')[0] || payload.code || payload.name;
       const slug = slugSource.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       const tenantType = payload.clientType === 'ISP / Provider' ? 'provider' : 'corporate';
-      const createdRemote = await createTenantApi(accessToken, {
-        name: payload.name,
-        slug,
-        tenant_type: tenantType,
-      });
-      const created: AdminTenantRecord = {
-        ...payload,
-        id: createdRemote.id,
-        code: createdRemote.slug,
-        status: 'Trial',
-        createdAt: new Date(createdRemote.created_at).toLocaleDateString('id-ID'),
-        humanCount: 0,
-        aiWorkerCount: 0,
-        creditsBalance: 0,
-        monthlyCreditsUsed: 0,
-        slaScore: 0,
-      };
-      setTenants((prev) => [created, ...prev.filter((tenant) => tenant.id !== created.id)]);
-      appendAudit('Tambah Tenant', created.name, created.name, 'Tenant tersimpan melalui FastAPI.');
-      showToast(`Tenant ${created.name} berhasil dibuat dengan status pending.`);
+      const status = payload.status === 'Aktif' ? 'active' : payload.status === 'Suspended' ? 'suspended' : 'pending';
+      if (payload.id) {
+        const updatedRemote = await updateTenantApi(accessToken, payload.id, {
+          name: payload.name, slug, tenant_type: tenantType, status,
+        });
+        setTenants((prev) => prev.map((tenant) => tenant.id === payload.id ? {
+          ...tenant, ...payload, code: updatedRemote.slug,
+          status: updatedRemote.status === 'active' ? 'Aktif' : updatedRemote.status === 'suspended' || updatedRemote.status === 'archived' ? 'Suspended' : 'Trial',
+        } : tenant));
+        appendAudit('Update Tenant', payload.name, payload.name, 'Perubahan tersimpan melalui FastAPI.');
+        showToast(`Tenant ${payload.name} diperbarui.`);
+      } else {
+        const createdRemote = await createTenantApi(accessToken, {
+          name: payload.name, slug, tenant_type: tenantType,
+        });
+        const created: AdminTenantRecord = {
+          ...payload, id: createdRemote.id, code: createdRemote.slug, status: 'Trial',
+          createdAt: new Date(createdRemote.created_at).toLocaleDateString('id-ID'),
+          humanCount: 0, aiWorkerCount: 0, creditsBalance: 0, monthlyCreditsUsed: 0, slaScore: 0,
+        };
+        setTenants((prev) => [created, ...prev.filter((tenant) => tenant.id !== created.id)]);
+        appendAudit('Tambah Tenant', created.name, created.name, 'Tenant tersimpan melalui FastAPI.');
+        showToast(`Tenant ${created.name} berhasil dibuat dengan status pending.`);
+      }
       setModal({ type: 'none' });
     },
     [auth.session?.access_token, appendAudit, showToast]
   );
 
   const deleteTenant = useCallback(
-    (tenantId: string) => {
-      const target = tenants.find((t) => t.id === tenantId);
-      setTenants((prev) => prev.filter((t) => t.id !== tenantId));
-      if (target) {
-        appendAudit('Hapus Tenant', target.name, target.name, `code: ${target.code}`);
-        showToast(`Tenant ${target.name} dihapus dari direktori.`);
-      }
+    async (tenantId: string) => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken) throw new Error('Session Super Admin tidak tersedia.');
+      const target = tenants.find((tenant) => tenant.id === tenantId);
+      await archiveTenantApi(accessToken, tenantId);
+      setTenants((prev) => prev.map((tenant) => tenant.id === tenantId ? { ...tenant, status: 'Suspended' } : tenant));
+      if (target) appendAudit('Arsip Tenant', target.name, target.name, 'Tenant diarsipkan melalui FastAPI.');
+      showToast('Tenant diarsipkan. Data tidak dihapus secara destruktif.');
       setModal({ type: 'none' });
     },
-    [appendAudit, showToast, tenants]
+    [auth.session?.access_token, appendAudit, showToast, tenants]
   );
 
   // Onboarding Wizard submit
