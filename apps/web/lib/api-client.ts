@@ -11,8 +11,9 @@ type ApiOptions = Omit<RequestInit, "headers"> & { accessToken: string; headers?
 
 export async function apiRequest<T>(path: string, options: ApiOptions): Promise<T> {
   if (!API_BASE_URL) throw new ApiError("API belum dikonfigurasi. Hubungi administrator.", 503, "API_NOT_CONFIGURED");
-  const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${options.accessToken}`);
+  const { accessToken, headers: inputHeaders, ...requestOptions } = options;
+  const headers = new Headers(inputHeaders);
+  headers.set("Authorization", `Bearer ${accessToken}`);
   headers.set("Accept", "application/json");
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_BASE_URL}/api/v1${path.startsWith("/") ? path : `/${path}`}`,
