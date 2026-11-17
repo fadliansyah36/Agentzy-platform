@@ -446,3 +446,15 @@ Phase 00 remains IN PROGRESS. Connector access blockers are resolved, but this d
 ### Execution guard
 
 No Phase 01 task may be marked IN PROGRESS until Phase 00 mandatory gates are signed off. No Phase 00 migration or synthetic M000 schema may be applied. Do not modify production Supabase ACL/function/trigger state while the event-trigger privilege semantics and approved remediation are unresolved. No staging, UAT, real-world, load, security-acceptance, or production release testing is permitted before Phase 22; minimum engineering checks remain mandatory during implementation.
+
+## 11. Portal source verification delta — 2026-11-18
+
+Detailed evidence: docs/AGENTZY_SOURCE_CODE_DEEP_DIVE_AUDIT_2026-11-17.md and docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md.
+
+- Super Admin hook initializes isAuthenticated=true, a fixed platform_super_admin role/email, and local INITIAL_* collections. Its inspected service returns local constants; no fetch() or Supabase client integration was found in the inspected hook/service.
+- Corporate hook initializes isAuthenticated=true and a client-selected first tenant, with local domain collections. The inspected service returns static records and hard-coded executive metrics; no fetch() or Supabase client integration was found in the inspected hook/service.
+- AI Workforce hook initializes workers/providers/skills/tools/memory/knowledge/workflows/runs/approvals/handoffs/tasks from INITIAL_* constants. It calls the existing Next.js generate-content route; that route still invokes Google GenAI directly and trusts tenantName from request JSON.
+- Existing portal services and UI must be migrated action-by-action to typed FastAPI endpoints after Phase 01 identity/tenant/RBAC foundations. Keep existing components and CSS; do not wire business writes directly to Supabase from the browser.
+- The targeted source scan is not a full 125-file source audit and does not close P00-AC-02 or P00-AC-04.
+
+These findings are implementation requirements, not authorization to bypass phase order. Phase 00 remains IN PROGRESS; Phase 01 remains blocked on Phase 00 sign-off.
