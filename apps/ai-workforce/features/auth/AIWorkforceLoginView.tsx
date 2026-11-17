@@ -15,7 +15,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
-import { AIWM_TENANTS } from '../../lib/ai-workforce-data';
 
 export function AIWorkforceLoginView({
   mode,
@@ -27,12 +26,13 @@ export function AIWorkforceLoginView({
   mode: 'splash' | 'login';
   initialTenantId: string;
   onStartFromSplash: () => void;
-  onLogin: (tenantId: string) => void;
+  onLogin: (email: string, password: string, method: 'password' | 'sso') => Promise<void>;
   onSwitchMode: (mode: 'splash' | 'login') => void;
 }) {
-  const [selectedTenantId, setSelectedTenantId] = useState(initialTenantId);
-  const [email, setEmail] = useState('budi@ispnusantara.co.id');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -96,7 +96,7 @@ export function AIWorkforceLoginView({
               </button>
               <button
                 type="button"
-                onClick={() => onLogin(selectedTenantId)}
+                onClick={onStartFromSplash}
                 className="inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-[10px] border border-[#B8C9D3] bg-white px-5 text-sm font-semibold text-[#17324D] transition hover:bg-[#E6F4F9]"
               >
                 <span>Langsung ke Dashboard</span>
@@ -157,9 +157,13 @@ export function AIWorkforceLoginView({
         </div>
 
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            onLogin(selectedTenantId);
+            setErrorMsg(null);
+            setIsSubmitting(true);
+            try { await onLogin(email.trim(), password, 'password'); }
+            catch (error) { setErrorMsg(error instanceof Error ? error.message : 'Autentikasi gagal.'); }
+            finally { setIsSubmitting(false); }
           }}
           className="mt-5 space-y-4"
         >
@@ -218,28 +222,17 @@ export function AIWorkforceLoginView({
             </span>
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-[#17324D]">
-              Pilih Tenant / Lingkungan
-            </label>
-            <select
-              value={selectedTenantId}
-              onChange={(e) => setSelectedTenantId(e.target.value)}
-              className="h-11 w-full rounded-[10px] border border-[#B8C9D3] bg-[#F5F8FA] px-3 text-xs font-semibold text-[#17324D] focus:border-[#0284C7] focus:outline-none"
-            >
-              {AIWM_TENANTS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.environment}) · {t.code}
-                </option>
-              ))}
-            </select>
+          <div className="rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3 py-3 text-xs leading-relaxed text-[#526675]">
+            Tenant dan akses AI Workforce ditentukan dari membership akun yang diverifikasi oleh Agentzy API.
           </div>
 
+          {errorMsg && <p className="rounded-[8px] border border-[#B23A48]/30 bg-[#B23A48]/10 px-3 py-2 text-xs font-medium text-[#B23A48]">{errorMsg}</p>}
           <button
             type="submit"
-            className="h-11 w-full rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white transition hover:bg-[#0369A1]"
+            disabled={isSubmitting}
+            className="h-11 w-full rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white transition hover:bg-[#0369A1] disabled:opacity-60"
           >
-            Masuk
+            {isSubmitting ? 'Memverifikasi…' : 'Masuk'}
           </button>
 
           <div className="relative py-1 text-center text-[11px] text-[#718391]">
@@ -249,7 +242,12 @@ export function AIWorkforceLoginView({
 
           <button
             type="button"
-            onClick={() => onLogin(selectedTenantId)}
+            onClick={async () => {
+              setErrorMsg(null);
+              setIsSubmitting(true);
+              try { await onLogin(email.trim(), '', 'sso'); }
+              catch (error) { setErrorMsg(error instanceof Error ? error.message : 'SSO tidak dapat dimulai.'); setIsSubmitting(false); }
+            }}
             className="gsi-material-button"
           >
             <span className="gsi-material-button-content-wrapper">
