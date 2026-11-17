@@ -1,6 +1,6 @@
 # Phase 00 — Verified Repository Inventory (18 November 2026)
 
-Status: PARTIAL — structural, route, manifest, environment-name and design-token inventory captured; license/SBOM, full env reference scan and asset metadata inventory remain open.
+Status: PARTIAL — structural, route, manifest and design-token inventory captured; resolved dependency SBOM and partial asset metadata are now recorded. License/NOTICE reconciliation, full env reference scan, asset dimensions/provenance and Auth/Data API evidence remain open.
 
 ## Connector binding runbook
 
@@ -62,7 +62,7 @@ Manifest:
 - runtime dependencies: `@google/genai ^2.4.0`, `@hookform/resolvers ^5.2.1`, `@vis.gl/react-google-maps ^1.10.2`, `autoprefixer ^10.4.21`, `class-variance-authority ^0.7.1`, `clsx ^2.1.1`, `firebase ^13.4.0`, `lucide-react ^0.553.0`, `motion ^12.23.24`, `next ^15.4.9`, `postcss ^8.5.6`, `react ^19.2.1`, `react-dom ^19.2.1`, `tailwind-merge ^3.3.1`.
 - dev dependencies: `@tailwindcss/postcss 4.1.11`, `@tailwindcss/typography ^0.5.19`, `@types/node ^20`, `@types/react ^19`, `@types/react-dom ^19`, `eslint 9.39.1`, `eslint-config-next 16.0.8`, `firebase-tools ^15.0.0`, `tailwindcss 4.1.11`, `tw-animate-css ^1.4.0`, `typescript 5.9.3`.
 - Observed compatibility review item: Next.js 15 with eslint-config-next 16. Do not change versions without validating compatibility and updating the canonical Bun lockfile.
-- License/SBOM status: OPEN. The manifest and lockfile do not provide sufficient evidence to claim a full license inventory. Need a generated resolved dependency SBOM with package name, exact version, source, license expression, license file/notice, direct/transitive classification, and unresolved-license disposition. Do not guess license metadata.
+- License/SBOM status: PARTIAL. A CycloneDX 1.6 inventory of 1,037 unique resolved package coordinates is committed at `docs/phase-00/sbom/bun-lock.cdx.json`. The manifest and lockfile do not provide sufficient evidence to claim a full license inventory. Need a generated resolved dependency SBOM with package name, exact version, source, license expression, license file/notice, direct/transitive classification, and unresolved-license disposition. Do not guess license metadata.
 
 ## Environment variable names
 
@@ -88,7 +88,7 @@ Source: `app/globals.css` at the inspected `main` tree.
 
 ## Asset path inventory (structural, not full media audit)
 
-Latest recursive tree contains 31 raster image files by extension: 11 PNG, 13 JPG/JPEG, and 7 WebP. Relevant directories include `public/images/`, `public/assets/aistudio/`, and `src/assets/images/`. The asset paths include Agentzy logos/icons, PWA icons, ecosystem/hero/workforce illustrations and uploaded AI Studio references. The tree inventory contains no GLB/GLTF, video, or font files by extension. Several files under `public/assets/aistudio/` are Markdown or uploaded reference files, not production image assets. Dimensions, byte sizes, hashes, duplicate detection and component usage mapping remain pending; do not infer asset usage from names.
+Latest recursive tree contains 31 raster image files by extension: 11 PNG, 13 JPG/JPEG, and 7 WebP. Relevant directories include `public/images/`, `public/assets/aistudio/`, and `src/assets/images/`. The asset paths include Agentzy logos/icons, PWA icons, ecosystem/hero/workforce illustrations and uploaded AI Studio references. The tree inventory contains no GLB/GLTF, video, or font files by extension. Several files under `public/assets/aistudio/` are Markdown or uploaded reference files, not production image assets. Byte sizes, Git blob hashes, six exact duplicate groups and targeted component usage references are now recorded in `docs/phase-00/ASSET_METADATA_INVENTORY_2026-11-18.md`. Pixel dimensions, full usage mapping and provenance remain pending; do not infer asset usage from names.
 
 ## Remaining Phase 00 inventory work
 
@@ -102,3 +102,7 @@ Latest recursive tree contains 31 raster image files by extension: 11 PNG, 13 JP
 8. Close P00-AC-01 through P00-AC-10 with inspectable evidence before Phase 01 begins.
 
 No database DDL, Auth setting, Data API setting, privilege, function or migration was changed during this inventory capture. No staging or real-world/UAT tests were run.
+
+## Continuation evidence (18 Nov 2026)
+
+See `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.md` for the updated dependency/SBOM, environment reference, asset metadata, Supabase Auth/Data API evidence gap, and `rls_auto_enable()` disposition. The Maps config route was hardened so the browser-facing response cannot fall back to the server-only Maps key. Phase 00 remains open.
