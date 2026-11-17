@@ -77,7 +77,8 @@ export function useAgentzyAuth() {
   const signIn = useCallback(async (email: string, password: string, requireMfa = false, mfaCode?: string) => {
     const client = getSupabaseBrowserClient();
     if (!client) throw new Error('Konfigurasi Supabase belum tersedia.');
-    const { data, error: signInError } = await client.auth.signInWithPassword({ email, password });
+    const credentials = email.includes('@') ? { email, password } : { phone: email, password };
+    const { data, error: signInError } = await client.auth.signInWithPassword(credentials);
     if (signInError) throw signInError;
     if (!data.session) throw new Error('Supabase tidak mengembalikan session aktif.');
     let session = data.session;
