@@ -1,0 +1,56 @@
+name: Dependency License Risk Review
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "bun.lock"
+      - "package.json"
+      - "scripts/audit-dependency-licenses.mjs"
+      - ".github/workflows/dependency-license-review.yml"
+permissions:
+  contents: write
+concurrency:
+  group: dependency-license-review-main
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact lockfile dependency tree
+        run: bun install --frozen-lockfile
+      - name: Inspect licenses and collect license texts
+        run: npx --yes @lizenz/checker@0.0.2 --json --out /tmp/agentzy-license-check.json --files /tmp/agentzy-license-files
+      - name: Reconcile exact package coordinates and classify risks
+        run: node scripts/audit-dependency-licenses.mjs --report /tmp/agentzy-license-check.json
+      - name: Preserve report and license-file evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentzy-dependency-license-review
+          path: |
+            docs/phase-00/reports/
+            /tmp/agentzy-license-files/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Commit generated report to main when changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/phase-00/reports/
+          if git diff --cached --quiet; then
+            echo "No report changes."
+          else
+            git commit -m "docs(phase-00): publish dependency license risk review"
+            git push origin HEAD:main
+          fi
