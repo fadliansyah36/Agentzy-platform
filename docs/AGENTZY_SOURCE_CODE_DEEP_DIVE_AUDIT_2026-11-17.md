@@ -47,3 +47,42 @@ Security Advisor reports `public.rls_auto_enable()` as SECURITY DEFINER and exec
 - No database changes were applied.
 - No real-world, staging or production tests were run.
 - This report does not claim Phase 00 complete.
+
+
+## 2026-11-18 execution continuation — targeted portal hook/service verification
+
+Repository source was re-opened from main after the Phase 00 re-audit. This remains a targeted source inspection, not a claim that all 125 TypeScript/TSX files have been line-by-line reviewed.
+
+### Super Admin portal
+
+- apps/admin/hooks/useAdminPortal.ts (blob edc43d03ae1c751954b18772e321a0e095d4dc01; 51,179 chars) initializes authenticated state to true, assigns platform_super_admin and superadmin@agentzy.id locally, and loads collections through adminPortalService.getInitialCollections().
+- apps/admin/services/admin-service.ts (blob 28f6c1ea3d27039386bb7efa37ac5385510427ff) imports INITIAL_* collections from apps/admin/lib/admin-data.ts and returns them as the initial domain state. Its model-routing preview is deterministic browser-side demonstration logic.
+- The targeted hook/service files do not contain fetch() or Supabase client usage. This confirms the portal data path is not yet wired to FastAPI in these files.
+
+### Corporate / ISP portal
+
+- apps/corporate/hooks/useCorporatePortal.ts (blob de1360396758fd96faf3913dfdc60a0795314841; 11,526 chars) initializes isAuthenticated=true, selects CORPORATE_TENANTS[0].id as active tenant, and loads all domain collections from corporatePortalService.
+- apps/corporate/services/corporate-service.ts (blob 9678b1865ecd728b1ec9f8d20a9251964e73e73e) imports static INITIAL_* collections and returns hard-coded executive metrics, analytics series and initial records. Its comment describes a future FastAPI forwarding boundary; the methods inspected currently return local values and do not make fetch() requests.
+- The targeted hook/service files do not contain Supabase client usage or fetch() integration. Tenant selection is client-side and must be replaced by server-resolved membership/tenant context in Phase 01 and subsequent domain phases.
+
+### AI Workforce portal
+
+- apps/ai-workforce/hooks/useAIWorkforcePortal.ts (blob 86c7ad944d525e5bc87140fcf2a4ee01a3970385; 32,920 chars) initializes workers, providers, skills, tools, memory layers, knowledge sources, workflows, runs, approvals, handoffs, tasks/goals and collaboration messages from INITIAL_* constants.
+- The hook initializes authenticated state based on route section (not a verified server session) and selects AIWM_TENANTS[0].id locally.
+- The inspected content-generation action POSTs to /api/ai-workforce/generate-content. That Next.js handler currently calls Google GenAI directly, hardcodes model gemini-4-hydrogen and accepts tenantName from the request body. This must move behind FastAPI AI Gateway/Model Router with tenant and membership resolved server-side.
+- apps/ai-workforce/services/ai-workforce-service.ts (blob 1b59e98bfae83f8e51782c52968585b79909f934) contains formatting and artifact-download helpers, not a typed HTTP API client.
+
+### Shared data and design baseline
+
+- lib/agentzy-data.ts (blob 00238be714652f9877453e872473691b97822cfc), apps/admin/lib/admin-data.ts (blob 004383901480be4db66e3739fd0c2f1eb82fb9f7), apps/corporate/lib/corporate-data.ts (blob 35cfbcfea887cdd2c50eab7dd45c4ce457fa01bd), and apps/ai-workforce/lib/ai-workforce-data.ts (blob 4ec7ec2f15c747df996c0ee4af53794d876e882c) contain static catalogue and initial business records. These are demonstration/initial UI data, not evidence of persisted production data.
+- app/globals.css (blob dfbaa340f5bc19b19f95333876ac9e6bd16b345f) confirms the existing light sky/azure/navy palette, Plus Jakarta Sans, JetBrains Mono, status colors, radii and shadows. Preserve these values and existing components during integration.
+- next.config.ts (blob d0dc5db8f2ad53184650d433c9b73ab5c8bf716a) references DISABLE_HMR. .env.example declares GEMINI_API_KEY, GOOGLE_MAPS_API_KEY and NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The targeted scan is not a complete source-wide environment scan.
+- Root middleware.ts was not found by the repository file fetch. This observation alone does not rule out route-level auth guards or other session handling; those require a complete route/navigation review.
+
+### Integration consequences and sequencing
+
+1. Do not expose business CRUD endpoints until Phase 01 identity, tenant resolution, RBAC/ABAC and deny-by-default authorization are implemented.
+2. Preserve existing UI components and replace each portal's local service adapter with typed FastAPI API-client calls only after its domain API contract and permissions exist.
+3. Remove default-authenticated and hard-coded tenant/role assumptions as part of the Phase 01 integration boundary; never map local role labels directly to trusted permissions.
+4. Migrate AI content generation from Next.js provider execution to the FastAPI AI Gateway in the applicable AI Gateway phase; keep any Next.js route only as a non-authoritative compatibility proxy if needed.
+5. No application code or Supabase schema was changed by this source inspection. No engineering tests, staging, UAT, real-world testing or deployment were run.
