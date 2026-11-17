@@ -87,3 +87,17 @@ export const listTenantMemberships = (accessToken: string, tenantId: string) =>
 
 export const listRoleTemplates = (accessToken: string) =>
   apiRequest<AgentzyRoleTemplate[]>("/roles", { method: "GET", accessToken });
+
+
+export type AgentzyPlatformTenant = {
+  id: string;
+  name: string;
+  slug: string;
+  tenant_type: 'corporate' | 'provider' | 'internal' | 'other';
+  status: 'pending' | 'active' | 'suspended' | 'archived';
+  created_at: string;
+  updated_at: string;
+};
+
+export const listPlatformTenants = (accessToken: string) =>
+  apiRequest<AgentzyPlatformTenant[]>("/tenants/directory", { method: "GET", accessToken });
