@@ -51,4 +51,9 @@ P00 dependency/license inventory closes only after the workflow completes, all 1
 
 ## Explicit limitations
 
-No staging, UAT, production deployment, or real-world testing is part of this task. The workflow performs package installation and static metadata/file inspection in an isolated GitHub Actions runner; it does not execute Agentzy application flows. The workflow has been committed but has **not** yet been run in this implementation session, so no package-level license result is claimed.
+No staging, UAT, production deployment, or real-world testing is part of this task. The workflow performs package installation and static metadata/file inspection in an isolated GitHub Actions runner; it does not execute Agentzy application flows. The workflow has run successfully. Exact reconciliation covers 1,037/1,037 package coordinates (960 installed plus 77 registry fallback), with zero unresolved registry lookups. See `docs/phase-00/DEPENDENCY_LICENSE_FINDINGS_2026-11-18.md` for counts, package groups and provisional KEEP/REVIEW decisions. 988 license texts are preserved in the generated bundle. Package-level review remains open for 26 LGPL/MPL, 5 manual-expression and 40 license-file-missing coordinates.
+
+
+## Latest run result
+
+GitHub Actions run `44138463292` completed successfully. The generated report is committed under `docs/phase-00/reports/`. This confirms inventory and metadata collection, not final legal approval. Phase 00 remains open until the flagged groups and release attribution obligations are resolved.
