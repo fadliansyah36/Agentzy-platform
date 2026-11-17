@@ -73,7 +73,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   // Stateful collections
   const [aiWorkers, setAiWorkers] = useState<AIWorkerRecord[]>(initialCollections.aiWorkers);
-  const [aiCreditsBalance, setAiCreditsBalance] = useState<number>(1250000);
+  const [aiCreditsBalance, setAiCreditsBalance] = useState<number>(0);
   const [monthlyBudgetLimit, setMonthlyBudgetLimit] = useState<number>(1250000);
   const [autoTopupEnabled, setAutoTopupEnabled] = useState<boolean>(false);
   const [creditTransactions, setCreditTransactions] = useState<AICreditTransaction[]>(
@@ -134,8 +134,8 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   }, [auth.loading, auth.session, auth.identity, tenantOptions, activeTenantId]);
 
   const overviewSnapshot = useMemo(
-    () => corporatePortalService.getExecutiveOverviewSnapshot(activeTenantId),
-    [activeTenantId]
+    () => activeTenant ? corporatePortalService.getExecutiveOverviewSnapshot(activeTenant) : null,
+    [activeTenant]
   );
 
   const nextId = (prefix: string) => {
