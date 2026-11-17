@@ -99,7 +99,7 @@ export function AIWorkforceLoginView({
                 onClick={onStartFromSplash}
                 className="inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-[10px] border border-[#B8C9D3] bg-white px-5 text-sm font-semibold text-[#17324D] transition hover:bg-[#E6F4F9]"
               >
-                <span>Langsung ke Dashboard</span>
+                <span>Lanjut ke Login</span>
               </button>
             </div>
           </div>
