@@ -458,3 +458,22 @@ Detailed evidence: docs/AGENTZY_SOURCE_CODE_DEEP_DIVE_AUDIT_2026-11-17.md and do
 - The targeted source scan is not a full 125-file source audit and does not close P00-AC-02 or P00-AC-04.
 
 These findings are implementation requirements, not authorization to bypass phase order. Phase 00 remains IN PROGRESS; Phase 01 remains blocked on Phase 00 sign-off.
+
+## 12. Implementation continuation — Phase 01 foundation started (2026-11-18)
+
+**Execution decision:** Following the project owner's explicit direction, baseline discovery is kept proportional to implementation. The absence of application tables, Auth users, Storage buckets and migration history is the greenfield starting condition, not a reason to repeat broad audits. Remaining configuration/security findings are tracked and addressed when the relevant capability is implemented; no destructive cleanup or speculative changes to the pre-existing Supabase event trigger are authorized.
+
+### Delivered foundation artifacts
+
+- apps/api/ created as the Python 3.12+ FastAPI modular monolith, with settings, Supabase JWT verification (JWKS / configured legacy HS256), SQLAlchemy async session, request correlation, CORS configuration and /health.
+- Initial authenticated API contracts/routes: GET /api/v1/me, GET /api/v1/tenants, GET /api/v1/tenants/{tenant_id}/organizations.
+- Direct Postgres requests set transaction-local JWT claims and switch to the authenticated role so database RLS remains in force; no service-role key is placed in frontend code.
+- apps/web/lib/api-client.ts added as the typed frontend transport boundary; no UI redesign and no fake API fallback.
+- Supabase migration 20261117175948_phase_01_platform_core_identity_tenant applied to canonical project. It creates profiles, tenants, organizations, memberships, roles, permissions, role_permissions, membership_roles and audit_logs; adds indexes, RLS policies and a minimal permission catalogue. No demo tenant, user, balance, transaction or business sample rows were seeded.
+- Remote migration history confirms version 20261117175948; read-only catalog query confirms all nine application tables exist with RLS enabled.
+
+### Current status and limits
+
+Phase 01 is IN PROGRESS, not complete. Only platform identity/tenant foundations are delivered. Existing portal hooks/services still contain local INITIAL_* data and fixed authentication defaults; the typed API client is not yet wired through every screen/action. Remaining Phase 00 inventory and Supabase configuration evidence will be completed just-in-time where they affect security or the next migration, rather than used as an open-ended blocker.
+
+No staging, UAT, real-world, load, security acceptance or production release test was run. Runtime/build/lint checks have not yet been executed in this continuation. The next work is to connect the existing login/session lifecycle to Supabase Auth and FastAPI identity/tenant resolution, then replace each portal's demo service boundary with real domain APIs.
