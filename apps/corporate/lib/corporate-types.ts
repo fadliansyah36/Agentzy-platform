@@ -141,7 +141,7 @@ export interface CorporateUserMember {
   department: string;
   branchScope: string;
   status: 'Aktif' | 'Menunggu Aktivasi';
-  mfaEnabled: boolean;
+  mfaEnabled: boolean | null;
   lastActive: string;
 }
 
