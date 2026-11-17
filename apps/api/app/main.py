@@ -3,6 +3,7 @@ from uuid import uuid4
 import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.api.v1.router import router as v1_router
@@ -51,7 +52,7 @@ async def http_exception_handler(_: Request, exc: HTTPException):
 async def validation_exception_handler(_: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=422,
-        content={"error": {"code": "VALIDATION_ERROR", "message": "Data permintaan tidak valid.", "details": exc.errors()}},
+        content={"error": {"code": "VALIDATION_ERROR", "message": "Data permintaan tidak valid.", "details": jsonable_encoder(exc.errors())}},
     )
 
 
