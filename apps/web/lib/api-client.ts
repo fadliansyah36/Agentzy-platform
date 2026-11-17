@@ -115,3 +115,19 @@ export const archiveTenant = (accessToken: string, tenantId: string) =>
   apiRequest<{ id: string; name: string; slug: string; status: string }>(
     `/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE", accessToken },
   );
+
+
+export type AgentzyOrganization = {
+  id: string;
+  tenant_id: string;
+  parent_id: string | null;
+  name: string;
+  slug: string;
+  organization_type: 'company' | 'division' | 'department' | 'branch' | 'team';
+  status: string;
+};
+
+export const listTenantOrganizations = (accessToken: string, tenantId: string) =>
+  apiRequest<AgentzyOrganization[]>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
+    method: "GET", accessToken,
+  });
