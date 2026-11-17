@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
-import { AIWM_TENANTS } from '../../lib/ai-workforce-data';
 import type {
   AIWMTenant,
   AIWorkforceSectionId,
@@ -49,6 +48,7 @@ interface NavGroup {
 
 export function AIWorkforceAppShell({
   activeTenant,
+  tenants,
   activeSection,
   pendingApprovalsCount,
   failedRunsCount,
@@ -61,6 +61,7 @@ export function AIWorkforceAppShell({
   children,
 }: {
   activeTenant: AIWMTenant;
+  tenants: AIWMTenant[];
   activeSection: AIWorkforceSectionId;
   pendingApprovalsCount: number;
   failedRunsCount: number;
@@ -309,7 +310,7 @@ export function AIWorkforceAppShell({
                     <p className="px-2.5 py-1 text-[11px] font-semibold text-[#526675]">
                       Pilih Tenant / Workspace
                     </p>
-                    {AIWM_TENANTS.map((t) => (
+                    {tenants.map((t) => (
                       <button
                         key={t.id}
                         type="button"
