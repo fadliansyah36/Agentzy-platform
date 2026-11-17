@@ -512,3 +512,17 @@ Read-only remote evidence after migration: 9/9 core tables have RLS enabled; 15 
 Phase 01 remains IN PROGRESS. The identity/tenant/RBAC foundation is implemented, but end-to-end readiness is not claimed. Remaining work includes API service deployment and secret configuration, first-admin bootstrap execution, live Supabase Auth redirect configuration for the final production domain, remaining portal domain API integration, role-catalogue wiring in all management screens, and engineering static checks.
 
 No staging, UAT, real-world acceptance, load testing, security acceptance or production release test was run. Do not mark Phase 01 complete until those implementation items and its acceptance evidence are closed. Phase 22 remains the first full staging/UAT/load/security acceptance gate.
+
+
+## 14. Identity/RBAC integration delta — 2026-11-18
+
+- Added canonical Supabase CLI project config at supabase/config.toml with project ref, PostgreSQL 17 and email-invitation-only Auth defaults. Production redirect domains still require the final frontend hostname.
+- Added a Dockerfile for the FastAPI service. Deployment is not yet configured because no Agentzy API runtime/hostname has been selected or supplied.
+- Added permission-guarded tenant CRUD, tenant directory, organization creation, membership listing/invitation and role-catalogue endpoints. Platform-wide operations require JWT aal2; sensitive tenant role assignment is restricted to the tenant owner or an aal2 platform membership administrator.
+- Corporate tenant member directory now uses the FastAPI membership API; invite actions call Supabase Auth through the backend and assign a validated role template. Organization structure now reads and creates tenant organization units through FastAPI.
+- Admin tenant directory and create/update/archive actions use FastAPI; platform directory calls wait until the session reaches aal2.
+- AI Workforce and Corporate tenant selectors are derived from backend membership and permission results. Client-side role switching was removed from Super Admin.
+- Login surfaces no longer contain sample credentials or client-only authentication bypasses. First-admin bootstrap and TOTP enrollment screens are available at /bootstrap and /mfa-setup.
+- Read-only Supabase evidence: 9 core tables, all 9 with RLS enabled; 15 role templates; 45 permissions; 134 role-permission grants; Auth profile trigger and profile email projection present; zero Auth users (expected until bootstrap invitation is executed).
+- Static build/type/lint checks have not been run in this continuation. No staging, UAT, real-world, load, security acceptance or production release testing has been run.
+- Remaining Phase 01 gates: configure and deploy the FastAPI service with DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY and PLATFORM_BOOTSTRAP_TOKEN; configure frontend API URL and Supabase publishable key; configure production Auth redirect URL and SMTP; execute first-admin bootstrap and enroll TOTP; complete remaining domain API integrations and run minimum deterministic engineering checks. Phase 01 remains IN PROGRESS.
