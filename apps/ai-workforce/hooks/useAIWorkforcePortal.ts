@@ -19,6 +19,7 @@ import type {
   KnowledgeSourceItem,
   MemoryLayerItem,
   ModelRoutingRule,
+  ModelProviderItem,
   SkillPackageItem,
   ToolIntegrationItem,
   WorkflowDefinitionItem,
@@ -58,7 +59,7 @@ export function useAIWorkforcePortal(
   // Core states
   const [aiWorkers, setAiWorkers] = useState<AIWorkerEntity[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
-  const [providers] = useState<string[]>([]);
+  const [providers] = useState<ModelProviderItem[]>([]);
   const [routingRules, setRoutingRules] = useState<ModelRoutingRule[]>([]);
   const [skills, setSkills] = useState<SkillPackageItem[]>([]);
   const [tools, setTools] = useState<ToolIntegrationItem[]>([]);
