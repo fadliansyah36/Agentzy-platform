@@ -45,6 +45,7 @@ export function CorporatePortalClient({
     <>
       <CorporateAppShell
         activeTenant={portal.activeTenant}
+        tenants={portal.tenantOptions}
         activeSection={portal.activeSection}
         alerts={portal.alerts}
         toastMessage={portal.toastMessage}
