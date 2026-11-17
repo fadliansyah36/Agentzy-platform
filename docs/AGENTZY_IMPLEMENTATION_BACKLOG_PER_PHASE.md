@@ -6,6 +6,8 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 
 ## 1. Audit findings and blockers
 
+**Phase 00 status: IN PROGRESS.** Governance artifacts are being finalized; repository/source, dependency/license, Supabase configuration and security acceptance gates remain open. See `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md`.
+
 - Repository default branch is `main`; latest structural inventory snapshot tree commit: `a9482d864aa6683027bbec02321ca469f1251596` (282 entries, not truncated).
 - GitHub binding `link_6af361418a4481919cc84f9f7e0d522b` (account `fadliansyah36`) has repository write access; `main` updates are available. Branch protection is not enabled at the time of inspection.
 - Existing UI modules are present under `apps/admin`, `apps/corporate`, and `apps/ai-workforce`; root `app/` contains public and workforce routes.
@@ -38,7 +40,7 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | `AGZ-P00-API-001` | 00 — Product Governance & Repo Baseline | API contract | Inventory Next.js route handlers and define canonical `/api/v1` ownership. | IN PROGRESS |
 | `AGZ-P00-PERM-001` | 00 — Product Governance & Repo Baseline | Permission | Inventory Auth/RLS/grants and create gap matrix; no speculative policy edits. | IN PROGRESS |
 | `AGZ-P00-INT-001` | 00 — Product Governance & Repo Baseline | Integration | Map portal → domain service → database and external provider dependencies. | IN PROGRESS |
-| `AGZ-P00-DOC-001` | 00 — Product Governance & Repo Baseline | Documentation | Prepare ADR index, AGENTS, backlog tracker and evidence template. | IN PROGRESS |
+| `AGZ-P00-DOC-001` | 00 — Product Governance & Repo Baseline | Documentation | Prepare ADR index, AGENTS, backlog tracker and evidence template. | COMPLETE — ADR register and baseline evidence committed; Phase 00 itself remains open |
 | `AGZ-P01-FE-001` | 01 — Platform Core, Identity & Tenant | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P01-BE-001` | 01 — Platform Core, Identity & Tenant | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
 | `AGZ-P01-DB-001` | 01 — Platform Core, Identity & Tenant | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
