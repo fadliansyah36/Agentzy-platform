@@ -227,18 +227,19 @@ async def list_tenant_memberships(
     )
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant membership read permission.")
-    result = await session.execute(text("""
-        select m.id,m.tenant_id,m.user_id,p.display_name,m.status,m.joined_at,m.created_at,
-               coalesce(array_agg(distinct r.key) filter (where r.key is not null),'{}') as role_keys
-        from public.memberships m
-        left join public.profiles p on p.user_id=m.user_id
-        left join public.membership_roles mr on mr.membership_id=m.id
-        left join public.roles r on r.id=mr.role_id
-        where m.tenant_id=:tenant_id
-        group by m.id,p.display_name
-        order by m.created_at desc
-    """), {"tenant_id": tenant_id})
-    return [dict(row) for row in result.mappings().all()]
+    async with engine.connect() as connection:
+        result = await connection.execute(text("""
+            select m.id,m.tenant_id,m.user_id,p.display_name,p.email,m.status,m.joined_at,m.created_at,
+                   coalesce(array_agg(distinct r.key) filter (where r.key is not null),'{}') as role_keys
+            from public.memberships m
+            left join public.profiles p on p.user_id=m.user_id
+            left join public.membership_roles mr on mr.membership_id=m.id
+            left join public.roles r on r.id=mr.role_id
+            where m.tenant_id=:tenant_id
+            group by m.id,p.display_name,p.email
+            order by m.created_at desc
+        """), {"tenant_id": tenant_id})
+        return [dict(row) for row in result.mappings().all()]
 
 
 @router.get("/tenants/directory", tags=["Tenant Administration"])
