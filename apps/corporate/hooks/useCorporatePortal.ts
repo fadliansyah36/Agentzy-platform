@@ -308,6 +308,8 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   const handleGenerateReport = useCallback(
     (payload: { category: string; period: string; format: 'CSV' | 'PDF' | 'XLSX' }) => {
+    if (!activeTenant) throw new Error('Tenant context belum tersedia.');
+
       const entry: ReportExportHistory = {
         id: nextId('REP-2026'),
         title: `Laporan ${payload.category} — ${payload.period}`,
