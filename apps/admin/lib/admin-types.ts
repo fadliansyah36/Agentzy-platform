@@ -43,9 +43,9 @@ export interface AdminTenantRecord {
   domain: string;
   industry: string;
   clientType: 'ISP / Provider' | 'Corporate Enterprise' | 'Multi-Cabang';
-  cooperationModel: 'Kontrak Managed End-to-End' | 'Kontrak Field & Sales' | 'Kontrak Pilot Kemitraan';
-  cooperationLabel: string;
-  contractNumber: string;
+  cooperationModel?: 'Kontrak Managed End-to-End' | 'Kontrak Field & Sales' | 'Kontrak Pilot Kemitraan';
+  cooperationLabel?: string;
+  contractNumber?: string;
   status: 'Aktif' | 'Trial' | 'Suspended';
   region: string;
   humanCount: number;
