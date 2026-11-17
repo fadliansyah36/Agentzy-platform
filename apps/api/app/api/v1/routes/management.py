@@ -3,7 +3,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,11 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter()
+
+
+def _require_aal2(claims: dict) -> None:
+    if claims.get('aal') != 'aal2':
+        raise HTTPException(status_code=403, detail='Platform privileged actions require Supabase MFA assurance level aal2.')
 
 
 class TenantCreate(BaseModel):
@@ -65,9 +70,11 @@ async def create_tenant(
     claims: dict = Depends(current_claims),
     session: AsyncSession = Depends(user_session),
 ):
+    _require_aal2(claims)
     user_id = UUID(claims["sub"])
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload.slug):
         raise HTTPException(status_code=422, detail="Slug hanya boleh berisi huruf kecil, angka dan tanda hubung.")
+    _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     async with engine.begin() as connection:
@@ -96,6 +103,7 @@ async def create_organization(
     user_id = UUID(claims["sub"])
     allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage",))
     if not allowed:
+        _require_aal2(claims)
         allowed = await _has_platform_permission(session, user_id, "platform.tenants.manage")
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant organization management permission.")
@@ -128,6 +136,7 @@ async def invite_tenant_member(
     user_id = UUID(claims["sub"])
     allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage",))
     if not allowed:
+        _require_aal2(claims)
         allowed = await _has_platform_permission(session, user_id, "platform.memberships.manage")
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant membership management permission.")
@@ -194,6 +203,8 @@ async def list_role_templates(
 ):
     user_id = UUID(claims["sub"])
     allowed = await _has_platform_permission(session, user_id, "platform.roles.read")
+    if allowed:
+        _require_aal2(claims)
     if not allowed:
         result = await session.execute(text("""
             select exists (
@@ -226,6 +237,7 @@ async def list_tenant_memberships(
     user_id = UUID(claims["sub"])
     allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.read",))
     if not allowed:
+        _require_aal2(claims)
         allowed = await _has_platform_permission(session, user_id, "platform.memberships.read")
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant membership read permission.")
@@ -250,6 +262,7 @@ async def list_platform_tenants(
     session: AsyncSession = Depends(user_session),
 ):
     user_id = UUID(claims["sub"])
+    _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.read"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.read permission.")
     result = await session.execute(text("""
