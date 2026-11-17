@@ -25,16 +25,22 @@ import {
   ShieldCheck,
   AlertCircle,
   Filter,
+  Building2,
 } from 'lucide-react';
 import {
   formatIDR,
-  SALES_AGENTZY_TIERS,
   type LeadItem,
   type TaskItem,
   type AffiliateMember,
   type SalesLifecycleStatus,
   type WorkforceRoleMode,
 } from '@/lib/agentzy-data';
+import {
+  INITIAL_CORPORATE_COMPENSATION_SCHEMAS,
+  calculateCorporateSalesAffiliatePayroll,
+  type CorporateCompensationSchema,
+  type SalesGradeKey,
+} from '@/lib/corporate-compensation';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 
 // --- 1. SALES / AFFILIATE DASHBOARD (Image 1 Desktop/Mobile + Screen 5) ---
@@ -45,6 +51,9 @@ export function SalesDashboardView({
   onOpenNewLead,
   userName,
   sponsorInfo,
+  placedSchema,
+  allCorpSchemas,
+  onChangePlacedCorporateId,
 }: {
   roleMode: WorkforceRoleMode;
   tasks: TaskItem[];
@@ -52,11 +61,30 @@ export function SalesDashboardView({
   onOpenNewLead: () => void;
   userName?: string;
   sponsorInfo?: { name: string; code: string };
+  placedSchema?: CorporateCompensationSchema;
+  allCorpSchemas?: CorporateCompensationSchema[];
+  onChangePlacedCorporateId?: (id: string) => void;
 }) {
   const isAffiliate = roleMode === 'affiliate';
   const displayName = userName || (isAffiliate ? 'Siti Nabila' : 'Raka Pratama');
   const sponsorName = sponsorInfo?.name || 'Raka Pratama';
   const sponsorCode = sponsorInfo?.code || 'AGT-RAKA-2026';
+  const activeSchema = placedSchema || INITIAL_CORPORATE_COMPENSATION_SCHEMAS[0];
+  const schemasList =
+    allCorpSchemas && allCorpSchemas.length > 0
+      ? allCorpSchemas
+      : INITIAL_CORPORATE_COMPENSATION_SCHEMAS;
+
+  const payroll = calculateCorporateSalesAffiliatePayroll({
+    schema: activeSchema,
+    grade: 'Pro',
+    personalSA: 24,
+    affiliateSA: 10,
+  });
+
+  const affSplit = payroll.affiliateSplitPct;
+  const salesSplit = payroll.salesIncrementalSplitPct;
+
   const activeTasks = tasks
     .filter((t) => t.roles.includes(roleMode) && t.status === 'aktif')
     .slice(0, 3);
@@ -80,18 +108,37 @@ export function SalesDashboardView({
           </h1>
           <p className="text-xs text-[#526675] sm:text-sm">
             {isAffiliate
-              ? `Affiliate Freelance · Sponsor Sales: ${sponsorName} (${sponsorCode})`
-              : 'Human Workforce Portal · Sales Agentzy (Tier Pro) · Area Jakarta'}
+              ? `Affiliate Freelance · Sponsor Sales: ${sponsorName} (${sponsorCode}) · ${activeSchema.corporateName}`
+              : `Penempatan: ${activeSchema.corporateName} (${activeSchema.contractNumber}) · Split ${affSplit}/${salesSplit}`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => onNavigate(isAffiliate ? 'profile' : 'tier')}
-          className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#ADD8E6] bg-[#E6F4F9] px-3 py-1.5 text-xs font-bold text-[#17324D] hover:bg-[#DCEFF7]"
-        >
-          <Award className="h-3.5 w-3.5 text-[#0284C7]" />
-          <span>{isAffiliate ? `Terikat: ${sponsorCode}` : 'Sales Agentzy · Tier Pro'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onChangePlacedCorporateId && (
+            <div className="flex items-center gap-1.5 rounded-[10px] border border-[#D8E3E9] bg-white px-2.5 py-1.5">
+              <Building2 className="h-3.5 w-3.5 text-[#0284C7]" />
+              <select
+                value={activeSchema.id}
+                onChange={(e) => onChangePlacedCorporateId(e.target.value)}
+                aria-label="Penempatan Vendor Corporate"
+                className="bg-transparent text-xs font-semibold text-[#17324D] outline-none"
+              >
+                {schemasList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.corporateName} ({s.salesConfig.affiliateSplitPct}/{s.salesConfig.salesIncrementalSplitPct})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onNavigate(isAffiliate ? 'profile' : 'tier')}
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#ADD8E6] bg-[#E6F4F9] px-3 py-1.5 text-xs font-bold text-[#17324D] hover:bg-[#DCEFF7]"
+          >
+            <Award className="h-3.5 w-3.5 text-[#0284C7]" />
+            <span>{isAffiliate ? `Terikat: ${sponsorCode}` : 'Sales Agentzy · Tier Pro'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Hero Promotional Banner (Image 1) */}
@@ -100,18 +147,18 @@ export function SalesDashboardView({
           <div className="p-5 sm:p-6 md:col-span-7">
             <p className="text-xs font-bold text-[#0284C7]">
               {isAffiliate
-                ? 'Skema Pembagian Inkremental 60%'
-                : 'Program Sales & Jaringan Affiliate'}
+                ? `Skema Pembagian Inkremental ${affSplit}% (${activeSchema.corporateName})`
+                : `Kontrak ${activeSchema.contractNumber} · Split ${affSplit}% Affiliate / ${salesSplit}% Sales`}
             </p>
             <h2 className="mt-1 text-lg font-bold leading-snug text-[#17324D] sm:text-xl">
               {isAffiliate
                 ? 'Kirim Prospek ISP & Pantau Komisi Anda Real-Time'
-                : 'Jual, Rekrut, Kolaborasi & Raih Komisi Lebih Besar'}
+                : 'Jual, Rekrut, Kolaborasi & Raih Gaji + Komisi Sesuai Kontrak'}
             </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-[#526675] sm:text-sm">
               {isAffiliate
-                ? 'Setiap aktivasi pelanggan dari referral Anda terhitung transparan pada statement komisi Agentzy.'
-                : 'Jalankan penugasan, kelola tim affiliate, dan tingkatkan penghasilanmu melalui skema Combined Tier di Agentzy.'}
+                ? `Setiap aktivasi pelanggan di ${activeSchema.corporateName} terhitung otomatis pada rasio ${affSplit}% Affiliate / ${salesSplit}% Staff Sales.`
+                : `Gaji Pokok ${formatIDR(payroll.baseSalaryIdr)} + Komisi SA & pembagian otomatis ${salesSplit}% dari jaringan Affiliate di ${activeSchema.corporateName}.`}
             </p>
           </div>
           <div className="relative h-40 w-full md:col-span-5 md:h-48">
@@ -251,14 +298,14 @@ export function SalesDashboardView({
 
           <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4">
             <p className="text-xs text-[#526675]">
-              {isAffiliate ? 'Komisi Affiliate (60%)' : 'Total Penghasilan'}
+              {isAffiliate ? `Komisi Affiliate (${affSplit}%)` : 'Total Take-Home Pay'}
             </p>
             <div className="mt-1.5 flex items-baseline justify-between gap-2">
               <span className="font-mono-tabular text-lg font-bold text-[#172B3A] sm:text-xl">
-                {isAffiliate ? 'Rp 2.400.000' : 'Rp 12.850.000'}
+                {isAffiliate ? formatIDR(payroll.affiliatePayoutIdr) : formatIDR(payroll.salesTotalTakeHomeIdr)}
               </span>
               <span className="font-mono-tabular text-xs font-semibold text-[#247A55]">
-                {isAffiliate ? '+18%' : '+32%'}
+                {activeSchema.vendorCode}
               </span>
             </div>
           </div>
@@ -1759,9 +1806,15 @@ export function AffiliateTeamAndRecruitView({
 export function CommissionAndSimulatorView({
   roleMode = 'sales',
   initialSubTab = 'rincian',
+  placedSchema,
+  allCorpSchemas,
+  onChangePlacedCorporateId,
 }: {
   roleMode?: WorkforceRoleMode;
   initialSubTab?: 'rincian' | 'riwayat' | 'simulasi';
+  placedSchema?: CorporateCompensationSchema;
+  allCorpSchemas?: CorporateCompensationSchema[];
+  onChangePlacedCorporateId?: (id: string) => void;
 }) {
   const isAffiliate = roleMode === 'affiliate';
   const [subTab, setSubTab] = useState<'rincian' | 'riwayat' | 'simulasi'>(
@@ -1776,71 +1829,101 @@ export function CommissionAndSimulatorView({
       : 'BCA · 8840192831 (Raka Pratama)'
   );
 
-  // Sales Simulator State (Screen 14 & PRD Section 6.2/6.3)
-  const [salesGrade, setSalesGrade] = useState<'Training' | 'Pro' | 'Elite'>('Pro');
+  const schemasList =
+    allCorpSchemas && allCorpSchemas.length > 0
+      ? allCorpSchemas
+      : INITIAL_CORPORATE_COMPENSATION_SCHEMAS;
+  const activeSchema = placedSchema || schemasList[0];
+
+  // Sales Simulator State (linked to Corporate Placement)
+  const [salesGrade, setSalesGrade] = useState<SalesGradeKey>('Pro');
   const [personalSA, setPersonalSA] = useState(24);
   const [affiliateSA, setAffiliateSA] = useState(10);
 
-  // Affiliate Simulator State (Affiliate 60% portion only)
+  // Affiliate Simulator State
   const [affOrders, setAffOrders] = useState(8);
-  const [affPackageRate, setAffPackageRate] = useState(275000);
+  const [affPackageRate, setAffPackageRate] = useState(activeSchema.salesConfig.productRates.ftthIdr);
 
-  const combinedSA = personalSA + affiliateSA;
-  const affiliateShareSA = affiliateSA * 0.6;
-  const salesIncrementalSA = affiliateSA * 0.4;
-  const salesAttributedTotalSA = personalSA + salesIncrementalSA;
+  // Monthly deterministic payroll for current placement (24 Personal SA + 10 Affiliate SA, Grade Pro)
+  const currentPayroll = calculateCorporateSalesAffiliatePayroll({
+    schema: activeSchema,
+    grade: 'Pro',
+    personalSA: 24,
+    affiliateSA: 10,
+  });
 
-  const matchedTier =
-    SALES_AGENTZY_TIERS.find((t) => combinedSA >= t.min && combinedSA <= t.max) ||
-    SALES_AGENTZY_TIERS[0];
+  // Live Simulator payroll calculation
+  const simPayroll = calculateCorporateSalesAffiliatePayroll({
+    schema: activeSchema,
+    grade: salesGrade,
+    personalSA,
+    affiliateSA,
+  });
 
-  const baseRate =
-    salesGrade === 'Training'
-      ? 150000
-      : salesGrade === 'Elite'
-        ? matchedTier.feeRef + 25000
-        : matchedTier.feeRef;
-
-  const salesCommissionEst = Math.round(salesIncrementalSA * baseRate * 1.4);
-  const affiliateCommissionEst = Math.round(affiliateShareSA * baseRate * 1.4);
-  const totalIncrementalEst = salesCommissionEst + affiliateCommissionEst;
-
-  const affiliatePersonalEst = Math.round(affOrders * affPackageRate * 0.6);
-  const totalDisplay = isAffiliate ? 'Rp 2.400.000' : 'Rp 12.850.000';
+  const affSplit = activeSchema.salesConfig.affiliateSplitPct;
+  const salesSplit = activeSchema.salesConfig.salesIncrementalSplitPct;
+  const affiliatePersonalEst = Math.round(
+    affOrders * (affPackageRate || activeSchema.salesConfig.affiliateFeePerSAIdr) * (affSplit / 100)
+  );
+  const totalDisplay = isAffiliate
+    ? formatIDR(currentPayroll.affiliatePayoutIdr)
+    : formatIDR(currentPayroll.salesTotalTakeHomeIdr);
 
   const rincianRows = isAffiliate
     ? [
-        { label: 'Komisi Prospek Teraktivasi (Porsi 60%)', val: 'Rp 1.850.000' },
-        { label: 'Insentif Kampanye Area', val: 'Rp 350.000' },
-        { label: 'Bonus Ketepatan Data & Follow-Up', val: 'Rp 200.000' },
+        {
+          label: `Komisi Prospek Teraktivasi (${currentPayroll.affiliateShareSA} SA · Porsi ${affSplit}% ${activeSchema.corporateName})`,
+          val: formatIDR(currentPayroll.affiliatePayoutIdr),
+        },
+        {
+          label: `Rate Fee Affiliate per SA (${activeSchema.contractNumber})`,
+          val: formatIDR(activeSchema.salesConfig.affiliateFeePerSAIdr),
+        },
+        {
+          label: 'Skema Split Penempatan Vendor',
+          val: `${affSplit}% Affiliate / ${salesSplit}% Staff Sales`,
+        },
       ]
     : [
-        { label: 'Komisi Penjualan (Pribadi)', val: 'Rp 6.000.000' },
         {
-          label: 'Atribusi Inkremental Affiliate (40% Sales / 60% Affiliate)',
-          val: 'Rp 4.200.000',
+          label: `Gaji Pokok Staff Sales (${activeSchema.contractNumber})`,
+          val: formatIDR(currentPayroll.baseSalaryIdr),
         },
-        { label: 'Insentif Produktivitas', val: 'Rp 1.500.000' },
-        { label: 'Bonus Tier (Sales Agentzy Pro)', val: 'Rp 1.150.000' },
+        {
+          label: 'Tunjangan Operasional Penempatan',
+          val: formatIDR(currentPayroll.operationalAllowanceIdr),
+        },
+        {
+          label: `Komisi SA Pribadi + ${salesSplit}% Inkremental (${currentPayroll.salesAttributedTotalSA} SA × ${formatIDR(currentPayroll.matchedTier.feePerSA)})`,
+          val: formatIDR(currentPayroll.salesCommissionIdr),
+        },
+        {
+          label: 'Bonus Grade Sales Agentzy Pro',
+          val: formatIDR(currentPayroll.gradeBonusIdr),
+        },
+        {
+          label: `Bonus Tier (${currentPayroll.matchedTier.label})`,
+          val: formatIDR(currentPayroll.tierBonusIdr),
+        },
       ];
 
   const riwayatRows = isAffiliate
     ? [
         {
           period: 'Oktober 2025',
-          rule: 'Skema Affiliate 60% Inkremental',
+          rule: `Skema Affiliate ${affSplit}% (${activeSchema.corporateName})`,
           net: 'Rp 2.150.000',
           status: 'Dibayarkan · 05 Nov 2025',
         },
         {
           period: 'September 2025',
-          rule: 'Skema Affiliate 60% Inkremental',
+          rule: `Skema Affiliate ${affSplit}% (${activeSchema.corporateName})`,
           net: 'Rp 1.800.000',
           status: 'Dibayarkan · 05 Okt 2025',
         },
         {
           period: 'Agustus 2025',
-          rule: 'Skema Affiliate 60% Inkremental',
+          rule: `Skema Affiliate ${affSplit}% (${activeSchema.corporateName})`,
           net: 'Rp 1.450.000',
           status: 'Dibayarkan · 05 Sep 2025',
         },
@@ -1848,19 +1931,19 @@ export function CommissionAndSimulatorView({
     : [
         {
           period: 'Oktober 2025',
-          rule: 'Scheme v3 (Sales Agentzy Pro)',
+          rule: `${activeSchema.contractNumber} (Sales Pro · Split ${affSplit}/${salesSplit})`,
           net: 'Rp 9.720.000',
           status: 'Dibayarkan · 05 Nov 2025',
         },
         {
           period: 'September 2025',
-          rule: 'Scheme v3 (Sales Agentzy Pro)',
+          rule: `${activeSchema.contractNumber} (Sales Pro · Split ${affSplit}/${salesSplit})`,
           net: 'Rp 8.940.000',
           status: 'Dibayarkan · 05 Okt 2025',
         },
         {
           period: 'Agustus 2025',
-          rule: 'Scheme v2 (Sales Agentzy Training)',
+          rule: `${activeSchema.contractNumber} (Sales OJT)`,
           net: 'Rp 6.450.000',
           status: 'Dibayarkan · 05 Sep 2025',
         },
@@ -1868,9 +1951,34 @@ export function CommissionAndSimulatorView({
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-[#17324D]">
-        Komisi &amp; Penghasilan
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-[#17324D]">
+            Gaji, Komisi &amp; Bagi Hasil Corporate
+          </h1>
+          <p className="text-xs text-[#526675]">
+            Penempatan aktif: <strong className="text-[#17324D]">{activeSchema.corporateName}</strong> ({activeSchema.contractNumber}) · Split {affSplit}% Affiliate / {salesSplit}% Staff Sales
+          </p>
+        </div>
+
+        {onChangePlacedCorporateId && (
+          <div className="flex items-center gap-1.5 rounded-[10px] border border-[#D8E3E9] bg-white px-3 py-2">
+            <Building2 className="h-4 w-4 text-[#0284C7]" />
+            <select
+              value={activeSchema.id}
+              onChange={(e) => onChangePlacedCorporateId(e.target.value)}
+              aria-label="Pilih Penempatan Corporate"
+              className="bg-transparent text-xs font-semibold text-[#17324D] outline-none"
+            >
+              {schemasList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.corporateName} · {s.contractNumber} ({s.salesConfig.affiliateSplitPct}/{s.salesConfig.salesIncrementalSplitPct})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       {/* Total Earnings Header Card (Screen 13) */}
       <div className="rounded-[14px] border border-[#D8E3E9] bg-[#E6F4F9] p-5">
@@ -1878,14 +1986,16 @@ export function CommissionAndSimulatorView({
           <div>
             <p className="text-xs font-semibold text-[#526675]">
               {isAffiliate
-                ? 'Total Komisi Affiliate Bulan Ini (Porsi 60%)'
-                : 'Total Penghasilan Bulan Ini'}
+                ? `Total Komisi Affiliate Bulan Ini (Porsi ${affSplit}% · ${activeSchema.corporateName})`
+                : `Total Take-Home Pay Sales Bulan Ini (${activeSchema.corporateName})`}
             </p>
             <p className="mt-1 font-mono-tabular text-2xl font-bold text-[#17324D] sm:text-3xl">
               {hideAmount ? 'Rp •••••••••' : totalDisplay}
             </p>
             <p className="mt-1 text-xs font-semibold text-[#247A55]">
-              {isAffiliate ? '+18% dari bulan lalu' : '+32% dari bulan lalu'}
+              {isAffiliate
+                ? `Atribusi ${currentPayroll.affiliateShareSA} SA dari ${currentPayroll.affiliateSA} SA · Kontrak ${activeSchema.contractNumber}`
+                : `Gaji Pokok ${formatIDR(currentPayroll.baseSalaryIdr)} + Komisi & Bonus ${formatIDR(currentPayroll.salesTotalTakeHomeIdr - currentPayroll.baseSalaryIdr)}`}
             </p>
           </div>
           <button
@@ -1926,13 +2036,13 @@ export function CommissionAndSimulatorView({
       {subTab === 'rincian' && (
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
           <h2 className="text-sm font-bold text-[#17324D]">
-            Rincian Bulan Ini
+            Rincian Bulan Ini ({activeSchema.corporateName})
           </h2>
           <div className="mt-4 divide-y divide-[#EAF2F6] text-sm">
             {rincianRows.map((row) => (
               <div
                 key={row.label}
-                className="flex items-center justify-between gap-4 py-3"
+                className="flex items-center justify-between gap-4 py-3 text-xs sm:text-sm"
               >
                 <span className="text-[#526675]">{row.label}</span>
                 <span className="font-mono-tabular font-semibold text-[#172B3A]">
@@ -1948,6 +2058,17 @@ export function CommissionAndSimulatorView({
               {hideAmount ? 'Rp •••••••' : totalDisplay}
             </span>
           </div>
+
+          {!isAffiliate && (
+            <div className="mt-3 flex items-center justify-between rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-4 py-2.5 text-xs">
+              <span className="text-[#526675]">
+                Porsi Affiliate Terkait ({affSplit}% × {currentPayroll.affiliateSA} SA)
+              </span>
+              <span className="font-mono-tabular font-bold text-[#0284C7]">
+                {hideAmount ? 'Rp ••••••' : formatIDR(currentPayroll.affiliatePayoutIdr)}
+              </span>
+            </div>
+          )}
 
           <button
             type="button"
@@ -1992,10 +2113,10 @@ export function CommissionAndSimulatorView({
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-4">
           <div>
             <h2 className="text-base font-bold text-[#17324D]">
-              Simulasi Komisi Affiliate (Porsi 60%)
+              Simulasi Komisi Affiliate ({affSplit}% · {activeSchema.corporateName})
             </h2>
             <p className="text-xs text-[#526675]">
-              Hitung estimasi pendapatan dari prospek pelanggan ISP yang berhasil teraktivasi
+              Hitung estimasi pendapatan dari prospek pelanggan ISP yang berhasil teraktivasi sesuai kontrak penempatan Sales Sponsor Anda.
             </p>
           </div>
 
@@ -2014,23 +2135,29 @@ export function CommissionAndSimulatorView({
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-[#17324D]">
-                Kategori Paket ISP Referensi
+                Kategori Paket ISP ({activeSchema.corporateName})
               </label>
               <select
                 value={affPackageRate}
                 onChange={(e) => setAffPackageRate(Number(e.target.value))}
                 className="h-11 w-full rounded-[10px] border border-[#B8C9D3] bg-white px-3 text-sm"
               >
-                <option value={225000}>FWA 50 Mbps</option>
-                <option value={275000}>FTTH 100 Mbps</option>
-                <option value={360000}>FTTH 200 Mbps</option>
+                <option value={activeSchema.salesConfig.productRates.fwaIdr}>
+                  FWA Wireless ({formatIDR(activeSchema.salesConfig.productRates.fwaIdr)})
+                </option>
+                <option value={activeSchema.salesConfig.productRates.ftthIdr}>
+                  FTTH Fiber ({formatIDR(activeSchema.salesConfig.productRates.ftthIdr)})
+                </option>
+                <option value={activeSchema.salesConfig.productRates.pxgyIdr}>
+                  PXGY Enterprise ({formatIDR(activeSchema.salesConfig.productRates.pxgyIdr)})
+                </option>
               </select>
             </div>
           </div>
 
           <div className="rounded-[12px] border border-[#ADD8E6] bg-[#E6F4F9] p-4 space-y-2.5 text-sm">
             <p className="font-bold text-[#17324D]">
-              Estimasi Komisi Affiliate Freelance
+              Estimasi Komisi Affiliate Freelance ({activeSchema.contractNumber})
             </p>
             <div className="flex justify-between text-xs">
               <span className="text-[#526675]">Total Aktivasi Prospek</span>
@@ -2041,7 +2168,7 @@ export function CommissionAndSimulatorView({
             <div className="flex justify-between text-xs">
               <span className="text-[#526675]">Porsi Pembagian Affiliate</span>
               <span className="font-mono-tabular font-bold text-[#17324D]">
-                60% dari nilai aktivasi inkremental
+                {affSplit}% Affiliate / {salesSplit}% Staff Sales
               </span>
             </div>
             <div className="border-t border-[#B8C9D3] pt-2.5 flex justify-between text-sm font-bold text-[#247A55]">
@@ -2051,43 +2178,51 @@ export function CommissionAndSimulatorView({
               </span>
             </div>
           </div>
-
-          <div className="flex items-start gap-2 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-[11px] text-[#526675]">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0284C7]" />
-            <span>
-              Simulasi mengikuti skema komisi Affiliate Freelance (porsi 60%
-              dari aktivasi pelanggan terverifikasi). Angka payable resmi tetap
-              ditentukan oleh Commission Engine dan ketentuan program insentif
-              ISP Partner yang berlaku.
-            </span>
-          </div>
         </div>
       )}
 
       {subTab === 'simulasi' && !isAffiliate && (
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-4">
-          <div>
-            <h2 className="text-base font-bold text-[#17324D]">
-              Simulasi Komisi &amp; Pembagian SA (60/40)
-            </h2>
-            <p className="text-xs text-[#526675]">
-              Kalkulasi deterministik mengikuti skema inkremental PRD Section 6.2 &amp; 6.3
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-base font-bold text-[#17324D]">
+                Simulasi Gaji, Tier &amp; Pembagian SA ({affSplit}/{salesSplit})
+              </h2>
+              <p className="text-xs text-[#526675]">
+                Otomatis mengikuti skema kontrak penempatan vendor <strong className="text-[#17324D]">{activeSchema.corporateName}</strong> ({activeSchema.contractNumber})
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {onChangePlacedCorporateId && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#17324D]">
+                  Penempatan Vendor Corporate
+                </label>
+                <select
+                  value={activeSchema.id}
+                  onChange={(e) => onChangePlacedCorporateId(e.target.value)}
+                  className="h-11 w-full rounded-[10px] border border-[#B8C9D3] bg-white px-3 text-sm"
+                >
+                  {schemasList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.corporateName} ({s.salesConfig.affiliateSplitPct}/{s.salesConfig.salesIncrementalSplitPct})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs font-semibold text-[#17324D]">
                 Tingkatan Sales Agentzy
               </label>
               <select
                 value={salesGrade}
-                onChange={(e) =>
-                  setSalesGrade(e.target.value as 'Training' | 'Pro' | 'Elite')
-                }
+                onChange={(e) => setSalesGrade(e.target.value as SalesGradeKey)}
                 className="h-11 w-full rounded-[10px] border border-[#B8C9D3] bg-white px-3 text-sm"
               >
-                <option value="Training">Sales Agentzy Training (OJT)</option>
+                <option value="OJT">Sales Agentzy Training (OJT)</option>
                 <option value="Pro">Sales Agentzy Pro</option>
                 <option value="Elite">Sales Agentzy Elite</option>
               </select>
@@ -2120,50 +2255,59 @@ export function CommissionAndSimulatorView({
 
           <div className="rounded-[12px] border border-[#ADD8E6] bg-[#E6F4F9] p-4 space-y-2.5 text-sm">
             <p className="font-bold text-[#17324D]">
-              Hasil Perhitungan Unit Produktivitas &amp; Estimasi
+              Hasil Kalkulasi Otomatis ({simPayroll.corporateName} · {simPayroll.contractNumber})
             </p>
             <div className="flex justify-between text-xs">
-              <span className="text-[#526675]">Combined SA (Tier Basis)</span>
+              <span className="text-[#526675]">Combined SA (Penentu Bracket Tier)</span>
               <span className="font-mono-tabular font-bold text-[#17324D]">
-                {combinedSA} SA · {matchedTier.label}
+                {simPayroll.combinedSA} SA · {simPayroll.matchedTier.label} ({formatIDR(simPayroll.matchedTier.feePerSA)}/SA)
               </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-[#526675]">
-                Atribusi Sales Resmi (Personal + 40% Inkremental)
+                Atribusi Staff Sales (Personal + {simPayroll.salesIncrementalSplitPct}% Inkremental)
               </span>
               <span className="font-mono-tabular font-bold text-[#17324D]">
-                {salesAttributedTotalSA.toFixed(1)} SA ({personalSA} +{' '}
-                {salesIncrementalSA.toFixed(1)})
+                {simPayroll.salesAttributedTotalSA} SA ({simPayroll.personalSA} + {simPayroll.salesIncrementalSA})
               </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-[#526675]">
-                Atribusi Affiliate (60% Inkremental)
+                Atribusi Affiliate ({simPayroll.affiliateSplitPct}% Inkremental)
               </span>
               <span className="font-mono-tabular font-bold text-[#17324D]">
-                {affiliateShareSA.toFixed(1)} SA
+                {simPayroll.affiliateShareSA} SA
               </span>
             </div>
             <div className="border-t border-[#B8C9D3] pt-2.5 space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-[#526675]">Estimasi Porsi Sales (40%)</span>
-                <span className="font-mono-tabular font-bold text-[#17324D]">
-                  {formatIDR(salesCommissionEst)}
+                <span className="text-[#526675]">Gaji Pokok + Tunjangan Operasional</span>
+                <span className="font-mono-tabular font-semibold text-[#17324D]">
+                  {formatIDR(simPayroll.baseSalaryIdr + simPayroll.operationalAllowanceIdr)}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-[#526675]">
-                  Estimasi Porsi Affiliate (60%)
-                </span>
-                <span className="font-mono-tabular font-bold text-[#17324D]">
-                  {formatIDR(affiliateCommissionEst)}
+                <span className="text-[#526675]">Komisi SA + Bonus Grade + Bonus Tier</span>
+                <span className="font-mono-tabular font-semibold text-[#17324D]">
+                  {formatIDR(simPayroll.salesCommissionIdr + simPayroll.gradeBonusIdr + simPayroll.tierBonusIdr)}
                 </span>
               </div>
-              <div className="flex justify-between text-sm font-bold text-[#247A55]">
-                <span>Total Inkremental Estimasi</span>
+              <div className="flex justify-between text-xs font-bold text-[#0284C7]">
+                <span>Total Take-Home Pay Staff Sales</span>
                 <span className="font-mono-tabular">
-                  {formatIDR(totalIncrementalEst)}
+                  {formatIDR(simPayroll.salesTotalTakeHomeIdr)}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs font-bold text-[#17324D]">
+                <span>Payout Mitra Affiliate ({simPayroll.affiliateSplitPct}%)</span>
+                <span className="font-mono-tabular">
+                  {formatIDR(simPayroll.affiliatePayoutIdr)}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-[#B8C9D3] pt-1.5 text-sm font-bold text-[#247A55]">
+                <span>Total Payout Gabungan (Sales + Affiliate)</span>
+                <span className="font-mono-tabular">
+                  {formatIDR(simPayroll.grossCombinedPayoutIdr)}
                 </span>
               </div>
             </div>
@@ -2172,10 +2316,7 @@ export function CommissionAndSimulatorView({
           <div className="flex items-start gap-2 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-[11px] text-[#526675]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0284C7]" />
             <span>
-              Simulasi mengikuti skema incremental productivity (60% Affiliate /
-              40% Sales) &amp; referensi tier PRD. Angka payable resmi tetap
-              ditentukan oleh Commission Engine backend dan dokumen insentif ISP
-              Partner yang berlaku.
+              Kalkulasi disinkronkan langsung dengan aturan kontrak {activeSchema.corporateName} dari Super Admin Control Plane. Mengubah rasio split atau gaji pokok di Super Admin otomatis memperbarui simulasi ini.
             </span>
           </div>
         </div>
@@ -2230,7 +2371,8 @@ export function CommissionAndSimulatorView({
                   />
                 </div>
                 <div className="rounded-[10px] bg-[#F5F8FA] p-3 text-xs text-[#526675]">
-                  Nominal tersedia: <strong className="font-mono-tabular text-[#17324D]">{totalDisplay}</strong>
+                  Nominal tersedia ({activeSchema.corporateName}):{' '}
+                  <strong className="font-mono-tabular text-[#17324D]">{totalDisplay}</strong>
                 </div>
                 <div className="flex justify-end gap-2">
                   <button

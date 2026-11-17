@@ -209,6 +209,14 @@ export function LandingPageClient() {
                   <Smartphone className="h-4 w-4 text-[#0284C7]" />
                   <span>Portal Workforce</span>
                 </Link>
+                <Link
+                  href="/admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex h-11 items-center gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3 text-xs font-semibold text-[#17324D]"
+                >
+                  <ShieldCheck className="h-4 w-4 text-[#0284C7]" />
+                  <span>Super Admin Control Plane</span>
+                </Link>
               </div>
             </div>
 
@@ -411,6 +419,13 @@ export function LandingPageClient() {
                   Pengelolaan kualitas tim, kepatuhan kerja sama, perlindungan data
                   pelanggan, serta laporan pencapaian bisnis yang jelas dan akuntabel.
                 </p>
+                <Link
+                  href="/admin"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0284C7] hover:underline"
+                >
+                  <span>Buka Super Admin Control Plane</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
               </div>
             </div>
 
@@ -1092,6 +1107,9 @@ export function LandingPageClient() {
             </Link>
             <Link href="/workforce" className="py-1 hover:text-[#17324D]">
               Portal Workforce
+            </Link>
+            <Link href="/admin" className="py-1 hover:text-[#17324D]">
+              Super Admin Portal
             </Link>
             <button
               type="button"

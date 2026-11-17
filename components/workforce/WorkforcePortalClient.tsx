@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -82,6 +82,19 @@ import {
   type WorkOrderItem,
   type InventoryItem,
 } from '@/lib/agentzy-data';
+import {
+  INITIAL_CORPORATE_COMPENSATION_SCHEMAS,
+  INITIAL_TECH_BONUS_RULES,
+  DEFAULT_TECH_TASK_COUNTS,
+  COMPENSATION_STORAGE_EVENT,
+  loadCorporateCompensationSchemas,
+  loadTechnicianBonusRules,
+  mapWoTypeToBonusCategory,
+  calculateTechnicianCompensation,
+  type CorporateCompensationSchema,
+  type TechnicianBonusRule,
+  type TechnicianTaskCounts,
+} from '@/lib/corporate-compensation';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 
 type PortalTab =
@@ -126,6 +139,37 @@ export function WorkforcePortalClient() {
   const [workOrders, setWorkOrders] = useState<WorkOrderItem[]>(INITIAL_WORK_ORDERS);
   const [selectedWoId, setSelectedWoId] = useState<string | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+
+  // Live Super Admin Corporate Payroll, Split & Technician Bonus State
+  const [corpSchemas, setCorpSchemas] = useState<CorporateCompensationSchema[]>(
+    INITIAL_CORPORATE_COMPENSATION_SCHEMAS
+  );
+  const [techBonusRules, setTechBonusRules] = useState<TechnicianBonusRule[]>(
+    INITIAL_TECH_BONUS_RULES
+  );
+  const [placedCorporateId, setPlacedCorporateId] = useState<string>('corp-comp-nusantara');
+  const [techTaskCounts, setTechTaskCounts] = useState<TechnicianTaskCounts>(
+    DEFAULT_TECH_TASK_COUNTS
+  );
+
+  useEffect(() => {
+    const syncCompensation = () => {
+      setCorpSchemas(loadCorporateCompensationSchemas());
+      setTechBonusRules(loadTechnicianBonusRules());
+    };
+    syncCompensation();
+    window.addEventListener(COMPENSATION_STORAGE_EVENT, syncCompensation);
+    window.addEventListener('storage', syncCompensation);
+    return () => {
+      window.removeEventListener(COMPENSATION_STORAGE_EVENT, syncCompensation);
+      window.removeEventListener('storage', syncCompensation);
+    };
+  }, []);
+
+  const placedSchema = useMemo(
+    () => corpSchemas.find((s) => s.id === placedCorporateId) || corpSchemas[0],
+    [corpSchemas, placedCorporateId]
+  );
 
   // Offline / PWA Queue State
   const [offlineSyncEnabled, setOfflineSyncEnabled] = useState(true);
@@ -301,6 +345,9 @@ export function WorkforcePortalClient() {
   };
 
   const handleCompleteWo = (id: string) => {
+    const targetWo = workOrders.find((w) => w.id === id);
+    const shouldCount = targetWo && targetWo.status !== 'Selesai';
+
     setWorkOrders((prev) =>
       prev.map((wo) =>
         wo.id === id
@@ -313,6 +360,51 @@ export function WorkforcePortalClient() {
           : wo
       )
     );
+
+    if (shouldCount && targetWo) {
+      const cat = mapWoTypeToBonusCategory(targetWo.type);
+      const bucketKey: keyof TechnicianTaskCounts =
+        cat === 'Pemasangan' ? 'pemasangan' : cat === 'Survey' ? 'survey' : 'maintenance';
+
+      const prevCounts = techTaskCounts;
+      const nextCounts: TechnicianTaskCounts = {
+        ...prevCounts,
+        [bucketKey]: {
+          daily: prevCounts[bucketKey].daily + 1,
+          weekly: prevCounts[bucketKey].weekly + 1,
+          monthly: prevCounts[bucketKey].monthly + 1,
+        },
+      };
+      setTechTaskCounts(nextCounts);
+
+      const beforeComp = calculateTechnicianCompensation({
+        schema: placedSchema,
+        bonusRules: techBonusRules,
+        completedCounts: prevCounts,
+        slaPct: 97,
+      });
+      const afterComp = calculateTechnicianCompensation({
+        schema: placedSchema,
+        bonusRules: techBonusRules,
+        completedCounts: nextCounts,
+        slaPct: 97,
+      });
+
+      const newlyUnlocked = afterComp.bonusEvaluations.filter(
+        (afterItem, idx) => afterItem.achieved && !beforeComp.bonusEvaluations[idx]?.achieved
+      );
+
+      if (newlyUnlocked.length > 0) {
+        const unlockedLabels = newlyUnlocked
+          .map((u) => `${u.rule.period} ${u.rule.taskType}`)
+          .join(', ');
+        showToast(
+          `WO ${id} selesai! Target Bonus (${unlockedLabels}) tercapai!`
+        );
+        return;
+      }
+    }
+
     showToast(`Work Order ${id} selesai & laporan Berita Acara tersimpan.`);
   };
 
@@ -383,7 +475,7 @@ export function WorkforcePortalClient() {
         },
         { id: 'ai-collab', label: 'Kolaborasi AI (Partner)', icon: Bot, badge: 'Aktif' },
         { id: 'commission', label: 'Komisi & Penghasilan', icon: Wallet },
-        { id: 'simulator', label: 'Simulasi Komisi (60%)', icon: Calculator },
+        { id: 'simulator', label: `Simulasi Komisi (${placedSchema.salesConfig.affiliateSplitPct}%)`, icon: Calculator },
         { id: 'performance', label: 'Performa & KPI', icon: BarChart3 },
         { id: 'training', label: 'Pelatihan & Materi', icon: GraduationCap },
         { id: 'help', label: 'Bantuan & FAQ', icon: HelpCircle },
@@ -420,7 +512,7 @@ export function WorkforcePortalClient() {
       { id: 'help', label: 'Bantuan & FAQ', icon: HelpCircle },
       { id: 'settings', label: 'Pengaturan', icon: Settings },
     ];
-  }, [roleMode, tasks, leads, workOrders]);
+  }, [roleMode, tasks, leads, workOrders, placedSchema.salesConfig.affiliateSplitPct]);
 
   // Global search results scoped strictly by active roleMode
   const searchResults = useMemo(() => {
@@ -641,10 +733,10 @@ export function WorkforcePortalClient() {
               >
                 <div className="flex items-center gap-2 text-xs font-bold text-[#87CEEB]">
                   <ShieldCheck className="h-4 w-4" />
-                  <span>Mitra Affiliate Aktif (60%)</span>
+                  <span>Mitra Affiliate Aktif ({placedSchema.salesConfig.affiliateSplitPct}%)</span>
                 </div>
                 <p className="mt-1 text-[11px] text-[#CFE3EE]">
-                  Input prospek baru &amp; pantau aktivasi pelanggan Anda.
+                  {placedSchema.corporateName} · Input prospek &amp; pantau komisi Anda.
                 </p>
               </button>
             ) : (
@@ -703,14 +795,14 @@ export function WorkforcePortalClient() {
                 </div>
                 <div className="hidden lg:block">
                   <p className="text-sm font-bold text-[#17324D] whitespace-nowrap">
-                    Human Workforce Portal
+                    Human Workforce Portal · {placedSchema.corporateName}
                   </p>
                   <p className="text-[11px] text-[#526675] whitespace-nowrap">
                     {roleMode === 'technician'
-                      ? 'Portal Teknisi Lapangan · Offline Ready'
+                      ? `Portal Teknisi Lapangan · Kontrak ${placedSchema.contractNumber}`
                       : roleMode === 'affiliate'
-                        ? 'Portal Mitra Affiliate Freelance · Bagi Hasil 60%'
-                        : 'Portal Sales Resmi · Manajemen Tim Affiliate'}
+                        ? `Mitra Affiliate Freelance · Bagi Hasil ${placedSchema.salesConfig.affiliateSplitPct}%`
+                        : `Sales Resmi · Split ${placedSchema.salesConfig.affiliateSplitPct}/${placedSchema.salesConfig.salesIncrementalSplitPct} (${placedSchema.contractNumber})`}
                   </p>
                 </div>
               </div>
@@ -896,6 +988,11 @@ export function WorkforcePortalClient() {
                         setSelectedWoId(wo.id);
                         setActiveTab('workorders');
                       }}
+                      placedSchema={placedSchema}
+                      allCorpSchemas={corpSchemas}
+                      onChangePlacedCorporateId={setPlacedCorporateId}
+                      techBonusRules={techBonusRules}
+                      techTaskCounts={techTaskCounts}
                     />
                   ) : (
                     <SalesDashboardView
@@ -909,6 +1006,9 @@ export function WorkforcePortalClient() {
                       }}
                       userName={currentUser.name}
                       sponsorInfo={boundSponsor}
+                      placedSchema={placedSchema}
+                      allCorpSchemas={corpSchemas}
+                      onChangePlacedCorporateId={setPlacedCorporateId}
                     />
                   ))}
 
@@ -955,12 +1055,21 @@ export function WorkforcePortalClient() {
 
                 {activeTab === 'commission' &&
                   (roleMode === 'technician' ? (
-                    <TechCommissionView />
+                    <TechCommissionView
+                      placedSchema={placedSchema}
+                      allCorpSchemas={corpSchemas}
+                      onChangePlacedCorporateId={setPlacedCorporateId}
+                      techBonusRules={techBonusRules}
+                      techTaskCounts={techTaskCounts}
+                    />
                   ) : (
                     <CommissionAndSimulatorView
                       key="commission"
                       roleMode={roleMode}
                       initialSubTab="rincian"
+                      placedSchema={placedSchema}
+                      allCorpSchemas={corpSchemas}
+                      onChangePlacedCorporateId={setPlacedCorporateId}
                     />
                   ))}
 
@@ -969,11 +1078,17 @@ export function WorkforcePortalClient() {
                     key="simulator"
                     roleMode={roleMode}
                     initialSubTab="simulasi"
+                    placedSchema={placedSchema}
+                    allCorpSchemas={corpSchemas}
+                    onChangePlacedCorporateId={setPlacedCorporateId}
                   />
                 )}
 
                 {activeTab === 'tier' && roleMode === 'sales' && (
-                  <SalesTierView onNavigate={navigateTo} />
+                  <SalesTierView
+                    onNavigate={navigateTo}
+                    placedSchema={placedSchema}
+                  />
                 )}
 
                 {/* TECHNICIAN ROUTES */}
@@ -1404,7 +1519,9 @@ export function WorkforcePortalClient() {
                   className="flex flex-col items-start gap-1.5 rounded-[12px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-left hover:border-[#0284C7] hover:bg-[#E6F4F9]"
                 >
                   <Wallet className="h-5 w-5 text-[#247A55]" />
-                  <span className="text-xs font-bold text-[#17324D]">Cek Komisi 60%</span>
+                  <span className="text-xs font-bold text-[#17324D]">
+                    Cek Komisi {placedSchema.salesConfig.affiliateSplitPct}%
+                  </span>
                   <span className="text-[11px] text-[#526675]">Rincian &amp; tarik penghasilan</span>
                 </button>
               ) : (

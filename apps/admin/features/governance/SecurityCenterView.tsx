@@ -1,0 +1,261 @@
+'use client';
+
+import React from 'react';
+import {
+  Lock,
+  ShieldCheck,
+  KeyRound,
+  CheckCircle2,
+  XCircle,
+  Sliders,
+} from 'lucide-react';
+import {
+  AdminPageHeader,
+  AdminStatusText,
+} from '../../components/data-display/AdminDataDisplay';
+import type {
+  BreakGlassRequestRecord,
+  FeatureFlagRecord,
+} from '../../lib/admin-types';
+
+export function SecurityCenterView({
+  mfaEnforced,
+  onToggleMfa,
+  activeSessionsCount,
+  onRevokeAllSessions,
+  ipAllowlistEnabled,
+  sessionTtlMinutes,
+  breakGlassRequests,
+  onOpenBreakGlassModal,
+  onDecideBreakGlass,
+  onOpenSecurityPolicyModal,
+  featureFlags,
+  onToggleFeatureFlag,
+  onBack,
+}: {
+  mfaEnforced: boolean;
+  onToggleMfa: () => void;
+  activeSessionsCount: number;
+  onRevokeAllSessions: () => void;
+  ipAllowlistEnabled: boolean;
+  sessionTtlMinutes: number;
+  breakGlassRequests: BreakGlassRequestRecord[];
+  onOpenBreakGlassModal: () => void;
+  onDecideBreakGlass: (id: string, status: 'Aktif' | 'Ditolak' | 'Selesai') => void;
+  onOpenSecurityPolicyModal: () => void;
+  featureFlags: FeatureFlagRecord[];
+  onToggleFeatureFlag: (id: string) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <AdminPageHeader
+        title="Security Center (MFA, Break-Glass & Integrasi Akses)"
+        subtitle="Autentikasi 2FA platform, sesi aktif, persetujuan darurat 2-tahap Break-Glass Access, kebijakan IP allowlist, dan feature flags."
+        onBack={onBack}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenBreakGlassModal}
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-[#B23A48]/40 bg-[#B23A48]/5 px-3.5 text-xs font-semibold text-[#B23A48] hover:bg-[#B23A48]/10 whitespace-nowrap"
+            >
+              <Lock className="h-4 w-4" />
+              <span>Ajukan Break-Glass</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenSecurityPolicyModal}
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#17324D] px-4 text-xs font-semibold text-white hover:bg-[#245477] whitespace-nowrap"
+            >
+              <Sliders className="h-4 w-4" />
+              <span>Atur Kebijakan</span>
+            </button>
+          </div>
+        }
+      />
+
+      {/* Top Row matching Screen 27 */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#526675]">MFA (2FA)</span>
+            <AdminStatusText
+              tone={mfaEnforced ? 'success' : 'danger'}
+              label={mfaEnforced ? 'Aktif' : 'Nonaktif'}
+            />
+          </div>
+          <p className="text-sm font-bold text-[#17324D]">Wajib untuk seluruh Admin</p>
+          <button
+            type="button"
+            onClick={onToggleMfa}
+            className="h-8 w-full rounded-lg border border-[#D8E3E9] text-xs font-semibold text-[#17324D] hover:bg-[#EAF2F6]"
+          >
+            {mfaEnforced ? 'Evaluasi Kebijakan MFA' : 'Aktifkan MFA Wajib'}
+          </button>
+        </div>
+
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#526675]">Session Aktif</span>
+            <KeyRound className="h-4 w-4 text-[#0284C7]" />
+          </div>
+          <p className="font-mono-tabular text-2xl font-bold text-[#17324D]">
+            {activeSessionsCount}
+          </p>
+          <button
+            type="button"
+            onClick={onRevokeAllSessions}
+            className="h-8 w-full rounded-lg border border-[#D8E3E9] text-xs font-semibold text-[#B23A48] hover:bg-[#B23A48]/10"
+          >
+            Cabut Sesi Non-Esensial
+          </button>
+        </div>
+
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#526675]">
+              Kebijakan Keamanan
+            </span>
+            <ShieldCheck className="h-4 w-4 text-[#247A55]" />
+          </div>
+          <p className="text-sm font-bold text-[#17324D]">
+            IP Allowlist: {ipAllowlistEnabled ? 'Ketat Aktif' : 'Terbuka'}
+          </p>
+          <p className="text-xs text-[#526675]">
+            Batas sesi:{' '}
+            <span className="font-mono-tabular font-semibold text-[#17324D]">
+              {sessionTtlMinutes} menit
+            </span>
+          </p>
+        </div>
+
+        <div className="rounded-[14px] border border-[#B23A48]/35 bg-[#B23A48]/5 p-5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#B23A48]">Break-Glass Access</span>
+            <Lock className="h-4 w-4 text-[#B23A48]" />
+          </div>
+          <p className="text-xs font-semibold text-[#17324D]">
+            Akses darurat (terkendali, 2-tahap approval, time-bound)
+          </p>
+          <p className="font-mono-tabular text-[11px] text-[#526675]">
+            {breakGlassRequests.filter((b) => b.status === 'Aktif').length} sesi aktif ·
+            Semua aksi diaudit
+          </p>
+        </div>
+      </div>
+
+      {/* Break-Glass Governance Queue */}
+      <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EAF2F6] pb-3">
+          <div>
+            <h2 className="text-sm font-bold text-[#17324D]">
+              Antrean &amp; Sesi Break-Glass Access (Akses Darurat Lintas Tenant)
+            </h2>
+            <p className="text-xs text-[#526675]">
+              Time-bound · Approval-required (min. 2 tahap) · Wajib ditinjau pasca-akses
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2.5">
+          {breakGlassRequests.map((req) => (
+            <div
+              key={req.id}
+              className="flex flex-col gap-3 rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-[#17324D]">
+                    {req.targetTenant}
+                  </span>
+                  <AdminStatusText
+                    tone={
+                      req.status === 'Aktif'
+                        ? 'danger'
+                        : req.status === 'Menunggu Approval'
+                          ? 'warning'
+                          : req.status === 'Selesai'
+                            ? 'success'
+                            : 'neutral'
+                    }
+                    label={req.status}
+                  />
+                </div>
+                <p className="text-xs text-[#172B3A]">{req.reason}</p>
+                <p className="font-mono-tabular text-[11px] text-[#718391]">
+                  Actor: {req.actorEmail} · Durasi: {req.durationMinutes} mnt · Approver:{' '}
+                  {req.approver1} + {req.approver2}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {req.status === 'Menunggu Approval' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onDecideBreakGlass(req.id, 'Aktif')}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#247A55] px-3 text-xs font-semibold text-white"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Setujui Tahap-2</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDecideBreakGlass(req.id, 'Ditolak')}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#B23A48]/40 px-2.5 text-xs font-semibold text-[#B23A48]"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      <span>Tolak</span>
+                    </button>
+                  </>
+                )}
+                {req.status === 'Aktif' && (
+                  <button
+                    type="button"
+                    onClick={() => onDecideBreakGlass(req.id, 'Selesai')}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#17324D] px-3 text-xs font-semibold text-white"
+                  >
+                    <span>Tutup &amp; Review</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Platform Feature Flags */}
+      <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
+        <h2 className="text-sm font-bold text-[#17324D]">
+          Platform Feature Flags &amp; Kill-Switch
+        </h2>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {featureFlags.map((flag) => (
+            <div
+              key={flag.id}
+              className="flex items-center justify-between gap-3 rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] p-3.5"
+            >
+              <div>
+                <p className="text-xs font-bold text-[#17324D]">{flag.label}</p>
+                <p className="font-mono-tabular text-[11px] text-[#526675]">
+                  {flag.flagKey} · {flag.scope}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggleFeatureFlag(flag.id)}
+                className={`h-8 shrink-0 rounded-lg px-3 text-xs font-bold ${
+                  flag.enabled
+                    ? 'bg-[#0284C7] text-white'
+                    : 'border border-[#D8E3E9] bg-white text-[#526675]'
+                }`}
+              >
+                {flag.enabled ? 'Aktif' : 'Nonaktif'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

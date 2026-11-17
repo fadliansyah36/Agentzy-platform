@@ -234,24 +234,31 @@ export function CorporateAppShell({
               <LogOut className="h-3.5 w-3.5" />
               <span>Ganti Tenant / Login SSO</span>
             </button>
-            <div className="flex items-center gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               <Link
                 href="/ai-workforce"
-                className="flex flex-1 items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
+                className="flex items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
               >
                 <span>AI Portal</span>
                 <ExternalLink className="h-3 w-3" />
               </Link>
               <Link
                 href="/workforce"
-                className="flex flex-1 items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
+                className="flex items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
               >
                 <span>Workforce</span>
                 <ExternalLink className="h-3 w-3" />
               </Link>
               <Link
+                href="/admin"
+                className="flex items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
+              >
+                <span>Super Admin</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+              <Link
                 href="/"
-                className="flex flex-1 items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
+                className="flex items-center justify-center gap-1 rounded-[8px] border border-white/15 px-2 py-1.5 text-[11px] font-medium text-[#ADD8E6] hover:bg-white/10"
               >
                 <span>Landing</span>
               </Link>

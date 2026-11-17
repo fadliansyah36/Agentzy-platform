@@ -18,11 +18,14 @@ import {
   SALES_TIER_LEVELS,
   formatIDR,
 } from '@/lib/agentzy-data';
+import type { CorporateCompensationSchema } from '@/lib/corporate-compensation';
 
 export function SalesTierView({
   onNavigate,
+  placedSchema,
 }: {
   onNavigate: (tab: string) => void;
+  placedSchema?: CorporateCompensationSchema;
 }) {
   const [selectedTierId, setSelectedTierId] = useState<'Training' | 'Pro' | 'Elite'>('Pro');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -32,6 +35,11 @@ export function SalesTierView({
   const currentSA = 24;
   const eliteThresholdSA = 30;
   const progressPct = Math.min(100, Math.round((currentSA / eliteThresholdSA) * 100));
+  const affSplit = placedSchema?.salesConfig.affiliateSplitPct ?? 60;
+  const salesSplit = placedSchema?.salesConfig.salesIncrementalSplitPct ?? 40;
+  const corpLabel = placedSchema
+    ? `${placedSchema.corporateName} (${placedSchema.contractNumber})`
+    : 'PT ISP Nusantara (CTR-2026-001)';
 
   return (
     <div className="space-y-6">
@@ -250,7 +258,7 @@ export function SalesTierView({
               Skema Target SA &amp; Referensi Insentif Sales Agentzy
             </h2>
             <p className="mt-1 text-xs text-[#526675]">
-              Mengacu pada aturan pembagian produktivitas Master PRD: Personal Sales (100%) + Inkremental Affiliate (40% Sales / 60% Affiliate).
+              Penempatan aktif: <strong className="text-[#17324D]">{corpLabel}</strong> · Personal Sales (100%) + Inkremental Affiliate ({salesSplit}% Sales / {affSplit}% Affiliate).
             </p>
           </div>
           <span className="rounded-[8px] border border-[#ADD8E6] bg-[#E6F4F9] px-3 py-1 text-[11px] font-bold text-[#17324D]">
@@ -270,18 +278,18 @@ export function SalesTierView({
           </div>
           <div className="rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] p-3">
             <p className="text-[11px] font-semibold text-[#526675]">
-              2. Basis Atribusi Sales Agentzy
+              2. Basis Atribusi Sales Resmi ({salesSplit}%)
             </p>
             <p className="mt-1 font-mono-tabular text-xs font-bold text-[#17324D]">
-              Sales_basis = P_personal + 0.40 × ΔP
+              Sales_basis = P_personal + {(salesSplit / 100).toFixed(2)} × ΔP
             </p>
           </div>
           <div className="rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] p-3">
             <p className="text-[11px] font-semibold text-[#526675]">
-              3. Porsi Affiliate Teratribusi
+              3. Porsi Affiliate Teratribusi ({affSplit}%)
             </p>
             <p className="mt-1 font-mono-tabular text-xs font-bold text-[#17324D]">
-              Affiliate_share = 0.60 × ΔP
+              Affiliate_share = {(affSplit / 100).toFixed(2)} × ΔP
             </p>
           </div>
         </div>
@@ -299,7 +307,17 @@ export function SalesTierView({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EAF2F6]">
-              {SALES_AGENTZY_TIERS.map((row) => {
+              {(placedSchema
+                ? placedSchema.salesConfig.tiers.map((t) => ({
+                    min: t.minSA,
+                    max: t.maxSA ?? 9999,
+                    label: t.label,
+                    tierGroup: t.label,
+                    feeRef: t.feePerSA,
+                    multiplier: t.multiplier,
+                  }))
+                : SALES_AGENTZY_TIERS
+              ).map((row) => {
                 const isActiveRow = currentSA >= row.min && currentSA <= row.max;
                 return (
                   <tr

@@ -47,7 +47,7 @@ export interface AffiliateMember {
 
 export interface WorkOrderItem {
   id: string;
-  type: 'Instalasi Baru' | 'Maintenance' | 'Troubleshooting';
+  type: 'Instalasi Baru' | 'Maintenance' | 'Troubleshooting' | 'Survey';
   customerName: string;
   customerPhone: string;
   address: string;
@@ -510,6 +510,20 @@ export const INITIAL_WORK_ORDERS: WorkOrderItem[] = [
     coordinates: { lat: -6.2874, lng: 106.7852 },
   },
   {
+    id: 'WO-872344',
+    type: 'Survey',
+    customerName: 'Cluster Kemang Timur Residence',
+    customerPhone: '0813 8801 4455',
+    address: 'Jl. Kemang Timur No. 45, Jakarta Selatan',
+    productPackage: 'Survey ODP & FTTH Area',
+    priority: 'Normal',
+    status: 'Pending',
+    slaRemaining: '± 3 jam (sisa 2 jam 15 mnt)',
+    distanceKm: '1,9',
+    etaMinutes: 7,
+    coordinates: { lat: -6.2768, lng: 106.8184 },
+  },
+  {
     id: 'WO-872300',
     type: 'Maintenance',
     customerName: 'Ibu Kartika Sari',
@@ -540,6 +554,22 @@ export const INITIAL_WORK_ORDERS: WorkOrderItem[] = [
     coordinates: { lat: -6.2752, lng: 106.8012 },
     durationText: '55 menit',
     completedDate: '19 Jan 2025',
+  },
+  {
+    id: 'WO-872298',
+    type: 'Survey',
+    customerName: 'Kompleks Pondok Indah Blok D',
+    customerPhone: '0812 9900 1122',
+    address: 'Jl. Metro Pondok Indah No. 14, Jakarta Selatan',
+    productPackage: 'Survey Jalur Fiber & Tiang',
+    priority: 'Normal',
+    status: 'Selesai',
+    slaRemaining: 'Tepat Waktu',
+    distanceKm: '3,4',
+    etaMinutes: 12,
+    coordinates: { lat: -6.2831, lng: 106.7832 },
+    durationText: '45 menit',
+    completedDate: '18 Jan 2025',
   },
 ];
 

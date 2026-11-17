@@ -22,27 +22,66 @@ import {
   RotateCcw,
   Wallet,
   ShieldCheck,
+  Target,
+  Building2,
 } from 'lucide-react';
 import { TechnicianNavigationMap } from '@/components/maps/TechnicianNavigationMap';
-import type {
-  WorkOrderItem,
-  InventoryItem,
+import {
+  formatIDR,
+  type WorkOrderItem,
+  type InventoryItem,
 } from '@/lib/agentzy-data';
+import {
+  INITIAL_CORPORATE_COMPENSATION_SCHEMAS,
+  INITIAL_TECH_BONUS_RULES,
+  DEFAULT_TECH_TASK_COUNTS,
+  calculateTechnicianCompensation,
+  type CorporateCompensationSchema,
+  type TechnicianBonusRule,
+  type TechnicianTaskCounts,
+  type TechnicianTaskCategory,
+  type BonusPeriodType,
+} from '@/lib/corporate-compensation';
 
 // --- 1. BERANDA TEKNISI (Image 4 Screen 4) ---
 export function TechnicianDashboardView({
   workOrders,
   onNavigate,
   onSelectWorkOrder,
+  placedSchema,
+  allCorpSchemas,
+  onChangePlacedCorporateId,
+  techBonusRules,
+  techTaskCounts,
 }: {
   workOrders: WorkOrderItem[];
   onNavigate: (tab: string) => void;
   onSelectWorkOrder: (wo: WorkOrderItem) => void;
+  placedSchema?: CorporateCompensationSchema;
+  allCorpSchemas?: CorporateCompensationSchema[];
+  onChangePlacedCorporateId?: (id: string) => void;
+  techBonusRules?: TechnicianBonusRule[];
+  techTaskCounts?: TechnicianTaskCounts;
 }) {
-  const nearest = workOrders[0];
+  const nearest = workOrders.find((w) => w.status !== 'Selesai') || workOrders[0];
   const pendingCount = workOrders.filter((w) => w.status === 'Pending').length;
   const processCount = workOrders.filter((w) => w.status === 'Proses').length;
   const doneCount = workOrders.filter((w) => w.status === 'Selesai').length;
+
+  const activeSchema = placedSchema || INITIAL_CORPORATE_COMPENSATION_SCHEMAS[0];
+  const schemasList = allCorpSchemas && allCorpSchemas.length > 0 ? allCorpSchemas : INITIAL_CORPORATE_COMPENSATION_SCHEMAS;
+  const activeRules = techBonusRules || INITIAL_TECH_BONUS_RULES;
+  const counts = techTaskCounts || DEFAULT_TECH_TASK_COUNTS;
+
+  const comp = calculateTechnicianCompensation({
+    schema: activeSchema,
+    bonusRules: activeRules,
+    completedCounts: counts,
+    slaPct: 97,
+  });
+
+  const dailyBonuses = comp.bonusEvaluations.filter((b) => b.rule.period === 'Harian');
+  const achievedCount = comp.bonusEvaluations.filter((b) => b.achieved).length;
 
   return (
     <div className="space-y-5">
@@ -52,11 +91,30 @@ export function TechnicianDashboardView({
             Halo, Budi Santoso 👋
           </h1>
           <p className="text-xs text-[#526675] sm:text-sm">
-            Teknisi FTTH/FWA · Area Jakarta Selatan · ID: TK-000128
+            Teknisi FTTH/FWA · Penempatan: <strong className="text-[#17324D]">{activeSchema.corporateName}</strong> ({activeSchema.contractNumber})
           </p>
         </div>
-        <div className="rounded-[10px] border border-[#ADD8E6] bg-[#E6F4F9] px-3.5 py-2 text-xs font-semibold text-[#17324D]">
-          Shift Hari Ini: <span className="text-[#247A55]">Aktif 08:00 – 17:00</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {onChangePlacedCorporateId && (
+            <div className="flex items-center gap-1.5 rounded-[10px] border border-[#D8E3E9] bg-white px-2.5 py-1.5">
+              <Building2 className="h-3.5 w-3.5 text-[#0284C7]" />
+              <select
+                value={activeSchema.id}
+                onChange={(e) => onChangePlacedCorporateId(e.target.value)}
+                aria-label="Penempatan Vendor Corporate"
+                className="bg-transparent text-xs font-semibold text-[#17324D] outline-none"
+              >
+                {schemasList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.corporateName} · {s.contractNumber}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="rounded-[10px] border border-[#ADD8E6] bg-[#E6F4F9] px-3.5 py-2 text-xs font-semibold text-[#17324D]">
+            Shift Hari Ini: <span className="text-[#247A55]">Aktif 08:00 – 17:00</span>
+          </div>
         </div>
       </div>
 
@@ -65,14 +123,13 @@ export function TechnicianDashboardView({
         <div className="grid grid-cols-1 items-center md:grid-cols-12">
           <div className="p-5 md:col-span-7">
             <p className="text-xs font-bold text-[#0284C7]">
-              Portal Teknisi Lapangan · Offline Ready
+              Portal Teknisi Lapangan · Kontrak {activeSchema.contractNumber}
             </p>
             <h2 className="mt-1 text-lg font-bold text-[#17324D]">
-              Eksekusi Work Order, SOP Instalasi &amp; Bukti Digital Pelanggan
+              Eksekusi Work Order, SOP Instalasi &amp; Target Bonus Teknisi
             </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-[#526675]">
-              Seluruh checklist SOP, foto sebelum-sesudah, hasil uji kecepatan, dan
-              tanda tangan pelanggan tersimpan aman meski jaringan lapangan lemah.
+              Selesaikan tugas Pemasangan, Maintenance, dan Survey sesuai SLA untuk membuka bonus target harian, mingguan, hingga bulanan di luar gaji pokok.
             </p>
           </div>
           <div className="relative h-36 w-full md:col-span-5 md:h-44">
@@ -90,28 +147,94 @@ export function TechnicianDashboardView({
       {/* 4 KPI Cards (Screen 4) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4">
-          <p className="text-xs text-[#526675]">Tugas Hari Ini</p>
+          <p className="text-xs text-[#526675]">Tugas Aktif</p>
           <p className="mt-1.5 font-mono-tabular text-2xl font-bold text-[#17324D]">
-            {workOrders.length}
+            {pendingCount + processCount}
           </p>
         </div>
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4">
-          <p className="text-xs text-[#526675]">Dalam Proses</p>
-          <p className="mt-1.5 font-mono-tabular text-2xl font-bold text-[#A96816]">
-            {processCount + pendingCount > 0 ? processCount : 0}
-          </p>
-        </div>
-        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4">
-          <p className="text-xs text-[#526675]">Selesai</p>
+          <p className="text-xs text-[#526675]">Selesai Hari Ini / Total</p>
           <p className="mt-1.5 font-mono-tabular text-2xl font-bold text-[#247A55]">
             {doneCount}
           </p>
         </div>
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4">
-          <p className="text-xs text-[#526675]">Kepatuhan SLA</p>
-          <p className="mt-1.5 font-mono-tabular text-2xl font-bold text-[#0284C7]">
-            100%
+          <p className="text-xs text-[#526675]">Gaji Pokok ({activeSchema.vendorCode})</p>
+          <p className="mt-1.5 font-mono-tabular text-lg font-bold text-[#17324D]">
+            {formatIDR(comp.baseSalaryIdr)}
           </p>
+        </div>
+        <div className="rounded-[14px] border border-[#ADD8E6] bg-[#E6F4F9] p-4">
+          <p className="text-xs font-semibold text-[#526675]">Estimasi Take-Home Pay</p>
+          <p className="mt-1.5 font-mono-tabular text-lg font-bold text-[#0284C7]">
+            {formatIDR(comp.totalTakeHomePayIdr)}
+          </p>
+        </div>
+      </div>
+
+      {/* Target Bonus Harian · Mingguan · Bulanan Snapshot */}
+      <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-[#17324D]">
+              Target Bonus Harian Anda (Di Luar Gaji Pokok)
+            </h3>
+            <p className="text-xs text-[#526675]">
+              {achievedCount} dari {comp.bonusEvaluations.length} target bonus (Harian/Mingguan/Bulanan) telah tercapai · SLA Aktual 97%
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('commission')}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#0284C7] hover:underline"
+          >
+            <span>Lihat Rincian Gaji &amp; Bonus</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {dailyBonuses.map((item) => (
+            <div
+              key={item.rule.id}
+              className={`rounded-[12px] border p-3.5 ${
+                item.achieved
+                  ? 'border-[#247A55]/40 bg-emerald-50/60'
+                  : 'border-[#D8E3E9] bg-[#F5F8FA]'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-[#17324D]">
+                  {item.rule.taskType} (Harian)
+                </span>
+                <span
+                  className={`font-mono-tabular text-xs font-bold ${
+                    item.achieved ? 'text-[#247A55]' : 'text-[#A96816]'
+                  }`}
+                >
+                  {item.actualCount}/{item.rule.targetCount}
+                </span>
+              </div>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    item.achieved ? 'bg-[#247A55]' : 'bg-[#0284C7]'
+                  }`}
+                  style={{ width: `${item.progressPct}%` }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px]">
+                <span className="text-[#526675]">
+                  {item.achieved
+                    ? 'Target Tercapai'
+                    : `Kurang ${Math.max(0, item.rule.targetCount - item.actualCount)} tugas lagi`}
+                </span>
+                <span className="font-mono-tabular font-bold text-[#17324D]">
+                  +{formatIDR(item.rule.bonusAmountIdr)}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1072,13 +1195,14 @@ export function WorkOrderWorkflowView({
 
 // --- 3. RIWAYAT PEKERJAAN TEKNISI (Screen 17) ---
 export function TechHistoryView({ workOrders }: { workOrders: WorkOrderItem[] }) {
-  const [filter, setFilter] = useState<'Semua' | 'Instalasi' | 'Maintenance'>('Semua');
+  const [filter, setFilter] = useState<'Semua' | 'Instalasi' | 'Maintenance' | 'Survey'>('Semua');
   const [selectedReport, setSelectedReport] = useState<WorkOrderItem | null>(null);
 
   const completed = workOrders.filter((w) => {
     if (w.status !== 'Selesai') return false;
     if (filter === 'Instalasi') return w.type === 'Instalasi Baru';
-    if (filter === 'Maintenance') return w.type !== 'Instalasi Baru';
+    if (filter === 'Maintenance') return w.type === 'Maintenance' || w.type === 'Troubleshooting';
+    if (filter === 'Survey') return w.type === 'Survey';
     return true;
   });
 
@@ -1086,8 +1210,8 @@ export function TechHistoryView({ workOrders }: { workOrders: WorkOrderItem[] })
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-[#17324D]">Riwayat Pekerjaan</h1>
 
-      <div className="grid grid-cols-3 rounded-[10px] border border-[#D8E3E9] bg-white p-1">
-        {(['Semua', 'Instalasi', 'Maintenance'] as const).map((tab) => (
+      <div className="grid grid-cols-4 rounded-[10px] border border-[#D8E3E9] bg-white p-1">
+        {(['Semua', 'Instalasi', 'Maintenance', 'Survey'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -1317,46 +1441,164 @@ export function TechInventoryView({
   );
 }
 
-// --- 5. KOMISI & PENGHASILAN TEKNISI (Screen 16) ---
-export function TechCommissionView() {
+// --- 5. GAJI POKOK, KOMISI & BONUS TARGET TEKNISI (Screen 16) ---
+export function TechCommissionView({
+  placedSchema,
+  allCorpSchemas,
+  onChangePlacedCorporateId,
+  techBonusRules,
+  techTaskCounts,
+}: {
+  placedSchema?: CorporateCompensationSchema;
+  allCorpSchemas?: CorporateCompensationSchema[];
+  onChangePlacedCorporateId?: (id: string) => void;
+  techBonusRules?: TechnicianBonusRule[];
+  techTaskCounts?: TechnicianTaskCounts;
+}) {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [done, setDone] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<'Semua' | BonusPeriodType>('Semua');
+  const [taskFilter, setTaskFilter] = useState<'Semua' | TechnicianTaskCategory>('Semua');
+  const [slaPct, setSlaPct] = useState(97);
+
+  const activeSchema = placedSchema || INITIAL_CORPORATE_COMPENSATION_SCHEMAS[0];
+  const schemasList = allCorpSchemas && allCorpSchemas.length > 0 ? allCorpSchemas : INITIAL_CORPORATE_COMPENSATION_SCHEMAS;
+  const activeRules = techBonusRules || INITIAL_TECH_BONUS_RULES;
+  const counts = techTaskCounts || DEFAULT_TECH_TASK_COUNTS;
+
+  const comp = calculateTechnicianCompensation({
+    schema: activeSchema,
+    bonusRules: activeRules,
+    completedCounts: counts,
+    slaPct,
+  });
+
+  const filteredBonuses = comp.bonusEvaluations.filter((item) => {
+    const matchPeriod = periodFilter === 'Semua' || item.rule.period === periodFilter;
+    const matchTask = taskFilter === 'Semua' || item.rule.taskType === taskFilter;
+    return matchPeriod && matchTask;
+  });
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-[#17324D]">
-        Komisi &amp; Penghasilan Teknisi
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-[#17324D]">
+            Gaji, Komisi &amp; Bonus Target Teknisi
+          </h1>
+          <p className="text-xs text-[#526675]">
+            Kontrak <strong className="text-[#17324D]">{comp.corporateName}</strong> ({comp.contractNumber}) · Skema bonus harian, mingguan &amp; bulanan di luar gaji pokok.
+          </p>
+        </div>
 
-      <div className="rounded-[14px] border border-[#D8E3E9] bg-[#E6F4F9] p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-[#0284C7] text-white">
-            <Wallet className="h-5 w-5" />
+        {onChangePlacedCorporateId && (
+          <div className="flex items-center gap-1.5 rounded-[10px] border border-[#D8E3E9] bg-white px-3 py-2">
+            <Building2 className="h-4 w-4 text-[#0284C7]" />
+            <select
+              value={activeSchema.id}
+              onChange={(e) => onChangePlacedCorporateId(e.target.value)}
+              aria-label="Penempatan Vendor Corporate Teknisi"
+              className="bg-transparent text-xs font-semibold text-[#17324D] outline-none"
+            >
+              {schemasList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.corporateName} · {s.contractNumber}
+                </option>
+              ))}
+            </select>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-[#526675]">Total Penghasilan</p>
-            <p className="font-mono-tabular text-2xl font-bold text-[#17324D]">
-              Rp 8.450.000
+        )}
+      </div>
+
+      {/* Total Take-Home Pay Card */}
+      <div className="rounded-[14px] border border-[#ADD8E6] bg-gradient-to-br from-[#E6F4F9] to-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-[#0284C7] text-white">
+              <Wallet className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-[#526675]">
+                Total Estimasi Take-Home Pay (Gaji Pokok + Fee WO + Bonus Target)
+              </p>
+              <p className="font-mono-tabular text-2xl font-bold text-[#17324D] sm:text-3xl">
+                {formatIDR(comp.totalTakeHomePayIdr)}
+              </p>
+              <p className="text-xs font-semibold text-[#247A55]">
+                Gaji Pokok {formatIDR(comp.baseSalaryIdr)} + Total Bonus Target {formatIDR(comp.totalTargetBonusIdr)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white px-3 py-2">
+            <span className="text-xs text-[#526675]">SLA Aktual:</span>
+            <input
+              type="number"
+              min={80}
+              max={100}
+              value={slaPct}
+              onChange={(e) => setSlaPct(Math.min(100, Math.max(80, Number(e.target.value))))}
+              aria-label="Simulasi SLA Teknisi"
+              className="w-14 rounded border border-[#B8C9D3] px-1.5 py-0.5 text-center font-mono-tabular text-xs font-bold text-[#17324D]"
+            />
+            <span className="text-xs font-bold text-[#0284C7]">%</span>
+          </div>
+        </div>
+
+        {/* Summary Split Cards: Harian, Mingguan, Bulanan */}
+        <div className="mt-4 grid grid-cols-3 gap-2.5">
+          <div className="rounded-[10px] border border-[#D8E3E9] bg-white p-3">
+            <p className="text-[11px] text-[#526675]">Bonus Harian</p>
+            <p className="mt-1 font-mono-tabular text-sm font-bold text-[#17324D]">
+              {formatIDR(comp.totalDailyBonusIdr)}
             </p>
-            <p className="text-xs font-semibold text-[#247A55]">
-              +24% dari bulan lalu
+          </div>
+          <div className="rounded-[10px] border border-[#D8E3E9] bg-white p-3">
+            <p className="text-[11px] text-[#526675]">Bonus Mingguan</p>
+            <p className="mt-1 font-mono-tabular text-sm font-bold text-[#0284C7]">
+              {formatIDR(comp.totalWeeklyBonusIdr)}
+            </p>
+          </div>
+          <div className="rounded-[10px] border border-[#D8E3E9] bg-white p-3">
+            <p className="text-[11px] text-[#526675]">Bonus Bulanan</p>
+            <p className="mt-1 font-mono-tabular text-sm font-bold text-[#247A55]">
+              {formatIDR(comp.totalMonthlyBonusIdr)}
             </p>
           </div>
         </div>
       </div>
 
+      {/* Rincian Gaji Pokok & Komisi WO */}
       <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
         <h2 className="text-sm font-bold text-[#17324D]">
-          Rincian Pendapatan Teknisi
+          Rincian Gaji Pokok &amp; Fee Work Order ({comp.corporateName})
         </h2>
         <div className="mt-3 divide-y divide-[#EAF2F6] text-sm">
           {[
-            { label: 'Komisi Instalasi FTTH', val: 'Rp 5.600.000' },
-            { label: 'Komisi Maintenance & Troubleshooting', val: 'Rp 1.200.000' },
-            { label: 'Insentif Kepatuhan SLA (100%)', val: 'Rp 900.000' },
-            { label: 'Bonus Produktivitas First-Time-Fix', val: 'Rp 750.000' },
+            { label: `Gaji Pokok Teknisi (${comp.contractNumber})`, val: formatIDR(comp.baseSalaryIdr) },
+            { label: 'Tunjangan Operasional Lapangan', val: formatIDR(comp.fieldAllowanceIdr) },
+            {
+              label: `Fee Pemasangan (${comp.taskFeesBreakdown.pemasanganCount} WO × ${formatIDR(activeSchema.technicianConfig.feePemasanganIdr)})`,
+              val: formatIDR(comp.taskFeesBreakdown.pemasanganFeeIdr),
+            },
+            {
+              label: `Fee Maintenance (${comp.taskFeesBreakdown.maintenanceCount} WO × ${formatIDR(activeSchema.technicianConfig.feeMaintenanceIdr)})`,
+              val: formatIDR(comp.taskFeesBreakdown.maintenanceFeeIdr),
+            },
+            {
+              label: `Fee Survey Lokasi/ODP (${comp.taskFeesBreakdown.surveyCount} WO × ${formatIDR(activeSchema.technicianConfig.feeSurveyIdr)})`,
+              val: formatIDR(comp.taskFeesBreakdown.surveyFeeIdr),
+            },
+            {
+              label: `Bonus Kepatuhan SLA (Min. ${activeSchema.technicianConfig.minSlaPctForBonus}%)`,
+              val: comp.slaQualified ? formatIDR(comp.slaComplianceBonusIdr) : 'Rp 0 (Di bawah SLA)',
+            },
+            {
+              label: 'Total Bonus Target (Harian + Mingguan + Bulanan)',
+              val: formatIDR(comp.totalTargetBonusIdr),
+            },
           ].map((row) => (
-            <div key={row.label} className="flex justify-between py-3">
+            <div key={row.label} className="flex items-center justify-between gap-3 py-3 text-xs sm:text-sm">
               <span className="text-[#526675]">{row.label}</span>
               <span className="font-mono-tabular font-semibold text-[#17324D]">
                 {row.val}
@@ -1364,6 +1606,7 @@ export function TechCommissionView() {
             </div>
           ))}
         </div>
+
         <button
           type="button"
           onClick={() => {
@@ -1372,8 +1615,144 @@ export function TechCommissionView() {
           }}
           className="mt-4 h-11 w-full rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white hover:bg-[#0369A1]"
         >
-          Tarik Penghasilan
+          Tarik Penghasilan ({formatIDR(comp.totalTakeHomePayIdr)})
         </button>
+      </div>
+
+      {/* Skema Bonus Target Teknisi (Harian, Mingguan, Bulanan) */}
+      <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-[#17324D]">
+              <Target className="h-4 w-4 text-[#0284C7]" />
+              <span>Pencapaian Target Bonus (Pemasangan · Maintenance · Survey)</span>
+            </h2>
+            <p className="mt-0.5 text-xs text-[#526675]">
+              Selesaikan Work Order di tab Tugas untuk melihat progres target harian, mingguan, dan bulanan bertambah otomatis.
+            </p>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="grid grid-cols-4 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-1">
+            {(['Semua', 'Harian', 'Mingguan', 'Bulanan'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriodFilter(p)}
+                className={`rounded-[7px] px-2.5 py-1.5 text-xs font-semibold transition ${
+                  periodFilter === p
+                    ? 'bg-[#17324D] text-white'
+                    : 'text-[#526675] hover:text-[#17324D]'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-4 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-1">
+            {(['Semua', 'Pemasangan', 'Maintenance', 'Survey'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTaskFilter(t)}
+                className={`rounded-[7px] px-2.5 py-1.5 text-xs font-semibold transition ${
+                  taskFilter === t
+                    ? 'bg-[#0284C7] text-white'
+                    : 'text-[#526675] hover:text-[#17324D]'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bonus Rule Progress Cards */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {filteredBonuses.map((item) => (
+            <div
+              key={item.rule.id}
+              className={`rounded-[12px] border p-4 transition ${
+                item.achieved
+                  ? 'border-[#247A55]/40 bg-emerald-50/40'
+                  : 'border-[#D8E3E9] bg-[#F8FAFC]'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#0284C7]">
+                    {item.rule.period}
+                  </span>
+                  <h3 className="text-sm font-bold text-[#17324D]">
+                    {item.rule.taskType}
+                  </h3>
+                </div>
+                <span
+                  className={`font-mono-tabular text-xs font-bold ${
+                    item.achieved ? 'text-[#247A55]' : 'text-[#A96816]'
+                  }`}
+                >
+                  {item.achieved ? 'Tercapai' : `Kurang ${Math.max(0, item.rule.targetCount - item.actualCount)}`}
+                </span>
+              </div>
+
+              <div className="mt-3">
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#526675]">Capaian Tugas</span>
+                  <span className="font-mono-tabular font-bold text-[#17324D]">
+                    {item.actualCount} / {item.rule.targetCount} WO ({item.progressPct}%)
+                  </span>
+                </div>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-[#D8E3E9]">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      item.achieved ? 'bg-[#247A55]' : 'bg-[#0284C7]'
+                    }`}
+                    style={{ width: `${item.progressPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-1 border-t border-[#EAF2F6] pt-2.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-[#526675]">Bonus Target</span>
+                  <span className="font-mono-tabular font-semibold text-[#17324D]">
+                    {formatIDR(item.rule.bonusAmountIdr)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#526675]">Ekstra / Unit Kelebihan</span>
+                  <span className="font-mono-tabular font-semibold text-[#17324D]">
+                    +{formatIDR(item.rule.extraPerUnitIdr)} ({item.extraUnits} unit)
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#526675]">Syarat Min. SLA</span>
+                  <span
+                    className={`font-mono-tabular font-semibold ${
+                      item.slaQualified ? 'text-[#247A55]' : 'text-[#B23A48]'
+                    }`}
+                  >
+                    {item.rule.minSlaPct}% ({item.slaQualified ? 'Memenuhi' : 'Kurang'})
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1 text-xs font-bold">
+                  <span className="text-[#17324D]">Bonus Diterima</span>
+                  <span
+                    className={`font-mono-tabular ${
+                      item.earnedBonusIdr > 0 ? 'text-[#247A55]' : 'text-[#718391]'
+                    }`}
+                  >
+                    {formatIDR(item.earnedBonusIdr)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {showWithdraw && (
@@ -1386,7 +1765,7 @@ export function TechCommissionView() {
                   Penarikan Diajukan
                 </h3>
                 <p className="text-xs text-[#526675]">
-                  Pencairan Rp 8.450.000 ke rekening Mandiri Budi Santoso sedang diproses Finance.
+                  Pencairan <strong className="font-mono-tabular">{formatIDR(comp.totalTakeHomePayIdr)}</strong> ke rekening Mandiri Budi Santoso ({comp.corporateName}) sedang diproses Finance.
                 </p>
                 <button
                   type="button"
@@ -1402,7 +1781,10 @@ export function TechCommissionView() {
                   Konfirmasi Tarik Penghasilan
                 </h3>
                 <p className="text-xs text-[#526675]">
-                  Saldo siap tarik: <strong className="font-mono-tabular text-[#17324D]">Rp 8.450.000</strong>
+                  Saldo siap tarik ({comp.corporateName}):{' '}
+                  <strong className="font-mono-tabular text-[#17324D]">
+                    {formatIDR(comp.totalTakeHomePayIdr)}
+                  </strong>
                 </p>
                 <div className="flex justify-end gap-2">
                   <button
