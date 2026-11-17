@@ -12,6 +12,7 @@ import {
 } from '@/lib/corporate-compensation';
 import { adminPortalService } from '../services/admin-service';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
+import { createTenant as createTenantApi, listPlatformTenants } from '@/apps/web/lib/api-client';
 import type {
   AdminAIWorkerRecord,
   AdminCreditLedgerItem,
@@ -254,6 +255,39 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     }
   }, [auth.loading, auth.session, auth.identity, auth.aal, auth.signOut]);
 
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    const canReadDirectory = auth.identity?.memberships.some((membership) =>
+      membership.permissions.includes('platform.tenants.read')
+    );
+    if (!accessToken || !canReadDirectory) return;
+    let active = true;
+    void listPlatformTenants(accessToken).then((rows) => {
+      if (!active) return;
+      setTenants(rows.map((tenant) => ({
+        id: tenant.id,
+        code: tenant.slug,
+        name: tenant.name,
+        legalName: tenant.name,
+        domain: '',
+        industry: '',
+        clientType: tenant.tenant_type === 'provider' ? 'ISP / Provider' : 'Corporate Enterprise',
+        cooperationLabel: 'Belum diatur',
+        status: tenant.status === 'active' ? 'Aktif' : tenant.status === 'suspended' || tenant.status === 'archived' ? 'Suspended' : 'Trial',
+        region: '',
+        humanCount: 0,
+        aiWorkerCount: 0,
+        creditsBalance: 0,
+        monthlyCreditsUsed: 0,
+        slaScore: 0,
+        createdAt: new Date(tenant.created_at).toLocaleDateString('id-ID'),
+      })));
+    }).catch((error) => {
+      if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat direktori tenant.');
+    });
+    return () => { active = false; };
+  }, [auth.session?.access_token, auth.identity, showToast]);
+
   const handleLogin = useCallback(
     async (email: string, password: string, mfaCode: string) => {
       const context = await auth.signIn(email, password, true, mfaCode);
@@ -282,28 +316,40 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     setModal({ type: 'none' });
   }, [auth.signOut]);
 
-  // Tenant CRUD
+  // Tenant CRUD — persisted by FastAPI, never by browser-local state.
   const upsertTenant = useCallback(
-    (payload: Omit<AdminTenantRecord, 'id' | 'createdAt'> & { id?: string }) => {
+    async (payload: Omit<AdminTenantRecord, 'id' | 'createdAt'> & { id?: string }) => {
       if (payload.id) {
-        setTenants((prev) =>
-          prev.map((t) => (t.id === payload.id ? { ...t, ...payload } : t))
-        );
-        appendAudit('Update Tenant', payload.name, payload.name, `status: ${payload.status}`);
-        showToast(`Tenant ${payload.name} diperbarui.`);
-      } else {
-        const created: AdminTenantRecord = {
-          ...payload,
-          id: nextId('ten'),
-          createdAt: '17 Nov 2026',
-        };
-        setTenants((prev) => [created, ...prev]);
-        appendAudit('Tambah Tenant', created.name, created.name, `kontrak: ${created.contractNumber}`);
-        showToast(`Tenant ${created.name} berhasil dibuat.`);
+        throw new Error('Perubahan tenant existing harus menggunakan endpoint update yang belum diaktifkan.');
       }
+      const accessToken = auth.session?.access_token;
+      if (!accessToken) throw new Error('Session Super Admin tidak tersedia.');
+      const slugSource = payload.domain?.split('.')[0] || payload.code || payload.name;
+      const slug = slugSource.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const tenantType = payload.clientType === 'ISP / Provider' ? 'provider' : 'corporate';
+      const createdRemote = await createTenantApi(accessToken, {
+        name: payload.name,
+        slug,
+        tenant_type: tenantType,
+      });
+      const created: AdminTenantRecord = {
+        ...payload,
+        id: createdRemote.id,
+        code: createdRemote.slug,
+        status: 'Trial',
+        createdAt: new Date(createdRemote.created_at).toLocaleDateString('id-ID'),
+        humanCount: 0,
+        aiWorkerCount: 0,
+        creditsBalance: 0,
+        monthlyCreditsUsed: 0,
+        slaScore: 0,
+      };
+      setTenants((prev) => [created, ...prev.filter((tenant) => tenant.id !== created.id)]);
+      appendAudit('Tambah Tenant', created.name, created.name, 'Tenant tersimpan melalui FastAPI.');
+      showToast(`Tenant ${created.name} berhasil dibuat dengan status pending.`);
       setModal({ type: 'none' });
     },
-    [appendAudit, showToast]
+    [auth.session?.access_token, appendAudit, showToast]
   );
 
   const deleteTenant = useCallback(
