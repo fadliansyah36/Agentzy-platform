@@ -3,10 +3,10 @@ import type { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'Agentzy — Human & AI Workforce',
-    short_name: 'Agentzy',
+    name: 'Agent-zy — Smarter Workforce, Powered by Human & AI',
+    short_name: 'Agent-zy',
     description:
-      'One Platform to Manage Human & AI Workforce. Portal kerja Sales Resmi, Affiliate Freelance, dan Teknisi Lapangan.',
+      'Menyediakan Jasa dan Tenaga Kerja dengan Support Teknologi dan Artificial Intelligence untuk Staff Sales, Affiliate Freelance, dan Teknisi Lapangan.',
     start_url: '/',
     scope: '/',
     display: 'standalone',

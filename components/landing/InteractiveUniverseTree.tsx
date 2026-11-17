@@ -20,20 +20,20 @@ import {
 export type UniverseFocusMode =
   | 'all'
   | 'sales_affiliate'
-  | 'human_ai'
-  | 'tech_ecosystem';
+  | 'ai_marketing_sales'
+  | 'tech_ops';
 
 export type TreeNodeId =
   | 'tenant_core'
-  | 'sales_resmi'
+  | 'staff_sales'
   | 'sales_personal'
   | 'affiliate_leaf'
-  | 'support_human'
-  | 'staff_ai'
+  | 'ai_sales_marketing'
+  | 'ai_tech_ops'
   | 'technician_lead'
   | 'tech_dispatch'
   | 'tech_execution'
-  | 'commission_ledger';
+  | 'growth_settlement';
 
 interface TreeNodeMeta {
   id: TreeNodeId;
@@ -51,214 +51,212 @@ interface TreeNodeMeta {
 const TREE_NODES: Record<TreeNodeId, TreeNodeMeta> = {
   tenant_core: {
     id: 'tenant_core',
-    title: 'Inti Tenant & Tata Kelola Agentzy',
-    roleTag: 'Corporate Partner · Super Admin · RLS',
+    title: 'Ekosistem Bisnis & Kemitraan Agentzy',
+    roleTag: 'Perusahaan Mitra · Tim Sales · Teknisi · AI',
     category: 'core',
     parentId: null,
-    focusGroups: ['all', 'sales_affiliate', 'human_ai', 'tech_ecosystem'],
+    focusGroups: ['all', 'sales_affiliate', 'ai_marketing_sales', 'tech_ops'],
     summary:
-      'Pusat kendali kontrak layanan (SOW), isolasi data multi-tenant, konfigurasi skema insentif ISP Partner, serta pencatatan audit trail seluruh peran manusia dan AI.',
+      'Pusat kerja sama antara perusahaan mitra dan seluruh tim terkelola Agentzy. Setiap target penjualan, pembagian komisi, dan standar layanan pelanggan dikelola secara transparan dalam satu sistem.',
     authorityBoundary:
-      'Mengatur hak akses RBAC/ABAC, anggaran AI Credits, dan menyetujui aturan komisi resmi sebelum berlaku ke portal workforce.',
+      'Perusahaan mitra memiliki kendali penuh atas target area, promo yang berjalan, jadwal layanan, serta persetujuan anggaran kemitraan.',
     collaboratesWith: [
-      { target: 'Sales Agentzy', protocol: 'Target SA · Wilayah · Skema Tier' },
-      { target: 'Support Staff & Staff AI', protocol: 'Kebijakan Otonomi L0–L4 & Audit' },
-      { target: 'Teknisi Lapangan', protocol: 'Standar SLA & Kepatuhan K3' },
+      { target: 'Staff Sales & Affiliate', protocol: 'Target Penjualan · Wilayah Pemasaran · Bagi Hasil' },
+      { target: 'Asisten AI Bisnis & Operasional', protocol: 'Dukungan Marketing Sales & Operasional Teknisi' },
+      { target: 'Teknisi Lapangan', protocol: 'Ketepatan Jadwal & Kepuasan Pelanggan' },
     ],
     rules: [
-      'Isolasi data ketat per perusahaan mitra (Row-Level Security)',
-      'Pemisahan jelas antara biaya SaaS Platform dan Managed Services',
-      'Jejak audit append-only untuk seluruh keputusan human maupun AI',
+      'Data pelanggan, wilayah, dan laporan penjualan terpisah aman khusus untuk perusahaan Anda',
+      'Transparansi penuh antara pertumbuhan bisnis mitra dan insentif tim lapangan',
+      'Setiap aktivitas tercatat rapi agar mudah dievaluasi secara berkala',
     ],
   },
-  sales_resmi: {
-    id: 'sales_resmi',
-    title: 'Sales Agentzy (Sales Resmi)',
-    roleTag: 'Pilar Komersial · Training / Pro / Elite',
+  staff_sales: {
+    id: 'staff_sales',
+    title: 'Staff Sales Agentzy',
+    roleTag: 'Pilar Penjualan · Training / Pro / Elite',
     category: 'commercial',
     parentId: 'tenant_core',
-    focusGroups: ['all', 'sales_affiliate', 'tech_ecosystem'],
+    focusGroups: ['all', 'sales_affiliate', 'ai_marketing_sales'],
     summary:
-      'Tenaga penjualan resmi Agentzy yang menangani closing pelanggan langsung sekaligus berperan sebagai sponsor pembina bagi mitra Affiliate Freelance.',
+      'Tim penjualan profesional yang menangani konsultasi produk, presentasi penawaran, dan closing pelanggan baru sekaligus membina jaringan Affiliate Freelance di wilayah kerjanya.',
     authorityBoundary:
-      'Berhak merekrut Affiliate Freelance, mengajukan aktivasi affiliate, dan mengelola pipeline hingga order tervalidasi.',
+      'Membina mitra Affiliate baru, mengawal calon pelanggan hingga berlangganan aktif, dan menjaga etika promosi sesuai merek perusahaan mitra.',
     collaboratesWith: [
-      { target: 'Affiliate Freelance', protocol: 'Pembinaan & Bagi Hasil 40% Inkremental' },
-      { target: 'Staff AI Qualification', protocol: 'Cek Cakupan ODP & Ringkasan Prospek' },
-      { target: 'Teknisi Lapangan', protocol: 'Koordinasi Jadwal Instalasi Pelanggan' },
+      { target: 'AI Marketing & Content Support', protocol: 'Konten Sosmed, Kampanye Digital & Pencarian Leads' },
+      { target: 'Affiliate Freelance', protocol: 'Pendampingan Closing & Bagi Hasil 60/40' },
+      { target: 'Teknisi Lapangan', protocol: 'Koordinasi Jadwal Pemasangan Pelanggan' },
     ],
     rules: [
-      'Tier karir Training (OJT), Pro, dan Elite dihitung dari gabungan SA pribadi + affiliate',
-      'Memperoleh 100% basis SA pribadi dan 40% porsi inkremental dari aktivasi affiliate',
-      'Terhubung ke Google Calendar, Meet, dan Gmail untuk tindak lanjut prospek',
+      'Jenjang karir Training, Pro, hingga Elite memacu produktivitas penjualan berkelanjutan',
+      'Memperoleh 100% komisi penjualan pribadi dan 40% porsi pembinaan dari aktivasi Affiliate',
+      'Didukung penuh oleh AI untuk konten promosi, media sosial, dan pencarian prospek baru',
     ],
   },
   sales_personal: {
     id: 'sales_personal',
-    title: 'Pipeline Penjualan Langsung',
-    roleTag: 'Cabang Sales · 100% Atribusi Pribadi',
+    title: 'Penjualan Langsung (Direct Sales)',
+    roleTag: 'Cabang Staff Sales · 100% Komisi Pribadi',
     category: 'commercial',
-    parentId: 'sales_resmi',
-    focusGroups: ['all', 'sales_affiliate'],
+    parentId: 'staff_sales',
+    focusGroups: ['all', 'sales_affiliate', 'ai_marketing_sales'],
     summary:
-      'Akuisisi prospek residensial maupun korporasi yang ditangani langsung oleh Sales Agentzy dari konsultasi paket hingga closing order.',
+      'Akuisisi pelanggan perumahan maupun bisnis yang ditangani langsung oleh Staff Sales dari promosi produk, konsultasi paket, hingga kesepakatan berlangganan.',
     authorityBoundary:
-      'Seluruh unit produktivitas (SA) dari jalur ini diatribusikan penuh ke akun Sales Agentzy terkait.',
+      'Seluruh pencapaian penjualan di jalur ini tercatat penuh untuk Staff Sales yang menangani prospek hingga aktif.',
     collaboratesWith: [
-      { target: 'Staff AI', protocol: 'Skoring Kelengkapan Data & Promo Aktif' },
-      { target: 'Commission Ledger', protocol: '100% Kredit SA + Bonus Tier' },
+      { target: 'AI Marketing & Leads', protocol: 'Materi Promo Siap Sebar & Penyaringan Prospek' },
+      { target: 'Bagi Hasil & Pertumbuhan', protocol: '100% Komisi Penjualan + Bonus Pencapaian' },
     ],
     rules: [
-      'Mengikuti siklus 10 tahap: Lead Created hingga Commission Settled',
-      'Dukungan pengingat tindak lanjut otomatis via Google Calendar',
+      'Alur penjualan jelas dari calon pelanggan masuk hingga layanan aktif terpasang',
+      'Pengingat tindak lanjut otomatis agar tidak ada prospek potensial yang terlewat',
     ],
   },
   affiliate_leaf: {
     id: 'affiliate_leaf',
     title: 'Affiliate Freelance',
-    roleTag: 'Mitra Akuisisi · Node Akhir (60% Komisi)',
+    roleTag: 'Mitra Promosi · Bagi Hasil 60%',
     category: 'commercial',
-    parentId: 'sales_resmi',
-    focusGroups: ['all', 'sales_affiliate'],
+    parentId: 'staff_sales',
+    focusGroups: ['all', 'sales_affiliate', 'ai_marketing_sales'],
     summary:
-      'Mitra independen yang direkrut oleh Sales Agentzy untuk mengirimkan prospek pelanggan. Fokus pada pengiriman lead berkualitas dan pemantauan aktivasi.',
+      'Mitra promosi fleksibel yang membantu menjangkau komunitas, lingkungan perumahan, dan kanal online untuk merekomendasikan calon pelanggan potensial.',
     authorityBoundary:
-      'Tidak memiliki akses merekrut downline affiliate, tidak memiliki tier karir Training/Pro/Elite, dan tidak terikat absensi shift.',
+      'Fokus mempromosikan produk dan menyetor calon pelanggan berkualitas tanpa terbebani jam kerja kaku atau tugas rekrutmen berjenjang.',
     collaboratesWith: [
-      { target: 'Sales Agentzy (Sponsor)', protocol: 'Pendampingan Closing & Split 60/40' },
-      { target: 'Commission Ledger', protocol: 'Penerima Porsi 60% Inkremental' },
+      { target: 'Staff Sales Pembina', protocol: 'Bantuan Penawaran & Proses Closing Pelanggan' },
+      { target: 'AI Generate Content & Sosmed', protocol: 'Caption IG/TikTok/WA & Brosur Digital Siap Pakai' },
     ],
     rules: [
-      'Node akhir dalam struktur (tidak membentuk jaringan MLM/berjenjang)',
-      'Hanya melihat data prospek pribadi dan simulator komisi 60%',
-      'Pembayaran komisi dipicu setelah layanan berstatus aktif tervalidasi',
+      'Menerima porsi komisi 60% untuk setiap calon pelanggan yang berhasil aktif berlangganan',
+      'Langsung mendapatkan materi konten media sosial dan panduan promosi dari AI',
+      'Transparan memantau status prospek hingga pencairan komisi di aplikasi',
     ],
   },
-  support_human: {
-    id: 'support_human',
-    title: 'Support Staff Agentzy (Human)',
-    roleTag: 'Supervisor Operasional · Human-in-the-Loop',
+  ai_sales_marketing: {
+    id: 'ai_sales_marketing',
+    title: 'AI Support: Staff Sales & Affiliate',
+    roleTag: 'Digital Marketing · Content · Leads · Sosmed',
     category: 'ai_support',
     parentId: 'tenant_core',
-    focusGroups: ['all', 'human_ai', 'tech_ecosystem'],
+    focusGroups: ['all', 'sales_affiliate', 'ai_marketing_sales'],
     summary:
-      'Tim operasional manusia yang memvalidasi kasus pengecualian, menyetujui draf aksi AI, melakukan eskalasi ke NOC mitra ISP, serta final Quality Control.',
+      'Rekan kerja AI khusus untuk memperkuat pemasaran Staff Sales dan Affiliate: merancang kampanye digital marketing, membuat konten & caption media sosial, mencari & menyaring leads, serta menyiapkan bahan follow-up.',
     authorityBoundary:
-      'Pemegang otoritas persetujuan kritis (Human Sign-off) sebelum order diproses atau pencairan komisi disahkan.',
+      'AI menyiapkan materi kreatif dan daftar prospek hangat; keputusan pengiriman penawaran dan komunikasi personal tetap di tangan Staff Sales & Affiliate.',
     collaboratesWith: [
-      { target: 'Staff AI Agentzy', protocol: 'Supervisi Tugas & Override Keputusan' },
-      { target: 'Teknisi Lapangan', protocol: 'Asistensi Eskalasi Teknis & QC Berita Acara' },
-      { target: 'Sales & Affiliate', protocol: 'Validasi Lead & Resolusi Dispute' },
+      { target: 'Staff Sales Agentzy', protocol: 'Ide Kampanye, Draf Follow-Up & Prospek Siap Closing' },
+      { target: 'Affiliate Freelance', protocol: 'Generate Konten Sosmed, Video Script & Flyer Promo' },
     ],
     rules: [
-      'Meninjau peringatan dini SLA dan mengoordinasikan penjadwalan ulang',
-      'Memverifikasi 4 foto bukti kerja dan hasil speedtest teknisi',
-      'Selalu menerima ringkasan konteks lengkap saat handoff dari Staf AI',
+      'Menghasilkan konten Instagram, TikTok, Facebook, dan WhatsApp Broadcast dalam hitungan detik',
+      'Membantu menyaring prospek online sehingga tim Sales fokus pada calon pembeli serius',
+      'Menyesuaikan gaya bahasa dengan promo resmi perusahaan mitra',
     ],
   },
-  staff_ai: {
-    id: 'staff_ai',
-    title: 'Staff AI Agentzy (AI Workers)',
-    roleTag: 'AI Gateway · Otonomi Terukur L0–L4',
+  ai_tech_ops: {
+    id: 'ai_tech_ops',
+    title: 'AI Support: Operasional & Teknis',
+    roleTag: 'Khusus Teknisi · Jadwal, Rute & Panduan Teknis',
     category: 'ai_support',
-    parentId: 'support_human',
-    focusGroups: ['all', 'human_ai', 'sales_affiliate', 'tech_ecosystem'],
+    parentId: 'tenant_core',
+    focusGroups: ['all', 'tech_ops'],
     summary:
-      'Tenaga kerja digital berkontrak tugas di bawah pengawasan Support Staff Human. Menjalankan pra-kualifikasi lead, cek cakupan ODP, dan pengawasan SLA real-time.',
+      'Berbeda dari tim penjualan, AI untuk divisi Teknisi difokuskan penuh pada kelancaran operasional dan teknis: mengatur jadwal & rute kunjungan tercepat, memastikan kesiapan material, serta menyediakan panduan teknis di lapangan.',
     authorityBoundary:
-      'Beroperasi hanya melalui izin tool terdaftar dan dibatasi kuota AI Credits; tidak dapat mengubah aturan komisi secara sepihak.',
+      'Membantu efisiensi kerja dan ketepatan waktu teknisi di lapangan; perubahan jadwal mendesak atau keputusan teknis kritis tetap dikendalikan tim operasional.',
     collaboratesWith: [
-      { target: 'Support Staff Human', protocol: 'Handoff Ringkasan & Permintaan Approval' },
-      { target: 'Sales Agentzy', protocol: 'Kualifikasi Lead & Draf Materi Kampanye' },
-      { target: 'Teknisi Lapangan', protocol: 'Assignment Berbasis Skill/Jarak & Monitor SLA' },
+      { target: 'Teknisi Lapangan', protocol: 'Rute Kunjungan Optimal, Panduan Teknis & Monitor SLA' },
+      { target: 'Manajemen Perusahaan Mitra', protocol: 'Laporan Ketepatan Jadwal & Kualitas Pemasangan' },
     ],
     rules: [
-      'Memeriksa duplikasi prospek dan kesiapan port ODP dalam hitungan detik',
-      'Memantau antrean sinkronisasi offline teknisi tanpa henti',
-      'Memastikan memori & RAG terisolasi per tenant mitra',
+      'Menyusun urutan kunjungan harian berdasarkan jarak terdekat dan keahlian teknisi',
+      'Memberikan referensi cepat standar pemasangan dan solusi kendala teknis di lokasi',
+      'Mengingatkan batas waktu layanan agar kepuasan pelanggan tetap terjaga tinggi',
     ],
   },
   technician_lead: {
     id: 'technician_lead',
-    title: 'Teknisi Lapangan (FTTH / FWA)',
-    roleTag: 'Pilar Eksekusi Fisik · Mode Offline Ready',
+    title: 'Teknisi Lapangan Profesional',
+    roleTag: 'Pilar Layanan · Instalasi & Perawatan',
     category: 'field',
     parentId: 'tenant_core',
-    focusGroups: ['all', 'tech_ecosystem', 'human_ai'],
+    focusGroups: ['all', 'tech_ops'],
     summary:
-      'Staf teknisi bersertifikat K3 yang mengeksekusi instalasi baru, survei ODP, pemeliharaan, dan troubleshooting jaringan di lokasi pelanggan.',
+      'Tim teknisi terlatih dan bersertifikat yang menangani pemasangan baru, survei lokasi, perawatan berkala, hingga perbaikan kendala layanan langsung di tempat pelanggan.',
     authorityBoundary:
-      'Mengeksekusi Work Order sesuai radius absensi GPS, SOP 7-langkah, dan standar mutu jaringan hingga Berita Acara digital ditandatangani.',
+      'Menjalankan pekerjaan lapangan sesuai standar keselamatan kerja, daftar periksa kualitas, dan bukti serah terima digital bersama pelanggan.',
     collaboratesWith: [
-      { target: 'AI Dispatch & Support Staff', protocol: 'Penerimaan WO & Eskalasi Lapangan' },
-      { target: 'Sales Agentzy', protocol: 'Konfirmasi Jadwal & Kesiapan Pemasangan' },
-      { target: 'Commission Ledger', protocol: 'Insentif SLA & Bonus First-Time-Fix' },
+      { target: 'AI Operasional & Teknis', protocol: 'Jadwal Kunjungan, Rute Peta & Panduan Teknis' },
+      { target: 'Staff Sales Agentzy', protocol: 'Konfirmasi Kesiapan Jadwal Pemasangan Pelanggan' },
+      { target: 'Bagi Hasil & Pertumbuhan', protocol: 'Insentif Pemasangan & Bonus Ketepatan Waktu' },
     ],
     rules: [
-      'Navigasi langsung ke lokasi pelanggan via Google Maps',
-      'Checklist SOP wajib, uji speedtest, 4 foto bukti, dan tanda tangan digital',
-      'Antrean data tetap tersimpan aman saat sinyal lapangan terputus',
+      'Navigasi langsung ke titik lokasi pelanggan melalui peta digital',
+      'Standar pengerjaan rapi lengkap dengan uji kualitas layanan & tanda tangan pelanggan',
+      'Tetap bisa mencatat laporan pekerjaan meski berada di area sinyal lemah',
     ],
   },
   tech_dispatch: {
     id: 'tech_dispatch',
-    title: 'AI Dispatch & Persiapan Material',
-    roleTag: 'Cabang Teknisi · Google Maps & Inventaris',
+    title: 'Penjadwalan Rute & Material (Operasional)',
+    roleTag: 'Dukungan AI Operasional · Peta & Stok',
     category: 'field',
     parentId: 'technician_lead',
-    focusGroups: ['all', 'tech_ecosystem', 'human_ai'],
+    focusGroups: ['all', 'tech_ops'],
     summary:
-      'Penyaluran Work Order otomatis berdasarkan kecocokan keahlian FTTH/FWA, jarak terdekat, kapasitas shift, dan ketersediaan perangkat ONT di gudang.',
+      'Pengaturan tugas pemasangan ke teknisi terdekat dengan keahlian yang tepat, lengkap dengan pengecekan kesiapan perangkat dan material sebelum berangkat ke lokasi.',
     authorityBoundary:
-      'Support Staff dapat mengubah penugasan kapan saja jika terdapat permintaan prioritas mendesak.',
+      'Memastikan teknisi berangkat dengan rute paling hemat waktu dan perlengkapan lengkap sehingga jarang terjadi penundaan.',
     collaboratesWith: [
-      { target: 'Staff AI Agentzy', protocol: 'Kalkulasi Rute & Prediksi Estimasi Tiba' },
-      { target: 'Support Staff Human', protocol: 'Penyesuaian Prioritas SLA' },
+      { target: 'AI Operasional & Teknis', protocol: 'Estimasi Waktu Tiba & Urutan Kunjungan Terbaik' },
+      { target: 'Staff Sales', protocol: 'Kepastian Jadwal Pemasangan untuk Pelanggan Baru' },
     ],
     rules: [
-      'Verifikasi stok ONT, kabel FO dropcore, konektor SC, dan splitter',
-      'Rute kunjungan optimal langsung dibuka melalui Google Maps',
+      'Pengecekan ketersediaan perangkat dan kabel sebelum kunjungan dimulai',
+      'Rekomendasi rute terdekat untuk memperbanyak kapasitas pemasangan harian',
     ],
   },
   tech_execution: {
     id: 'tech_execution',
-    title: 'Eksekusi 7-Langkah & Berita Acara',
-    roleTag: 'Cabang Teknisi · SOP, Speedtest & TTD',
+    title: 'Eksekusi Lapangan & Panduan Teknis',
+    roleTag: 'Dukungan AI Teknis · Uji Kualitas & Berita Acara',
     category: 'field',
     parentId: 'technician_lead',
-    focusGroups: ['all', 'tech_ecosystem'],
+    focusGroups: ['all', 'tech_ops'],
     summary:
-      'Alur kerja lapangan terstruktur mulai dari check-in lokasi, survey ODP, checklist instalasi, speedtest, dokumentasi foto, hingga tanda tangan pelanggan.',
+      'Panduan langkah demi langkah di lapangan mulai dari tiba di lokasi, pemasangan rapi, uji performa layanan, dokumentasi foto, hingga tanda tangan kepuasan pelanggan.',
     authorityBoundary:
-      'Work Order baru dinyatakan selesai setelah hasil speedtest memenuhi paket dan disetujui QC Supervisor.',
+      'Layanan baru dinyatakan selesai setelah hasil uji kualitas sesuai standar perusahaan mitra dan disetujui oleh pelanggan.',
     collaboratesWith: [
-      { target: 'Support Staff QC', protocol: 'Verifikasi Foto & Parameter Redaman Optik' },
-      { target: 'Commission Ledger', protocol: 'Pemicu Aktivasi Order & Insentif' },
+      { target: 'AI Asisten Teknis', protocol: 'Solusi Cepat Gangguan & Validasi Kualitas Instalasi' },
+      { target: 'Pertumbuhan & Bagi Hasil', protocol: 'Aktivasi Layanan Resmi & Pencairan Insentif' },
     ],
     rules: [
-      'Mengunci akurasi bukti digital sebelum status order berubah menjadi Activated',
-      'Sinkronisasi otomatis ke portal saat koneksi internet pulih',
+      'Dokumentasi foto dan hasil uji kualitas tersimpan rapi sebagai bukti kerja resmi',
+      'Mengurangi risiko kunjungan ulang berkat pengecekan kualitas sejak hari pertama',
     ],
   },
-  commission_ledger: {
-    id: 'commission_ledger',
-    title: 'QC Final & Commission Ledger',
-    roleTag: 'Konvergensi Akhir · Deterministik & Terukur',
+  growth_settlement: {
+    id: 'growth_settlement',
+    title: 'Pertumbuhan Bisnis & Bagi Hasil Transparan',
+    roleTag: 'Hasil Kerja Sama · Pelanggan Aktif & Komisi Jelas',
     category: 'ledger',
     parentId: 'tenant_core',
-    focusGroups: ['all', 'sales_affiliate', 'human_ai', 'tech_ecosystem'],
+    focusGroups: ['all', 'sales_affiliate', 'ai_marketing_sales', 'tech_ops'],
     summary:
-      'Titik temu seluruh kolaborasi: aktivasi layanan yang terverifikasi Support Staff dan AI Auditor langsung menghitung pembagian komisi secara deterministik.',
+      'Muara seluruh kolaborasi: setiap pelanggan yang berhasil diakuisisi dan terpasang rapi langsung menambah pendapatan perusahaan mitra sekaligus menghitung komisi tim secara adil.',
     authorityBoundary:
-      'Perhitungan ledger tidak dapat dimanipulasi manual; setiap penyesuaian memerlukan persetujuan audit dan Finance.',
+      'Perhitungan komisi dan laporan kinerja mengikuti kesepakatan kontrak kerja sama secara transparan dan dapat dipantau manajemen kapan saja.',
     collaboratesWith: [
-      { target: 'Affiliate Freelance', protocol: 'Kredit 60% Komisi Inkremental' },
-      { target: 'Sales Agentzy', protocol: 'Kredit 100% Pribadi + 40% Share + Bonus Tier' },
-      { target: 'Teknisi Lapangan', protocol: 'Kredit Komisi Instalasi + Insentif SLA' },
+      { target: 'Affiliate Freelance', protocol: 'Bagi Hasil 60% per Pelanggan Aktif' },
+      { target: 'Staff Sales Agentzy', protocol: '100% Komisi Langsung + 40% Pembinaan Affiliate' },
+      { target: 'Teknisi Lapangan', protocol: 'Insentif Penyelesaian & Ketepatan Jadwal' },
     ],
     rules: [
-      'Sumber kebenaran tunggal untuk statement komisi & rekonsiliasi invoice mitra',
-      'Status Commission Eligible terbuka otomatis saat Berita Acara lulus QC',
+      'Laporan penjualan, biaya layanan, dan pencairan komisi tercatat rapi dalam satu tempat',
+      'Komisi hanya cair untuk pelanggan yang benar-benar terpasang dan aktif berlangganan',
     ],
   },
 };
@@ -272,57 +270,60 @@ const SIMULATION_STEPS: Array<{
 }> = [
   {
     step: 1,
-    title: '01 · Akuisisi Prospek oleh Affiliate / Sales',
-    desc: 'Affiliate Freelance (atau Sales Agentzy) menginput prospek pelanggan baru lengkap dengan alamat pemasangan dan paket minat.',
-    activeNodes: ['sales_resmi', 'affiliate_leaf', 'sales_personal'],
-    focusedNode: 'affiliate_leaf',
+    title: '01 · AI Siapkan Konten Sosmed & Kampanye Digital Marketing',
+    desc: 'AI membantu Staff Sales dan Affiliate membuat caption Instagram/TikTok, desain pesan WhatsApp, dan iklan promo area agar cepat menarik perhatian calon pelanggan.',
+    activeNodes: ['ai_sales_marketing', 'staff_sales', 'affiliate_leaf'],
+    focusedNode: 'ai_sales_marketing',
   },
   {
     step: 2,
-    title: '02 · Kualifikasi Staff AI & Validasi Support Staff',
-    desc: 'Staff AI mengecek kelengkapan data dan port ODP secara otomatis, lalu Support Staff Human menyetujui kelayakan komersial menjadi Order.',
-    activeNodes: ['sales_resmi', 'staff_ai', 'support_human'],
-    focusedNode: 'staff_ai',
+    title: '02 · AI Saring Leads, Staff Sales & Affiliate Tindak Lanjut Closing',
+    desc: 'Calon pelanggan dari media sosial dan komunitas dijaring AI lalu diteruskan ke Staff Sales atau Affiliate untuk penawaran paket terbaik hingga sepakat berlangganan.',
+    activeNodes: ['ai_sales_marketing', 'staff_sales', 'sales_personal', 'affiliate_leaf'],
+    focusedNode: 'staff_sales',
   },
   {
     step: 3,
-    title: '03 · AI Dispatch & Persiapan Teknisi Lapangan',
-    desc: 'Staff AI bersama Support Staff menugaskan Work Order ke Teknisi FTTH terdekat lengkap dengan rute Google Maps dan alokasi material ONT.',
-    activeNodes: ['support_human', 'staff_ai', 'technician_lead', 'tech_dispatch'],
+    title: '03 · AI Operasional Atur Jadwal & Rute Teknisi Terdekat',
+    desc: 'Begitu pesanan disetujui, AI Operasional langsung mencocokkan lokasi pelanggan dengan Teknisi terdekat lengkap beserta kebutuhan perangkat dan rute kunjungan optimal.',
+    activeNodes: ['ai_tech_ops', 'technician_lead', 'tech_dispatch'],
     focusedNode: 'tech_dispatch',
   },
   {
     step: 4,
-    title: '04 · Eksekusi 7-Langkah & Monitoring SLA Real-Time',
-    desc: 'Teknisi melakukan check-in GPS, checklist SOP, speedtest, foto bukti, dan tanda tangan pelanggan sementara AI memantau kepatuhan SLA.',
-    activeNodes: ['technician_lead', 'tech_execution', 'staff_ai', 'support_human'],
+    title: '04 · Teknisi Pasang di Lokasi dengan Panduan AI Teknis',
+    desc: 'Teknisi melaksanakan instalasi sesuai standar, didampingi AI Teknis untuk pengecekan kualitas sinyal/layanan hingga berita acara ditandatangani pelanggan.',
+    activeNodes: ['ai_tech_ops', 'technician_lead', 'tech_execution'],
     focusedNode: 'tech_execution',
   },
   {
     step: 5,
-    title: '05 · QC Sign-off & Pembagian Komisi Deterministik',
-    desc: 'Support Staff menyelesaikan QC Berita Acara dan Commission Ledger langsung membagi 60% Affiliate, 40% Sales + SA Tier, serta insentif SLA Teknisi.',
+    title: '05 · Pelanggan Aktif, Bisnis Mitra Tumbuh & Komisi Cair',
+    desc: 'Layanan pelanggan resmi aktif: perusahaan mitra memperoleh pelanggan baru yang puas, sementara Staff Sales, Affiliate (60/40), dan Teknisi menerima hak komisi secara transparan.',
     activeNodes: [
-      'support_human',
-      'commission_ledger',
+      'growth_settlement',
       'affiliate_leaf',
-      'sales_resmi',
+      'staff_sales',
       'technician_lead',
     ],
-    focusedNode: 'commission_ledger',
+    focusedNode: 'growth_settlement',
   },
 ];
 
-const FOCUS_MODES: Array<{ id: UniverseFocusMode; label: string }> = [
-  { id: 'all', label: 'Semua Universe' },
-  { id: 'sales_affiliate', label: 'Sales ↔ Affiliate' },
-  { id: 'human_ai', label: 'Human ↔ Staf AI' },
-  { id: 'tech_ecosystem', label: 'Teknisi ↔ Lintas Peran' },
+const FOCUS_MODES: Array<{
+  id: UniverseFocusMode;
+  label: string;
+  mobileLabel: string;
+}> = [
+  { id: 'all', label: 'Semua Ekosistem', mobileLabel: 'Semua' },
+  { id: 'sales_affiliate', label: 'Staff Sales & Affiliate', mobileLabel: 'Sales & Affiliate' },
+  { id: 'ai_marketing_sales', label: 'AI Marketing & Konten', mobileLabel: 'AI Marketing' },
+  { id: 'tech_ops', label: 'Teknisi & AI Operasional', mobileLabel: 'Teknisi & Ops' },
 ];
 
 export function InteractiveUniverseTree() {
   const [focusMode, setFocusMode] = useState<UniverseFocusMode>('all');
-  const [selectedNodeId, setSelectedNodeId] = useState<TreeNodeId>('sales_resmi');
+  const [selectedNodeId, setSelectedNodeId] = useState<TreeNodeId>('ai_sales_marketing');
   const [simStepIndex, setSimStepIndex] = useState<number | null>(null);
   const [expandedBranches, setExpandedBranches] = useState<{
     commercial: boolean;
@@ -351,12 +352,12 @@ export function InteractiveUniverseTree() {
     if (mode === 'sales_affiliate') {
       setExpandedBranches((p) => ({ ...p, commercial: true }));
       setSelectedNodeId('affiliate_leaf');
-    } else if (mode === 'human_ai') {
-      setExpandedBranches((p) => ({ ...p, ai_support: true }));
-      setSelectedNodeId('staff_ai');
-    } else if (mode === 'tech_ecosystem') {
-      setExpandedBranches((p) => ({ ...p, field: true }));
-      setSelectedNodeId('technician_lead');
+    } else if (mode === 'ai_marketing_sales') {
+      setExpandedBranches((p) => ({ ...p, ai_support: true, commercial: true }));
+      setSelectedNodeId('ai_sales_marketing');
+    } else if (mode === 'tech_ops') {
+      setExpandedBranches((p) => ({ ...p, field: true, ai_support: true }));
+      setSelectedNodeId('ai_tech_ops');
     } else {
       setSelectedNodeId('tenant_core');
     }
@@ -401,27 +402,28 @@ export function InteractiveUniverseTree() {
               key={m.id}
               type="button"
               onClick={() => handleSelectMode(m.id)}
-              className={`rounded-[8px] px-3 py-2 text-xs font-semibold transition whitespace-nowrap ${
+              className={`min-h-[40px] rounded-[8px] px-2.5 py-2 text-xs font-semibold transition whitespace-nowrap truncate sm:min-h-0 sm:px-3 ${
                 focusMode === m.id && simStepIndex === null
                   ? 'bg-[#17324D] text-white'
                   : 'bg-[#F5F8FA] text-[#526675] hover:text-[#17324D] sm:bg-transparent'
               }`}
             >
-              {m.label}
+              <span className="sm:hidden">{m.mobileLabel}</span>
+              <span className="hidden sm:inline">{m.label}</span>
             </button>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={handleAdvanceSimulation}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-[#0284C7] px-3.5 text-xs font-semibold text-white transition hover:bg-[#0369A1] whitespace-nowrap"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[9px] bg-[#0284C7] px-3.5 text-xs font-semibold text-white transition hover:bg-[#0369A1] whitespace-nowrap sm:h-9 sm:w-auto"
           >
-            <Play className="h-3.5 w-3.5" />
+            <Play className="h-3.5 w-3.5 shrink-0" />
             <span>
               {simStepIndex === null
-                ? 'Simulasikan Alur Order'
+                ? 'Simulasikan Alur Bisnis'
                 : `Lanjut Tahap ${((simStepIndex + 1) % SIMULATION_STEPS.length) + 1}/5`}
             </span>
           </button>
@@ -429,9 +431,9 @@ export function InteractiveUniverseTree() {
             <button
               type="button"
               onClick={() => setSimStepIndex(null)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-[#D8E3E9] bg-[#F5F8FA] px-3 text-xs font-semibold text-[#526675] hover:text-[#17324D]"
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#D8E3E9] bg-[#F5F8FA] px-3 text-xs font-semibold text-[#526675] hover:text-[#17324D] sm:h-9 sm:w-auto"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3.5 w-3.5 shrink-0" />
               <span>Reset</span>
             </button>
           )}
@@ -477,18 +479,18 @@ export function InteractiveUniverseTree() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#EAF2F6] pb-3">
             <div>
               <p className="text-xs font-bold text-[#17324D]">
-                Pohon Struktur Universe Interaktif
+                Peta Kolaborasi Tim &amp; Peran Bisnis Agentzy
               </p>
               <p className="text-[11px] text-[#526675]">
-                Klik simpul peran untuk meninjau wewenang, batasan, &amp; jalur kolaborasi
+                Klik setiap kotak peran untuk melihat tugas, manfaat bisnis, &amp; cara kerja samanya
               </p>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-[#526675]">
-              <span>Pilar Komersial</span>
+              <span>Sales &amp; Affiliate</span>
               <span aria-hidden="true">·</span>
-              <span>Human &amp; AI</span>
+              <span>Asisten AI</span>
               <span aria-hidden="true">·</span>
-              <span>Operasional Teknisi</span>
+              <span>Teknisi Lapangan</span>
             </div>
           </div>
 
@@ -516,7 +518,7 @@ export function InteractiveUniverseTree() {
                     </div>
                   </div>
                   <span className="font-mono-tabular text-[11px] font-semibold text-[#0284C7]">
-                    Root
+                    Mitra
                   </span>
                 </div>
               </button>
@@ -525,7 +527,6 @@ export function InteractiveUniverseTree() {
             {/* SVG Tree Trunk & 3-Branch Orthogonal Connectors */}
             <div className="mx-auto w-full px-6" aria-hidden="true">
               <svg viewBox="0 0 900 54" className="h-12 w-full overflow-visible">
-                {/* Vertical Trunk from Root */}
                 <line
                   x1="450"
                   y1="0"
@@ -534,7 +535,6 @@ export function InteractiveUniverseTree() {
                   stroke="#0284C7"
                   strokeWidth="2"
                 />
-                {/* Horizontal Distribution Bus */}
                 <line
                   x1="150"
                   y1="24"
@@ -543,40 +543,29 @@ export function InteractiveUniverseTree() {
                   stroke="#B8C9D3"
                   strokeWidth="2"
                 />
-                {/* Left Drop: Sales */}
                 <line
                   x1="150"
                   y1="24"
                   x2="150"
                   y2="54"
-                  stroke={
-                    isNodeHighlighted('sales_resmi') ? '#0284C7' : '#D8E3E9'
-                  }
-                  strokeWidth={isNodeHighlighted('sales_resmi') ? '2.5' : '1.5'}
+                  stroke={isNodeHighlighted('staff_sales') ? '#0284C7' : '#D8E3E9'}
+                  strokeWidth={isNodeHighlighted('staff_sales') ? '2.5' : '1.5'}
                 />
-                {/* Center Drop: Support & AI */}
                 <line
                   x1="450"
                   y1="24"
                   x2="450"
                   y2="54"
-                  stroke={
-                    isNodeHighlighted('support_human') ? '#0284C7' : '#D8E3E9'
-                  }
-                  strokeWidth={isNodeHighlighted('support_human') ? '2.5' : '1.5'}
+                  stroke={isNodeHighlighted('ai_sales_marketing') ? '#0284C7' : '#D8E3E9'}
+                  strokeWidth={isNodeHighlighted('ai_sales_marketing') ? '2.5' : '1.5'}
                 />
-                {/* Right Drop: Teknisi */}
                 <line
                   x1="750"
                   y1="24"
                   x2="750"
                   y2="54"
-                  stroke={
-                    isNodeHighlighted('technician_lead') ? '#247A55' : '#D8E3E9'
-                  }
-                  strokeWidth={
-                    isNodeHighlighted('technician_lead') ? '2.5' : '1.5'
-                  }
+                  stroke={isNodeHighlighted('technician_lead') ? '#247A55' : '#D8E3E9'}
+                  strokeWidth={isNodeHighlighted('technician_lead') ? '2.5' : '1.5'}
                 />
                 <circle cx="150" cy="24" r="3.5" fill="#0284C7" />
                 <circle cx="450" cy="24" r="3.5" fill="#0284C7" />
@@ -586,13 +575,13 @@ export function InteractiveUniverseTree() {
 
             {/* Level 2 & Level 3: 3 Primary Pillars */}
             <div className="grid grid-cols-3 gap-4 items-start">
-              {/* BRANCH 1: SALES & AFFILIATE */}
+              {/* BRANCH 1: STAFF SALES & AFFILIATE */}
               <div className="space-y-2.5">
-                <div className={`rounded-[12px] border p-3.5 transition ${getNodeCardClasses('sales_resmi')}`}>
+                <div className={`rounded-[12px] border p-3.5 transition ${getNodeCardClasses('staff_sales')}`}>
                   <div className="flex items-start justify-between gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedNodeId('sales_resmi')}
+                      onClick={() => setSelectedNodeId('staff_sales')}
                       className="flex items-start gap-2.5 text-left flex-1 min-w-0"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#0284C7] text-white">
@@ -600,17 +589,17 @@ export function InteractiveUniverseTree() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[#17324D]">
-                          Sales Agentzy
+                          Staff Sales Agentzy
                         </p>
                         <p className="text-[11px] text-[#526675]">
-                          Sales Resmi · Pembina
+                          Penjualan · Pembina Affiliate
                         </p>
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleBranch('commercial')}
-                      aria-label="Buka atau tutup cabang Sales"
+                      aria-label="Buka atau tutup cabang Staff Sales"
                       className="rounded-md p-1 text-[#526675] hover:bg-[#EAF2F6]"
                     >
                       {expandedBranches.commercial ? (
@@ -623,17 +612,17 @@ export function InteractiveUniverseTree() {
                 </div>
 
                 {expandedBranches.commercial && (
-                  <div className="ml-4 space-y-2.5 border-l border-[#B8C9D3] pl-3.5">
+                  <div className="ml-3 space-y-2.5 border-l border-[#D8E3E9] pl-3">
                     <button
                       type="button"
                       onClick={() => setSelectedNodeId('sales_personal')}
                       className={`w-full rounded-[10px] border p-3 text-left transition ${getNodeCardClasses('sales_personal')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        Penjualan Pribadi
+                        Penjualan Langsung
                       </p>
                       <p className="mt-0.5 font-mono-tabular text-[11px] text-[#526675]">
-                        100% Basis SA · Tier Pro/Elite
+                        100% Komisi · Tier Pro &amp; Elite
                       </p>
                     </button>
 
@@ -651,38 +640,38 @@ export function InteractiveUniverseTree() {
                         </span>
                       </div>
                       <p className="mt-0.5 text-[11px] text-[#526675]">
-                        Node akhir · Kirim prospek (tanpa rekrutmen)
+                        Mitra promosi · Sebar info &amp; setor prospek
                       </p>
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* BRANCH 2: SUPPORT HUMAN & STAFF AI */}
+              {/* BRANCH 2: DUKUNGAN AI PER PERAN */}
               <div className="space-y-2.5">
-                <div className={`rounded-[12px] border p-3.5 transition ${getNodeCardClasses('support_human')}`}>
+                <div className={`rounded-[12px] border p-3.5 transition ${getNodeCardClasses('ai_sales_marketing')}`}>
                   <div className="flex items-start justify-between gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedNodeId('support_human')}
+                      onClick={() => setSelectedNodeId('ai_sales_marketing')}
                       className="flex items-start gap-2.5 text-left flex-1 min-w-0"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#17324D] text-white">
-                        <Users className="h-4 w-4" />
+                        <Bot className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[#17324D]">
-                          Support Staff Human
+                          AI Sales &amp; Affiliate
                         </p>
                         <p className="text-[11px] text-[#526675]">
-                          Supervisor · Approval &amp; QC
+                          Digital Marketing &amp; Konten
                         </p>
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleBranch('ai_support')}
-                      aria-label="Buka atau tutup cabang Support dan AI"
+                      aria-label="Buka atau tutup cabang Dukungan AI"
                       className="rounded-md p-1 text-[#526675] hover:bg-[#EAF2F6]"
                     >
                       {expandedBranches.ai_support ? (
@@ -695,34 +684,34 @@ export function InteractiveUniverseTree() {
                 </div>
 
                 {expandedBranches.ai_support && (
-                  <div className="ml-4 space-y-2.5 border-l border-[#B8C9D3] pl-3.5">
+                  <div className="ml-3 space-y-2.5 border-l border-[#D8E3E9] pl-3">
+                    <div className="rounded-[10px] border border-dashed border-[#87CEEB] bg-[#E6F4F9]/55 p-2.5 text-[11px] text-[#245477]">
+                      <span className="font-semibold text-[#17324D]">
+                        Untuk Sales &amp; Affiliate:
+                      </span>{' '}
+                      Generate konten, caption sosmed, iklan digital, &amp; cari leads
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => setSelectedNodeId('staff_ai')}
-                      className={`w-full rounded-[10px] border p-3 text-left transition ${getNodeCardClasses('staff_ai')}`}
+                      onClick={() => setSelectedNodeId('ai_tech_ops')}
+                      className={`w-full rounded-[10px] border p-3 text-left transition ${getNodeCardClasses('ai_tech_ops')}`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <Bot className="h-3.5 w-3.5 text-[#0284C7]" />
+                          <Bot className="h-3.5 w-3.5 text-[#247A55]" />
                           <p className="text-xs font-bold text-[#17324D]">
-                            Staff AI Agentzy
+                            AI Operasional Teknisi
                           </p>
                         </div>
-                        <span className="font-mono-tabular text-[10px] font-bold text-[#0284C7]">
-                          L0–L4
+                        <span className="font-mono-tabular text-[10px] font-bold text-[#247A55]">
+                          Teknis
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] text-[#526675]">
-                        Pra-kualifikasi lead, cek ODP, &amp; monitor SLA
+                        Khusus jadwal, rute kunjungan, &amp; panduan teknis
                       </p>
                     </button>
-
-                    <div className="rounded-[10px] border border-dashed border-[#87CEEB] bg-[#E6F4F9]/50 p-2.5 text-[11px] text-[#245477]">
-                      <span className="font-semibold text-[#17324D]">
-                        Handoff Lintas Tim:
-                      </span>{' '}
-                      Menyambungkan order Sales/Affiliate ke jadwal Teknisi secara otomatis
-                    </div>
                   </div>
                 )}
               </div>
@@ -744,7 +733,7 @@ export function InteractiveUniverseTree() {
                           Teknisi Lapangan
                         </p>
                         <p className="text-[11px] text-[#526675]">
-                          FTTH/FWA · Offline Ready
+                          Instalasi · Perawatan · SLA
                         </p>
                       </div>
                     </button>
@@ -764,17 +753,17 @@ export function InteractiveUniverseTree() {
                 </div>
 
                 {expandedBranches.field && (
-                  <div className="ml-4 space-y-2.5 border-l border-[#B8C9D3] pl-3.5">
+                  <div className="ml-3 space-y-2.5 border-l border-[#D8E3E9] pl-3">
                     <button
                       type="button"
                       onClick={() => setSelectedNodeId('tech_dispatch')}
                       className={`w-full rounded-[10px] border p-3 text-left transition ${getNodeCardClasses('tech_dispatch')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        AI Dispatch &amp; Material
+                        Jadwal, Rute &amp; Material
                       </p>
                       <p className="mt-0.5 text-[11px] text-[#526675]">
-                        Rute Google Maps · Stok ONT &amp; FO
+                        Rute kunjungan optimal &amp; kesiapan perangkat
                       </p>
                     </button>
 
@@ -784,10 +773,10 @@ export function InteractiveUniverseTree() {
                       className={`w-full rounded-[10px] border p-3 text-left transition ${getNodeCardClasses('tech_execution')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        Eksekusi 7-Langkah &amp; QC
+                        Eksekusi &amp; Panduan Teknis
                       </p>
                       <p className="mt-0.5 text-[11px] text-[#526675]">
-                        SOP, Speedtest, 4 Foto, TTD Digital
+                        Pemasangan rapi, uji kualitas &amp; berita acara
                       </p>
                     </button>
                   </div>
@@ -795,7 +784,7 @@ export function InteractiveUniverseTree() {
               </div>
             </div>
 
-            {/* SVG Convergence Connectors to Commission Ledger */}
+            {/* SVG Convergence Connectors to Growth & Settlement */}
             <div className="mx-auto w-full px-6" aria-hidden="true">
               <svg viewBox="0 0 900 44" className="h-10 w-full overflow-visible">
                 <line
@@ -803,9 +792,7 @@ export function InteractiveUniverseTree() {
                   y1="0"
                   x2="150"
                   y2="20"
-                  stroke={
-                    isNodeHighlighted('commission_ledger') ? '#0284C7' : '#D8E3E9'
-                  }
+                  stroke={isNodeHighlighted('growth_settlement') ? '#0284C7' : '#D8E3E9'}
                   strokeWidth="2"
                 />
                 <line
@@ -813,9 +800,7 @@ export function InteractiveUniverseTree() {
                   y1="0"
                   x2="450"
                   y2="20"
-                  stroke={
-                    isNodeHighlighted('commission_ledger') ? '#0284C7' : '#D8E3E9'
-                  }
+                  stroke={isNodeHighlighted('growth_settlement') ? '#0284C7' : '#D8E3E9'}
                   strokeWidth="2"
                 />
                 <line
@@ -823,9 +808,7 @@ export function InteractiveUniverseTree() {
                   y1="0"
                   x2="750"
                   y2="20"
-                  stroke={
-                    isNodeHighlighted('commission_ledger') ? '#247A55' : '#D8E3E9'
-                  }
+                  stroke={isNodeHighlighted('growth_settlement') ? '#247A55' : '#D8E3E9'}
                   strokeWidth="2"
                 />
                 <line
@@ -841,21 +824,19 @@ export function InteractiveUniverseTree() {
                   y1="20"
                   x2="450"
                   y2="44"
-                  stroke={
-                    isNodeHighlighted('commission_ledger') ? '#247A55' : '#B8C9D3'
-                  }
+                  stroke={isNodeHighlighted('growth_settlement') ? '#247A55' : '#B8C9D3'}
                   strokeWidth="2.5"
                 />
                 <circle cx="450" cy="20" r="3.5" fill="#247A55" />
               </svg>
             </div>
 
-            {/* Level 4: Convergence Ledger */}
+            {/* Level 4: Convergence Node */}
             <div className="flex justify-center">
               <button
                 type="button"
-                onClick={() => setSelectedNodeId('commission_ledger')}
-                className={`w-full max-w-xl rounded-[12px] border p-3.5 text-left transition ${getNodeCardClasses('commission_ledger')}`}
+                onClick={() => setSelectedNodeId('growth_settlement')}
+                className={`w-full max-w-xl rounded-[12px] border p-3.5 text-left transition ${getNodeCardClasses('growth_settlement')}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
@@ -864,15 +845,15 @@ export function InteractiveUniverseTree() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[#17324D]">
-                        {TREE_NODES.commission_ledger.title}
+                        {TREE_NODES.growth_settlement.title}
                       </p>
                       <p className="text-[11px] text-[#526675]">
-                        Aktivasi Tervalidasi → 60% Affiliate / 40% Sales + Insentif SLA Teknisi
+                        Pelanggan Aktif → Pertumbuhan Mitra · 60% Affiliate / 40% Staff Sales + Insentif Teknisi
                       </p>
                     </div>
                   </div>
                   <span className="font-mono-tabular text-[11px] font-bold text-[#247A55]">
-                    Settlement
+                    Bagi Hasil
                   </span>
                 </div>
               </button>
@@ -896,27 +877,26 @@ export function InteractiveUniverseTree() {
                     {TREE_NODES.tenant_core.title}
                   </p>
                   <p className="text-[11px] text-[#526675]">
-                    Inti Kontrol SOW, RBAC &amp; Audit Tenant
+                    Kerja Sama Mitra, Tim Terkelola &amp; Laporan Transparan
                   </p>
                 </div>
               </div>
             </button>
 
-            {/* Indented Tree Branches */}
-            <div className="ml-3 space-y-3 border-l border-[#B8C9D3] pl-3">
+            <div className="ml-3 space-y-3 border-l border-[#D8E3E9] pl-3">
               {/* Branch 1 Mobile */}
               <div className="space-y-2">
-                <div className={`rounded-[11px] border p-3 transition ${getNodeCardClasses('sales_resmi')}`}>
+                <div className={`rounded-[11px] border p-3 transition ${getNodeCardClasses('staff_sales')}`}>
                   <div className="flex items-center justify-between gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedNodeId('sales_resmi')}
+                      onClick={() => setSelectedNodeId('staff_sales')}
                       className="flex items-center gap-2 text-left flex-1"
                     >
                       <Briefcase className="h-4 w-4 shrink-0 text-[#0284C7]" />
                       <div>
                         <p className="text-xs font-bold text-[#17324D]">
-                          Sales Agentzy (Sales Resmi)
+                          Staff Sales Agentzy
                         </p>
                         <p className="text-[11px] text-[#526675]">
                           Penjualan langsung &amp; pembina affiliate
@@ -926,7 +906,7 @@ export function InteractiveUniverseTree() {
                     <button
                       type="button"
                       onClick={() => toggleBranch('commercial')}
-                      aria-label="Toggle cabang Sales"
+                      aria-label="Toggle cabang Staff Sales"
                       className="p-1 text-[#526675]"
                     >
                       {expandedBranches.commercial ? (
@@ -945,7 +925,7 @@ export function InteractiveUniverseTree() {
                       className={`w-full rounded-[10px] border p-2.5 text-left ${getNodeCardClasses('sales_personal')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        Penjualan Pribadi (100% SA)
+                        Penjualan Langsung (100% Komisi)
                       </p>
                     </button>
                     <button
@@ -954,7 +934,7 @@ export function InteractiveUniverseTree() {
                       className={`w-full rounded-[10px] border p-2.5 text-left ${getNodeCardClasses('affiliate_leaf')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        Affiliate Freelance (60% · Node Akhir)
+                        Affiliate Freelance (Bagi Hasil 60%)
                       </p>
                     </button>
                   </div>
@@ -963,27 +943,27 @@ export function InteractiveUniverseTree() {
 
               {/* Branch 2 Mobile */}
               <div className="space-y-2">
-                <div className={`rounded-[11px] border p-3 transition ${getNodeCardClasses('support_human')}`}>
+                <div className={`rounded-[11px] border p-3 transition ${getNodeCardClasses('ai_sales_marketing')}`}>
                   <div className="flex items-center justify-between gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedNodeId('support_human')}
+                      onClick={() => setSelectedNodeId('ai_sales_marketing')}
                       className="flex items-center gap-2 text-left flex-1"
                     >
-                      <Users className="h-4 w-4 shrink-0 text-[#17324D]" />
+                      <Bot className="h-4 w-4 shrink-0 text-[#17324D]" />
                       <div>
                         <p className="text-xs font-bold text-[#17324D]">
-                          Support Staff Human
+                          AI untuk Sales &amp; Affiliate
                         </p>
                         <p className="text-[11px] text-[#526675]">
-                          Approval, koordinasi, &amp; QC akhir
+                          Digital marketing, generate konten &amp; leads
                         </p>
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleBranch('ai_support')}
-                      aria-label="Toggle cabang Support dan AI"
+                      aria-label="Toggle cabang Dukungan AI"
                       className="p-1 text-[#526675]"
                     >
                       {expandedBranches.ai_support ? (
@@ -998,11 +978,11 @@ export function InteractiveUniverseTree() {
                   <div className="ml-3 space-y-2 border-l border-[#D8E3E9] pl-3">
                     <button
                       type="button"
-                      onClick={() => setSelectedNodeId('staff_ai')}
-                      className={`w-full rounded-[10px] border p-2.5 text-left ${getNodeCardClasses('staff_ai')}`}
+                      onClick={() => setSelectedNodeId('ai_tech_ops')}
+                      className={`w-full rounded-[10px] border p-2.5 text-left ${getNodeCardClasses('ai_tech_ops')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        Staff AI Agentzy (L0–L4 · Cek ODP &amp; SLA)
+                        AI untuk Teknisi (Operasional &amp; Teknis)
                       </p>
                     </button>
                   </div>
@@ -1021,10 +1001,10 @@ export function InteractiveUniverseTree() {
                       <Wrench className="h-4 w-4 shrink-0 text-[#247A55]" />
                       <div>
                         <p className="text-xs font-bold text-[#17324D]">
-                          Teknisi Lapangan (FTTH/FWA)
+                          Teknisi Lapangan Profesional
                         </p>
                         <p className="text-[11px] text-[#526675]">
-                          Instalasi, survey, &amp; mode offline
+                          Instalasi, perawatan &amp; jaminan layanan
                         </p>
                       </div>
                     </button>
@@ -1050,7 +1030,7 @@ export function InteractiveUniverseTree() {
                       className={`w-full rounded-[10px] border p-2.5 text-left ${getNodeCardClasses('tech_dispatch')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        AI Dispatch &amp; Material Gudang
+                        Penjadwalan Rute &amp; Material
                       </p>
                     </button>
                     <button
@@ -1059,7 +1039,7 @@ export function InteractiveUniverseTree() {
                       className={`w-full rounded-[10px] border p-2.5 text-left ${getNodeCardClasses('tech_execution')}`}
                     >
                       <p className="text-xs font-bold text-[#17324D]">
-                        Eksekusi 7-Langkah &amp; TTD Pelanggan
+                        Eksekusi &amp; Panduan Teknis Lapangan
                       </p>
                     </button>
                   </div>
@@ -1069,17 +1049,17 @@ export function InteractiveUniverseTree() {
               {/* Convergence Mobile */}
               <button
                 type="button"
-                onClick={() => setSelectedNodeId('commission_ledger')}
-                className={`w-full rounded-[11px] border p-3 text-left ${getNodeCardClasses('commission_ledger')}`}
+                onClick={() => setSelectedNodeId('growth_settlement')}
+                className={`w-full rounded-[11px] border p-3 text-left ${getNodeCardClasses('growth_settlement')}`}
               >
                 <div className="flex items-center gap-2">
                   <Wallet className="h-4 w-4 shrink-0 text-[#247A55]" />
                   <div>
                     <p className="text-xs font-bold text-[#17324D]">
-                      QC Final &amp; Commission Ledger
+                      Pertumbuhan Bisnis &amp; Bagi Hasil
                     </p>
                     <p className="text-[11px] text-[#526675]">
-                      60% Affiliate / 40% Sales + Insentif SLA
+                      60% Affiliate / 40% Staff Sales + Insentif Teknisi
                     </p>
                   </div>
                 </div>
@@ -1089,10 +1069,13 @@ export function InteractiveUniverseTree() {
         </div>
 
         {/* RIGHT: Live Selected Node & Collaboration Inspector */}
-        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-4">
-          <div className="flex items-center justify-between border-b border-[#EAF2F6] pb-3">
+        <div
+          id="universe-inspector"
+          className="rounded-[14px] border border-[#D8E3E9] bg-white p-4 sm:p-5 lg:col-span-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[#EAF2F6] pb-3">
             <span className="text-xs font-semibold text-[#0284C7]">
-              Detail Simpul Struktural
+              Detail Peran &amp; Manfaat
             </span>
             <span className="text-[11px] font-medium text-[#526675]">
               {selectedNode.roleTag}
@@ -1106,11 +1089,11 @@ export function InteractiveUniverseTree() {
             {selectedNode.summary}
           </p>
 
-          {/* Batas Wewenang */}
+          {/* Ruang Lingkup & Kendali */}
           <div className="mt-4 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3.5">
             <div className="flex items-center gap-1.5 text-xs font-bold text-[#17324D]">
               <ShieldCheck className="h-4 w-4 text-[#0284C7]" />
-              <span>Batas Wewenang &amp; Tata Kelola</span>
+              <span>Fokus Kerja &amp; Kendali</span>
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-[#526675]">
               {selectedNode.authorityBoundary}
@@ -1121,7 +1104,7 @@ export function InteractiveUniverseTree() {
           <div className="mt-4">
             <div className="flex items-center gap-1.5 text-xs font-bold text-[#17324D]">
               <GitBranch className="h-4 w-4 text-[#247A55]" />
-              <span>Jalur Kolaborasi Terhubung</span>
+              <span>Sinergi dengan Peran Lain</span>
             </div>
             <div className="mt-2 space-y-2">
               {selectedNode.collaboratesWith.map((col) => (
@@ -1138,10 +1121,10 @@ export function InteractiveUniverseTree() {
             </div>
           </div>
 
-          {/* Aturan Operasional */}
+          {/* Keunggulan Operasional */}
           <div className="mt-4 border-t border-[#EAF2F6] pt-3.5">
             <p className="text-xs font-bold text-[#17324D]">
-              Ketentuan Sistem &amp; Operasional
+              Nilai Tambah Kemitraan
             </p>
             <ul className="mt-2 space-y-1.5">
               {selectedNode.rules.map((r) => (

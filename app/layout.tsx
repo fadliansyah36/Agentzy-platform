@@ -13,33 +13,35 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Agentzy — Perusahaan Jasa Tenaga Kerja Sales & Teknisi Didukung Staf AI',
+  title: 'Agent-zy — Smarter Workforce, Powered by Human & AI',
   description:
-    'Agentzy adalah perusahaan penyedia dan pengelola tenaga kerja sales serta teknisi lapangan yang didukung oleh staf AI terkelola dalam satu sistem enterprise.',
-  applicationName: 'Agentzy',
+    'Menyediakan jasa dan tenaga kerja dengan support teknologi dan Artificial Intelligence — Staff Sales, jaringan Affiliate, dan Teknisi Lapangan terkelola.',
+  applicationName: 'Agent-zy',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Agentzy',
+    title: 'Agent-zy',
   },
   icons: {
     icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', sizes: '64x64', type: 'image/png' },
       { url: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: '/apple-touch-icon.png',
+    shortcut: '/favicon.png',
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
-    title: 'Agentzy — Jasa Tenaga Kerja Sales & Teknisi Didukung Staf AI',
+    title: 'Agent-zy — Smarter Workforce, Powered by Human & AI',
     description:
-      'Perusahaan jasa tenaga kerja sales dan teknisi lapangan yang didukung oleh staf AI terkelola untuk enterprise.',
+      'Menyediakan jasa dan tenaga kerja dengan support teknologi dan Artificial Intelligence untuk pertumbuhan bisnis & operasional.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Agentzy — Jasa Tenaga Kerja Sales & Teknisi Didukung Staf AI',
+    title: 'Agent-zy — Smarter Workforce, Powered by Human & AI',
     description:
-      'Perusahaan jasa tenaga kerja sales dan teknisi lapangan yang didukung oleh staf AI terkelola.',
+      'Menyediakan jasa dan tenaga kerja dengan support teknologi dan Artificial Intelligence.',
   },
 };
 

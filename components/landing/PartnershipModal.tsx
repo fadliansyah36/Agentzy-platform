@@ -10,22 +10,22 @@ interface PartnershipModalProps {
 }
 
 const HUMAN_NEEDS = [
-  'Sales Resmi (AE)',
+  'Staff Sales Profesional',
   'Jaringan Affiliate Freelance',
-  'Teknisi Lapangan FTTH/FWA',
-  'Rekrutmen & Onboarding',
-  'Pelatihan & Sertifikasi',
+  'Teknisi Lapangan',
+  'Rekrutmen & Penempatan',
+  'Pelatihan & Sertifikasi Tim',
 ];
 
 const AI_NEEDS = [
-  'AI Sales & Lead Qualification',
-  'AI Affiliate Onboarding',
-  'AI Marketing & Content',
-  'AI Technical Knowledge',
-  'AI Operations & Analytics',
+  'AI Digital Marketing & Konten Sosmed',
+  'AI Pencari & Penyaring Leads',
+  'AI Pendamping Rekrutmen Affiliate',
+  'AI Dukungan Operasional & Teknis',
+  'AI Analis Pertumbuhan & Laporan',
 ];
 
-const PROVIDER_PRODUCTS = ['FTTH', 'FWA', 'PXGY', 'Enterprise Connectivity'];
+const PROVIDER_PRODUCTS = ['Internet Fiber (FTTH)', 'Wireless (FWA)', 'Paket Bisnis / Korporasi', 'Layanan Lapangan Lainnya'];
 
 export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   const { openScheduleMeetingModal } = useWorkspace();
@@ -39,13 +39,14 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   const [locations, setLocations] = useState('Jabodetabek, Jawa Barat');
   const [estimatedWorkforce, setEstimatedWorkforce] = useState('50');
   const [humanNeeds, setHumanNeeds] = useState<string[]>([
-    'Sales Resmi (AE)',
-    'Teknisi Lapangan FTTH/FWA',
+    'Staff Sales Profesional',
+    'Teknisi Lapangan',
   ]);
   const [aiNeeds, setAiNeeds] = useState<string[]>([
-    'AI Sales & Lead Qualification',
+    'AI Digital Marketing & Konten Sosmed',
+    'AI Pencari & Penyaring Leads',
   ]);
-  const [products, setProducts] = useState<string[]>(['FTTH', 'FWA']);
+  const [products, setProducts] = useState<string[]>(['Internet Fiber (FTTH)', 'Wireless (FWA)']);
   const [needsSummary, setNeedsSummary] = useState('');
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +82,8 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172B3A]/55 p-4 backdrop-blur-xs">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[16px] border border-[#D8E3E9] bg-white p-6 shadow-xl sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#172B3A]/55 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+      <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-[20px] border border-[#D8E3E9] bg-white p-5 shadow-xl sm:rounded-[16px] sm:p-8">
         <div className="flex items-start justify-between gap-4 border-b border-[#D8E3E9] pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#E6F4F9] text-[#0284C7]">
@@ -90,10 +91,10 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-[#172B3A]">
-                Ajukan Kerja Sama Enterprise & Partner
+                Ajukan Kerja Sama Bisnis &amp; Kemitraan
               </h2>
               <p className="text-xs text-[#526675]">
-                Tahap 01 · Application → Qualification → Discovery → Contract & SOW
+                Langkah Awal Kemitraan · Konsultasi Kebutuhan · Penawaran Kerja Sama
               </p>
             </div>
           </div>
@@ -378,19 +379,19 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
               </p>
             )}
 
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+            <div className="grid grid-cols-1 gap-2.5 pt-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
+              <button
+                type="submit"
+                className="h-11 rounded-[10px] bg-[#17324D] px-5 text-sm font-semibold text-white transition hover:bg-[#245477] sm:order-2"
+              >
+                Kirim Pengajuan Kerja Sama
+              </button>
               <button
                 type="button"
                 onClick={handleResetAndClose}
-                className="rounded-[10px] border border-[#B8C9D3] bg-white px-4 py-2.5 text-sm font-semibold text-[#17324D] hover:bg-[#F5F8FA]"
+                className="h-11 rounded-[10px] border border-[#B8C9D3] bg-white px-4 text-sm font-semibold text-[#17324D] hover:bg-[#F5F8FA] sm:order-1"
               >
                 Batal
-              </button>
-              <button
-                type="submit"
-                className="rounded-[10px] bg-[#17324D] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#245477]"
-              >
-                Kirim Pengajuan Kerja Sama
               </button>
             </div>
           </form>

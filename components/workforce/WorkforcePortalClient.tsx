@@ -34,6 +34,7 @@ import {
   Sparkles,
   LogIn,
   Award,
+  Bot,
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
@@ -66,6 +67,7 @@ import {
   HelpFAQView,
   SettingsView,
 } from '@/components/workforce/SharedWorkforceViews';
+import { AICollaborationView } from '@/components/workforce/AICollaborationView';
 import {
   INITIAL_TASKS,
   INITIAL_LEADS,
@@ -98,6 +100,7 @@ type PortalTab =
   | 'performance'
   | 'training'
   | 'workspace'
+  | 'ai-collab'
   | 'notifications'
   | 'profile'
   | 'help'
@@ -347,6 +350,7 @@ export function WorkforcePortalClient() {
           icon: Wrench,
           badge: String(workOrders.filter((w) => w.status !== 'Selesai').length),
         },
+        { id: 'ai-collab', label: 'Kolaborasi AI (Partner)', icon: Bot, badge: 'Aktif' },
         { id: 'history', label: 'Riwayat Pekerjaan', icon: History },
         { id: 'inventory', label: 'Inventaris & Material', icon: Package },
         { id: 'attendance', label: 'Absensi Teknisi', icon: Clock },
@@ -377,6 +381,7 @@ export function WorkforcePortalClient() {
           icon: Briefcase,
           badge: String(leads.filter((l) => l.attributionType === 'affiliate').length),
         },
+        { id: 'ai-collab', label: 'Kolaborasi AI (Partner)', icon: Bot, badge: 'Aktif' },
         { id: 'commission', label: 'Komisi & Penghasilan', icon: Wallet },
         { id: 'simulator', label: 'Simulasi Komisi (60%)', icon: Calculator },
         { id: 'performance', label: 'Performa & KPI', icon: BarChart3 },
@@ -402,6 +407,7 @@ export function WorkforcePortalClient() {
         icon: Briefcase,
         badge: String(leads.length),
       },
+      { id: 'ai-collab', label: 'Kolaborasi AI (Partner)', icon: Bot, badge: 'Aktif' },
       { id: 'team', label: 'Tim Affiliate', icon: Users },
       { id: 'recruit', label: 'Rekrut Affiliate', icon: UserPlus },
       { id: 'commission', label: 'Komisi & Penghasilan', icon: Wallet },
@@ -563,7 +569,7 @@ export function WorkforcePortalClient() {
           {/* Brand Top */}
           <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
             <Link href="/" className="flex items-center gap-2.5">
-              <AgentzyLogo variant="light" />
+              <AgentzyLogo variant="dark" size="md" />
             </Link>
           </div>
 
@@ -693,7 +699,7 @@ export function WorkforcePortalClient() {
                   <Menu className="h-5 w-5" />
                 </button>
                 <div className="flex items-center gap-2 lg:hidden">
-                  <AgentzyLogo size="sm" />
+                  <AgentzyLogo variant="light" size="sm" />
                 </div>
                 <div className="hidden lg:block">
                   <p className="text-sm font-bold text-[#17324D] whitespace-nowrap">
@@ -1007,6 +1013,22 @@ export function WorkforcePortalClient() {
 
                 {activeTab === 'workspace' && roleMode !== 'affiliate' && (
                   <WorkspaceCenterView />
+                )}
+
+                {activeTab === 'ai-collab' && (
+                  <AICollaborationView
+                    roleMode={roleMode}
+                    userName={currentUser.name}
+                    workOrders={workOrders}
+                    leads={leads}
+                    onAddLead={handleAddLead}
+                    onSelectWorkOrder={(wo) => {
+                      setSelectedWoId(wo.id);
+                      setActiveTab('workorders');
+                    }}
+                    onNavigate={navigateTo}
+                    onShowToast={showToast}
+                  />
                 )}
 
                 {activeTab === 'notifications' && (
@@ -1422,22 +1444,36 @@ export function WorkforcePortalClient() {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setShowQuickActionModal(false);
-                openSendEmailModal({
-                  to: 'supervisor@agentzy.id',
-                  subject: `Laporan Harian Workforce - ${currentUser.name}`,
-                  body: `Halo Supervisor,\n\nBerikut ringkasan progres harian saya di Agentzy Human Workforce Portal.\n\nSalam,\n${currentUser.name}`,
-                  contextLabel: 'Laporan Cepat Workforce',
-                });
-              }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white py-2.5 text-xs font-bold text-[#17324D] hover:bg-[#F5F8FA]"
-            >
-              <Mail className="h-4 w-4 text-[#0284C7]" />
-              <span>Kirim Laporan Cepat via Gmail</span>
-            </button>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickActionModal(false);
+                  navigateTo('ai-collab');
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-[#ADD8E6] bg-[#E6F4F9] py-2.5 text-xs font-bold text-[#0284C7] hover:bg-[#D7EFF8]"
+              >
+                <Bot className="h-4 w-4" />
+                <span>Buka Kolaborasi AI Partner</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickActionModal(false);
+                  openSendEmailModal({
+                    to: 'supervisor@agentzy.id',
+                    subject: `Laporan Harian Workforce - ${currentUser.name}`,
+                    body: `Halo Supervisor,\n\nBerikut ringkasan progres harian saya di Agentzy Human Workforce Portal.\n\nSalam,\n${currentUser.name}`,
+                    contextLabel: 'Laporan Cepat Workforce',
+                  });
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white py-2.5 text-xs font-bold text-[#17324D] hover:bg-[#F5F8FA]"
+              >
+                <Mail className="h-4 w-4 text-[#0284C7]" />
+                <span>Kirim Laporan via Gmail</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

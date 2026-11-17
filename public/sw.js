@@ -1,11 +1,16 @@
-const CACHE_NAME = 'agentzy-pwa-v1';
+const CACHE_NAME = 'agentzy-pwa-v2';
 const APP_SHELL_URLS = [
   '/',
   '/workforce',
-  '/icon.svg',
+  '/corporate',
+  '/ai-workforce',
+  '/favicon.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
+  '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
+  '/images/agentzy-logo.png',
+  '/images/agentzy-icon.png',
   '/images/hero_agentzy_workforce.jpg',
   '/images/workforce_sales_banner.jpg',
   '/images/workforce_technician_field.jpg',
