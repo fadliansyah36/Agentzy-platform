@@ -29,10 +29,13 @@ Existing portal UI is present. Implementation should be backend-first, not a UI 
 - GitHub binding: `More Ai` / account `fadliansyah36`, link `link_6af361418a4481919cc84f9f7e0d522b`; repository permissions observed: pull, push and admin.
 - Supabase binding: `Agentzy DB`, project ref `cwhjdnkotuhueeudpgeu`, link `link_6afc797a7c44819192023bb809b8cae1`.
 - Project status: `ACTIVE_HEALTHY`; region `ap-northeast-1`; PostgreSQL `17.12`.
-- `public` schema table inventory: empty. Supabase migration history: empty.
-- Extensions observed: `vector` 0.8.2 and `pgcrypto` 1.3 installed; PostGIS 3.3.7 available but not installed.
+- `public` schema table inventory: empty. Supabase project migration history: empty. This does not mean the platform-managed schemas are empty.
+- All-schema inventory includes Supabase-managed `auth`, `storage`, `realtime`, and `vault` relations. `auth.schema_migrations` (84 rows), `storage.migrations` (81 rows), and `realtime.schema_migrations` (97 rows) are platform-managed migration histories, not Agentzy application migrations. `storage.buckets` and `storage.objects` currently contain 0 rows; Auth users and Realtime subscriptions also report 0 rows.
+- Extensions observed installed: `vector` 0.8.2 and `pgcrypto` 1.3 in `extensions`, `pg_stat_statements` 1.11, `supabase_vault` 0.3.2, and `uuid-ossp` 1.1. PostGIS 3.3.7 is available but not installed.
+- Security Advisor reports two WARN findings for the same function: `public.rls_auto_enable()` is `SECURITY DEFINER` and executable by both `anon` and `authenticated` through RPC. Do not invoke it as part of the Agentzy setup. Inspect its definition, ownership, grants and intended purpose; remediate through a reviewed migration/privilege change after impact analysis. [Advisor: SECURITY DEFINER RPC exposure](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable).
+- Performance and health advisors returned no lints at audit time.
 - No database changes have been applied by this audit.
-- This audit does not yet establish complete inventory of all schemas, Auth configuration, Storage buckets/policies, Realtime publication, grants, functions, triggers, RLS policies, Data API exposure, or advisor findings. Inspect these before the first migration.
+- Still pending: detailed grants and policies, full function/trigger definitions, Auth provider/configuration settings, Storage bucket policies, Realtime publication configuration, Data API exposure settings, and review of `public.rls_auto_enable()`.
 
 ## Current blockers / readiness
 1. Connector-access blockers are closed.
