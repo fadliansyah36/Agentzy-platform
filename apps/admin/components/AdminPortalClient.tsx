@@ -86,8 +86,8 @@ export function AdminPortalClient({
           <GlobalOverviewView
             tenants={portal.tenants}
             providersCount={portal.providers.length}
-            humanTotal={24860}
-            aiWorkersTotal={3420}
+            humanTotal={portal.tenants.reduce((total, tenant) => total + tenant.humanCount, 0)}
+            aiWorkersTotal={portal.tenants.reduce((total, tenant) => total + tenant.aiWorkerCount, 0)}
             breakGlassRequests={portal.breakGlassRequests}
             onNavigate={portal.navigateTo}
             onOpenBreakGlass={() => portal.setModal({ type: 'break-glass-request' })}
