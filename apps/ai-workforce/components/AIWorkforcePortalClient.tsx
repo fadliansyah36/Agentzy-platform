@@ -188,7 +188,7 @@ export function AIWorkforcePortalClient({
               portal.setModal({ type: 'handoff-assign', handoffId })
             }
             onNavigate={portal.navigateTo}
-          /> : <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Belum ada workflow yang dikonfigurasi untuk tenant ini.</div>
+          />
         )}
 
         {portal.activeSection === 'human-ai-binding' && (
@@ -217,7 +217,7 @@ export function AIWorkforcePortalClient({
             }
             onCreateWorkflowVersion={portal.handleCreateWorkflowVersion}
             onNavigate={portal.navigateTo}
-          />
+          /> : <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Belum ada workflow yang dikonfigurasi untuk tenant ini.</div>
         )}
 
         {portal.activeSection === 'workflow-builder' && (
