@@ -38,13 +38,14 @@ async function registryEvidence(name,version){
    let entries=[];
    try{entries=execFileSync("tar",["-tzf",archive],{encoding:"utf8",maxBuffer:8*1024*1024}).split(/\r?\n/).filter(Boolean);}catch{}
    const licenseEntry=entries.find(e=>/^package\/(?:LICENSE|LICENCE|COPYING)(?:\.[^/]*)?$/i.test(e));
-   if(licenseEntry)licenseFile=licenseEntry;
    const noticeEntries=entries.filter(e=>/^package\/(?:NOTICE(?:\.[^/]*)?|THIRD[-_ ]PARTY[-_ ]NOTICES(?:\.[^/]*)?|COPYING(?:\.[^/]*)?)$/i.test(e));
-   for(const entry of noticeEntries){
+   const evidenceEntries=[...new Set([...(licenseEntry?[licenseEntry]:[]),...noticeEntries])];
+   for(const entry of evidenceEntries){
     const content=execFileSync("tar",["-xOzf",archive,entry],{encoding:"utf8",maxBuffer:2*1024*1024});
     const target=path.join(noticeOut,safeFileName(name+"-"+version+"-"+path.basename(entry)));
     fs.writeFileSync(target,content);
-    notices.push(target);
+    if(entry===licenseEntry)licenseFile=target;
+    if(noticeEntries.includes(entry))notices.push(target);
    }
    tarballEvidence=meta.dist.integrity||meta.dist.shasum||null;
   }
@@ -60,6 +61,27 @@ for(const [key,info] of Object.entries(checker)){
  const modulePath=info.path||"";
  rows.push({name,version,licenses,risk:riskOf(licenses,info.licenseFile),licenseFile:info.licenseFile||null,noticeFiles:inspectNoticeFiles(modulePath),repository:info.repository||null,packagePath:modulePath||null,evidenceSource:"installed node_modules package metadata and files"});
 }
+// Re-inspect flagged installed packages from their exact registry tarballs so missing
+// LICENSE files and package-provided NOTICE/COPYING files are not silently skipped.
+const installedFlagged=rows.filter(r=>r.evidenceSource.startsWith("installed ")&&(r.risk!=="LOW_RISK_ATTRIBUTION_CHECK"||!r.licenseFile));
+await pooled(installedFlagged,6,async row=>{
+ try{
+  const meta=await registryEvidence(row.name,row.version);
+  if(!row.licenses.length&&meta.licenses.length)row.licenses=meta.licenses;
+  if(!row.licenseFile&&meta.licenseFile)row.licenseFile=meta.licenseFile;
+  row.noticeFiles=[...new Set([...(row.noticeFiles||[]),...meta.noticeFiles])];
+  row.risk=riskOf(row.licenses,row.licenseFile);
+  row.tarballIntegrity=meta.tarballIntegrity;
+  row.registryEvidence=meta.evidenceSource;
+ }catch(error){row.registryReviewError=String(error);}
+});
+for(const row of rows){
+ if(row.licenseFile&&row.licenseFile.startsWith("/tmp/")&&fs.existsSync(row.licenseFile)){
+  const target=path.join(noticeOut,safeFileName(row.name+"-"+row.version+"-LICENSE.txt"));
+  fs.copyFileSync(row.licenseFile,target);
+  row.licenseFile=target;
+ }
+}
 const found=new Set(rows.map(r=>r.name+"@"+r.version));
 const missing=[...expected.keys()].filter(k=>!found.has(k));
 const registryErrors=[];
@@ -74,7 +96,8 @@ rows.sort((a,b)=>a.name.localeCompare(b.name)||a.version.localeCompare(b.version
 const reconciled=new Set(rows.map(r=>r.name+"@"+r.version));
 const stillMissing=[...expected.keys()].filter(k=>!reconciled.has(k));
 const summary=rows.reduce((a,r)=>(a[r.risk]=(a[r.risk]||0)+1,a),{});
-const result={schemaVersion:2,generatedAt:new Date().toISOString(),source:{lockfile:"bun.lock",sbom:"docs/phase-00/sbom/bun-lock.cdx.json",lockfileBlobSha:(sbom.metadata?.properties||[]).find(p=>p.name==="source:lockfile_blob_sha")?.value||null},reconciliation:{expectedUniqueResolvedPackages:expected.size,installedTreePackages:found.size,registryFallbackPackages:missing.length,reviewedPackageCoordinates:rows.length,unresolvedRegistryLookups:registryErrors,missingAfterFallback:stillMissing,exactSetMatch:stillMissing.length===0,evidenceComplete:stillMissing.length===0&&registryErrors.length===0},summary,packages:rows,caveats:["Bun installs only packages applicable to the runner OS/CPU; missing lockfile coordinates are reconciled from exact npm registry version metadata and tarballs.","Package metadata can be incomplete or inaccurate; registry evidence does not replace publisher confirmation where ambiguous.","Risk labels are triage only. Review SPDX expressions, actual license text, and distribution context before approval.","NOTICE/COPYING presence is recorded; presence alone does not prove a legal requirement, and absence does not prove no attribution duty."]};
+const secondaryErrors=rows.filter(r=>r.registryReviewError).map(r=>({package:r.name+"@"+r.version,error:r.registryReviewError}));
+const result={schemaVersion:2,generatedAt:new Date().toISOString(),source:{lockfile:"bun.lock",sbom:"docs/phase-00/sbom/bun-lock.cdx.json",lockfileBlobSha:(sbom.metadata?.properties||[]).find(p=>p.name==="source:lockfile_blob_sha")?.value||null},reconciliation:{expectedUniqueResolvedPackages:expected.size,installedTreePackages:found.size,registryFallbackPackages:missing.length,reviewedPackageCoordinates:rows.length,unresolvedRegistryLookups:[...registryErrors,...secondaryErrors],missingAfterFallback:stillMissing,exactSetMatch:stillMissing.length===0,evidenceComplete:stillMissing.length===0&&registryErrors.length===0&&secondaryErrors.length===0},summary,packages:rows,caveats:["Bun installs only packages applicable to the runner OS/CPU; missing lockfile coordinates are reconciled from exact npm registry version metadata and tarballs.","Package metadata can be incomplete or inaccurate; registry evidence does not replace publisher confirmation where ambiguous.","Risk labels are triage only. Review SPDX expressions, actual license text, and distribution context before approval.","NOTICE/COPYING presence is recorded; presence alone does not prove a legal requirement, and absence does not prove no attribution duty."]};
 fs.mkdirSync("docs/phase-00/reports",{recursive:true});
 fs.writeFileSync("docs/phase-00/reports/dependency-license-review.json",JSON.stringify(result,null,2)+"\n");
 const lines=["# Dependency & License Risk Review","","Generated: "+result.generatedAt,"","## Reconciliation","", "- SBOM expected: **"+expected.size+"** exact package coordinates","- Installed node_modules tree: **"+found.size+"**","- Registry fallback: **"+missing.length+"**","- Total reviewed: **"+rows.length+"**","- Exact set match after fallback: **"+(result.reconciliation.exactSetMatch?"YES":"NO")+"**","- Unresolved registry lookups: **"+registryErrors.length+"**","","## Risk triage","",...Object.entries(summary).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>"- "+k+": "+v),"","## Packages requiring review","","| Package | Version | License | Risk | LICENSE | NOTICE/COPYING | Evidence |","|---|---:|---|---|---|---|---|",...rows.filter(r=>r.risk!=="LOW_RISK_ATTRIBUTION_CHECK").map(r=>"| "+r.name+" | "+r.version+" | "+(r.licenses.join(" ; ")||"UNKNOWN")+" | **"+r.risk+"** | "+(r.licenseFile?"present":"not found")+" | "+(r.noticeFiles.map(n=>path.basename(n)).join(", ")||"not found")+" | "+r.evidenceSource+" |"),"","## Limitations","","- Installed tree covers this runner; lockfile coordinates absent due platform-specific optional dependencies are checked against exact npm registry version metadata and tarballs.","- Unknown, compound, guessed, custom, non-SPDX or unavailable metadata remain for manual review.","- Strong/weak copyleft is flagged, not automatically rejected.","- NOTICE/COPYING files are inventoried; assess obligations against actual license text and distribution context.","- This is technical triage, not legal advice.","","Full per-package evidence: dependency-license-review.json."];
