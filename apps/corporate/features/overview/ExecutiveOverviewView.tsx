@@ -67,7 +67,7 @@ export function ExecutiveOverviewView({
           </p>
         </div>
         <p className="text-[11px] text-[#718391]">
-          Freshness: Near-Realtime · Diperbarui {snapshot.sourceFreshness.computedAt}
+          Freshness: {snapshot.sourceFreshness.status} · {snapshot.sourceFreshness.computedAt}
         </p>
       </div>
 
@@ -310,7 +310,7 @@ export function ExecutiveOverviewView({
             <FileWarning className="h-4 w-4 text-[#A96816]" />
           </div>
           <p className="mt-2 text-base font-bold text-[#17324D]">
-            Berakhir {snapshot.contractExpiryDays} hari lagi
+            {snapshot.contractExpiryDays > 0 ? `Berakhir ${snapshot.contractExpiryDays} hari lagi` : 'Data masa berlaku kontrak belum tersedia'}
           </p>
           <p className="mt-1 text-[11px] font-medium text-[#A96816]">
             Tinjau perpanjangan &amp; SOW →
