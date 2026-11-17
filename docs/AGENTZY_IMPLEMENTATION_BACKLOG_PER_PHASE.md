@@ -2,41 +2,43 @@
 
 Baseline: Master PRD v2.0 + Technical Implementation Blueprint v1.0
 Repository: `fadliansyah36/Agentzy-platform`, branch `main`
-Supabase ref supplied: `cwhjdnkotuhueeudpgeu` (not yet available through connected Supabase account)
+Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_HEALTHY` on 2026-11-17. Live baseline inspection is in progress; connection does not authorize migrations.
 
 ## 1. Audit findings and blockers
 
-- Repository default branch is `main`; observed HEAD `110f5d923507fe02c0740cdd8f548f630f03d4e0`.
-- Connected GitHub permission is `pull=true`, `push=false`, `admin=false`; repository writes are currently unavailable.
+- Repository default branch is `main`; latest verified HEAD at Phase 00 alignment: `a63b1a3592ae886a52aa6dbb2a26da093307f09c`.
+- GitHub binding `link_6af361418a4481919cc84f9f7e0d522b` (account `fadliansyah36`) has repository write access; `main` updates are available. Branch protection is not enabled at the time of inspection.
 - Existing UI modules are present under `apps/admin`, `apps/corporate`, and `apps/ai-workforce`; root `app/` contains public and workforce routes.
 - No `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `docs/`, or root `AGENTS.md` found in the 272-entry recursive tree.
 - Existing portal hooks/services initialize `INITIAL_*` demo collections and local state. Replace these with real FastAPI API adapters incrementally.
 - `app/api/ai-workforce/generate-content/route.ts` calls Google GenAI directly from Next.js, hardcodes model ID and accepts tenantName from request body; move to FastAPI AI Gateway with server-resolved tenant context.
 - Next.js Maps handlers exist under `app/api/maps/` and `app/api/config/maps/`; audit/consolidate behind FastAPI adapters.
 - `package.json`: Next.js 15, React 19, TypeScript 5.9, Tailwind 4; Firebase and Google GenAI dependencies. `.env.example` includes Gemini and Google Maps keys.
-- Supabase connector projects do not include ref `cwhjdnkotuhueeudpgeu`; no live schema/migration/RLS query was run against another project.
+- Supabase binding `link_6afc797a7c44819192023bb809b8cae1` resolves the canonical project `cwhjdnkotuhueeudpgeu` (`ACTIVE_HEALTHY`, PostgreSQL 17.12). Initial live inspection confirms no application tables in `public`, no project migration entries, and no Storage buckets; platform-managed `auth`, `storage`, and `realtime` schemas must be distinguished from application-owned schema.
 
-### Blockers
+### Access status and tracked implementation gaps
 
-| ID | Blocker | Resolution |
-|---|---|---|
-| BLK-001 | GitHub connector read-only | Grant Contents write access/reconnect account |
-| BLK-002 | Supabase ref not connected | Connect account owning `cwhjdnkotuhueeudpgeu` |
-| BLK-003 | FastAPI backend absent | Establish `apps/api` after Phase 00 ADR |
-| BLK-004 | No Supabase migration source | Create after live schema baseline |
-| BLK-005 | Local demo data paths | Replace phase-by-phase with typed API clients |
+| ID | Previous statement | Current verified status | Action / disposition |
+|---|---|---|---|
+| BLK-001 | GitHub connector read-only | **RESOLVED** — correct `fadliansyah36` binding has write access to `main`. | Use only the verified binding; commit evidence to `main`. |
+| BLK-002 | Supabase ref not connected | **RESOLVED (access)** — canonical project is connected and `ACTIVE_HEALTHY`. | Complete full live baseline (schema, grants, RLS, functions, triggers, Auth, Storage, Realtime, Data API, advisors) before any migration. |
+| BLK-003 | FastAPI backend absent | **OPEN — implementation gap**, not an access blocker. | Define architecture in Phase 00; create backend implementation in its approved phase. |
+| BLK-004 | No Supabase migration source | **OPEN — repository gap**, not an access blocker. | Establish `supabase/migrations/` after live baseline and migration strategy approval; never invent an initial schema from assumptions. |
+| BLK-005 | Local demo data paths | **OPEN — integration debt**. | Replace incrementally with typed FastAPI API clients; do not mask unavailable APIs with demo fallback. |
+
+**Revision note (2026-11-17):** This section supersedes the stale access statements in the original audit snapshot. It does not claim Phase 00 complete and does not authorize schema changes.
 
 ## 2. Backlog task registry
 
 | Task ID | Phase | Layer | Executable task | Initial status |
 |---|---:|---|---|---|
-| `AGZ-P00-GOV-001` | 00 — Product Governance & Repo Baseline | Governance | Audit repository, dependencies, env names, UI routes and source ownership; record baseline commit. | BLOCKED / NOT STARTED |
-| `AGZ-P00-BE-001` | 00 — Product Governance & Repo Baseline | Backend | Define FastAPI modular-monolith boundaries and service skeleton plan; do not implement before audit decisions. | BLOCKED / NOT STARTED |
-| `AGZ-P00-DB-001` | 00 — Product Governance & Repo Baseline | Migration | Inspect Supabase schema/history/extensions/RLS; M000 baseline only after project ref is verified. | BLOCKED / NOT STARTED |
-| `AGZ-P00-API-001` | 00 — Product Governance & Repo Baseline | API contract | Inventory Next.js route handlers and define canonical `/api/v1` ownership. | BLOCKED / NOT STARTED |
-| `AGZ-P00-PERM-001` | 00 — Product Governance & Repo Baseline | Permission | Inventory Auth/RLS/grants and create gap matrix; no speculative policy edits. | BLOCKED / NOT STARTED |
-| `AGZ-P00-INT-001` | 00 — Product Governance & Repo Baseline | Integration | Map portal → domain service → database and external provider dependencies. | BLOCKED / NOT STARTED |
-| `AGZ-P00-DOC-001` | 00 — Product Governance & Repo Baseline | Documentation | Prepare ADR index, AGENTS, backlog tracker and evidence template. | BLOCKED / NOT STARTED |
+| `AGZ-P00-GOV-001` | 00 — Product Governance & Repo Baseline | Governance | Audit repository, dependencies, env names, UI routes and source ownership; record baseline commit. | IN PROGRESS |
+| `AGZ-P00-BE-001` | 00 — Product Governance & Repo Baseline | Backend | Define FastAPI modular-monolith boundaries and service skeleton plan; do not implement before audit decisions. | IN PROGRESS |
+| `AGZ-P00-DB-001` | 00 — Product Governance & Repo Baseline | Migration | Inspect Supabase schema/history/extensions/RLS; M000 baseline only after canonical live state is fully inspected and reconciled. | IN PROGRESS |
+| `AGZ-P00-API-001` | 00 — Product Governance & Repo Baseline | API contract | Inventory Next.js route handlers and define canonical `/api/v1` ownership. | IN PROGRESS |
+| `AGZ-P00-PERM-001` | 00 — Product Governance & Repo Baseline | Permission | Inventory Auth/RLS/grants and create gap matrix; no speculative policy edits. | IN PROGRESS |
+| `AGZ-P00-INT-001` | 00 — Product Governance & Repo Baseline | Integration | Map portal → domain service → database and external provider dependencies. | IN PROGRESS |
+| `AGZ-P00-DOC-001` | 00 — Product Governance & Repo Baseline | Documentation | Prepare ADR index, AGENTS, backlog tracker and evidence template. | IN PROGRESS |
 | `AGZ-P01-FE-001` | 01 — Platform Core, Identity & Tenant | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P01-BE-001` | 01 — Platform Core, Identity & Tenant | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
 | `AGZ-P01-DB-001` | 01 — Platform Core, Identity & Tenant | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
@@ -393,7 +395,7 @@ Supabase ref supplied: `cwhjdnkotuhueeudpgeu` (not yet available through connect
 
 ## 7. Migration discipline
 
-Follow Blueprint migration batches M000–M220. For each phase: inspect live schema/history, reconcile, check duplicates/data impact, add RLS/grants/constraints/indexes, update API contracts, apply to verified Supabase ref, record version/actor/time/result. Do not migrate until BLK-002 is resolved.
+Follow Blueprint migration batches M000–M220. For each phase: inspect live schema/history, reconcile, check duplicates/data impact, add RLS/grants/constraints/indexes, update API contracts, apply only to canonical Supabase project `cwhjdnkotuhueeudpgeu` after its live baseline is fully reviewed, and record version/actor/time/result. BLK-002 access is resolved; migration readiness remains a separate gate.
 
 ## 8. Test policy
 
