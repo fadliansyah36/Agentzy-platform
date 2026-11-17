@@ -17,6 +17,12 @@ Never commit database passwords, JWT secrets, service-role keys or the bootstrap
 - `GET /api/v1/me` — verified Supabase identity, active tenant memberships, role keys and effective permission keys.
 - `GET /api/v1/tenants` — active tenants for the caller.
 - `GET /api/v1/tenants/{tenant_id}/organizations` — organizations after tenant membership, permission and RLS checks.
+- `POST /api/v1/tenants/{tenant_id}/organizations` — create a tenant-scoped organization unit.
+- `GET /api/v1/tenants/{tenant_id}/memberships` — authorized tenant membership directory.
+- `POST /api/v1/tenants/{tenant_id}/memberships/invite` — Supabase Auth invitation and RBAC assignment.
+- `GET /api/v1/roles` — system role templates and permission keys.
+- `GET /api/v1/tenants/directory` — platform-wide tenant directory (AAL2 + permission required).
+- `POST /api/v1/tenants`, `PATCH /api/v1/tenants/{tenant_id}`, `DELETE /api/v1/tenants/{tenant_id}` — tenant create, update and archive (AAL2 + permission required).
 - `POST /api/v1/bootstrap/platform-admin` — one-time first administrator invitation, protected by `X-Platform-Bootstrap-Token`.
 
 ## First administrator bootstrap
@@ -33,7 +39,7 @@ After accepting the email invitation and setting a password, sign in at `/admin`
 
 ## Security model
 
-Business routes require a Supabase access token. JWT signature, issuer and audience are verified. User-scoped database requests run inside a transaction with transaction-local JWT claims and the `authenticated` Postgres role, preserving Supabase RLS. The backend never trusts browser tenant IDs as authorization proof. Role and permission keys are resolved from membership-role-permission relations.
+Business routes require a Supabase access token. JWT signature, issuer and audience are verified. User-scoped database requests run inside a transaction with transaction-local JWT claims and the `authenticated` Postgres role, preserving Supabase RLS. The backend never trusts browser tenant IDs as authorization proof. Role and permission keys are resolved from membership-role-permission relations. Platform-wide tenant administration additionally requires Supabase MFA assurance level `aal2`.
 
 The service-role key is only used by the protected one-time bootstrap flow and must never be placed in Next.js public environment variables.
 
