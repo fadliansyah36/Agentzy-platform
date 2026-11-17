@@ -1,0 +1,28 @@
+project_id = "cwhjdnkotuhueeudpgeu"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = [
+  "http://localhost:3000/admin",
+  "http://localhost:3000/corporate",
+  "http://localhost:3000/ai-workforce",
+  "http://localhost:3000/mfa-setup",
+  "http://localhost:3000/bootstrap"
+]
+jwt_expiry = 3600
+enable_signup = false
+
+[auth.email]
+enable_signup = false
+enable_confirmations = true
+double_confirm_changes = true
