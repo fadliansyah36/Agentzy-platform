@@ -3,7 +3,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,7 +74,6 @@ async def create_tenant(
     user_id = UUID(claims["sub"])
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload.slug):
         raise HTTPException(status_code=422, detail="Slug hanya boleh berisi huruf kecil, angka dan tanda hubung.")
-    _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     async with engine.begin() as connection:
@@ -265,11 +264,12 @@ async def list_platform_tenants(
     _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.read"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.read permission.")
-    result = await session.execute(text("""
-        select id,name,slug,tenant_type,status,created_at,updated_at
-        from public.tenants order by created_at desc
-    """))
-    return [dict(row) for row in result.mappings().all()]
+    async with engine.connect() as connection:
+        result = await connection.execute(text("""
+            select id,name,slug,tenant_type,status,created_at,updated_at
+            from public.tenants order by created_at desc
+        """))
+        return [dict(row) for row in result.mappings().all()]
 
 
 class TenantUpdate(BaseModel):
@@ -288,6 +288,7 @@ async def update_tenant(
     session: AsyncSession = Depends(user_session),
 ):
     user_id = UUID(claims["sub"])
+    _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     values = payload.model_dump(exclude_unset=True)
@@ -322,6 +323,7 @@ async def archive_tenant(
     session: AsyncSession = Depends(user_session),
 ):
     user_id = UUID(claims["sub"])
+    _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     async with engine.begin() as connection:
