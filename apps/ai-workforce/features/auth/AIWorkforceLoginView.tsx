@@ -18,13 +18,11 @@ import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 
 export function AIWorkforceLoginView({
   mode,
-  initialTenantId,
   onStartFromSplash,
   onLogin,
   onSwitchMode,
 }: {
   mode: 'splash' | 'login';
-  initialTenantId: string;
   onStartFromSplash: () => void;
   onLogin: (email: string, password: string, method: 'password' | 'sso') => Promise<void>;
   onSwitchMode: (mode: 'splash' | 'login') => void;
