@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
   AIWM_TENANTS,
   INITIAL_AI_WORKERS,
@@ -68,12 +69,10 @@ export type AIWorkforceModalState =
 export function useAIWorkforcePortal(
   initialSection: AIWorkforceSectionId = 'overview'
 ) {
-  const [activeSection, setActiveSection] =
-    useState<AIWorkforceSectionId>(initialSection);
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    initialSection !== 'splash' && initialSection !== 'login'
-  );
-  const [activeTenantId, setActiveTenantId] = useState(AIWM_TENANTS[0].id);
+  const auth = useAgentzyAuth();
+  const [activeSection, setActiveSection] = useState<AIWorkforceSectionId>(initialSection);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeTenantId, setActiveTenantId] = useState('');
 
   // Core states
   const [aiWorkers, setAiWorkers] =
@@ -159,10 +158,23 @@ export function useAIWorkforcePortal(
     return () => clearTimeout(t);
   }, [toastMessage]);
 
-  const activeTenant: AIWMTenant = useMemo(
-    () => AIWM_TENANTS.find((t) => t.id === activeTenantId) ?? AIWM_TENANTS[0],
-    [activeTenantId]
-  );
+  const activeTenant: AIWMTenant | null = useMemo(() => {
+    const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
+    if (!tenant) return null;
+    return { id: tenant.id, code: tenant.slug, name: tenant.name };
+  }, [auth.tenants, activeTenantId]);
+
+  useEffect(() => {
+    if (auth.loading) return;
+    if (auth.session && auth.identity && auth.tenants.length > 0) {
+      const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
+      setActiveTenantId(tenant.id);
+      setIsAuthenticated(true);
+      setActiveSection((current) => current === 'login' || current === 'splash' ? 'overview' : current);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, [auth.loading, auth.session, auth.identity, auth.tenants, activeTenantId]);
 
   const selectedWorker = useMemo(
     () => aiWorkers.find((w) => w.id === selectedWorkerId) ?? aiWorkers[0],
@@ -207,24 +219,47 @@ export function useAIWorkforcePortal(
 
   const navigateTo = useCallback((section: AIWorkforceSectionId) => {
     setActiveSection(section);
-    if (section !== 'splash' && section !== 'login') {
-      setIsAuthenticated(true);
-    }
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, []);
 
   const handleLogin = useCallback(
-    (tenantId: string) => {
-      setActiveTenantId(tenantId);
+    async (email: string, password: string, method: 'password' | 'sso') => {
+      if (method === 'sso') {
+        await auth.signInWithOAuth();
+        return;
+      }
+      const context = await auth.signIn(email, password);
+      if (!context.tenants.length) {
+        await auth.signOut();
+        throw new Error('Akun belum memiliki membership tenant aktif untuk AI Workforce.');
+      }
+      setActiveTenantId(context.tenants[0].id);
       setIsAuthenticated(true);
       setActiveSection('overview');
-      const tenant = AIWM_TENANTS.find((t) => t.id === tenantId);
-      showToast(`Masuk ke AI Workforce Management · ${tenant?.name ?? ''}`);
+      showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
     },
-    [showToast]
+    [auth.signIn, auth.signInWithOAuth, auth.signOut, showToast]
   );
+
+  const handleLogout = useCallback(async () => {
+    await auth.signOut();
+    setIsAuthenticated(false);
+    setActiveTenantId('');
+    setActiveSection('login');
+    setModal({ type: 'none' });
+  }, [auth.signOut]);
+
+  const handleSwitchTenant = useCallback((tenantId: string) => {
+    const tenant = auth.tenants.find((item) => item.id === tenantId);
+    if (!tenant) {
+      showToast('Tenant tidak termasuk membership akun ini.');
+      return;
+    }
+    setActiveTenantId(tenant.id);
+    showToast(`Workspace tenant aktif berpindah ke ${tenant.name}.`);
+  }, [auth.tenants, showToast]);
 
   const handleToggleWorkerStatus = useCallback(
     (workerId: string) => {
@@ -978,6 +1013,8 @@ export function useAIWorkforcePortal(
   return {
     activeSection,
     isAuthenticated,
+    authLoading: auth.loading,
+    authError: auth.error,
     activeTenantId,
     activeTenant,
     aiWorkers,
@@ -1021,6 +1058,8 @@ export function useAIWorkforcePortal(
     showToast,
     navigateTo,
     setIsAuthenticated,
+    handleLogout,
+    handleSwitchTenant,
     setSelectedWorkerId,
     setActiveTenantId,
     handleLogin,
