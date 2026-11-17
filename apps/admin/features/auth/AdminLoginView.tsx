@@ -21,26 +21,34 @@ export function AdminLoginView({
   onLogin,
 }: {
   initialRole: SuperAdminRoleKey;
-  onLogin: (role: SuperAdminRoleKey, email: string) => void;
+  onLogin: (role: SuperAdminRoleKey, email: string, password: string, mfaCode: string) => Promise<void>;
 }) {
   const [role, setRole] = useState<SuperAdminRoleKey>(initialRole);
-  const [email, setEmail] = useState('superadmin@agentzy.id');
-  const [password, setPassword] = useState('••••••••••••');
-  const [mfaCode, setMfaCode] = useState('482910');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const selectedRole =
     SUPER_ADMIN_ROLES.find((r) => r.key === role) ?? SUPER_ADMIN_ROLES[0];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim() || mfaCode.trim().length < 6) {
-      setErrorMsg('Email admin, kata sandi, dan kode MFA 6 digit wajib diisi.');
+    if (!email.trim() || !password.trim() || mfaCode.trim().length !== 6) {
+      setErrorMsg('Email, kata sandi, dan kode MFA 6 digit wajib diisi.');
       return;
     }
     setErrorMsg(null);
-    onLogin(role, email.trim());
+    setIsSubmitting(true);
+    try {
+      await onLogin(role, email.trim(), password, mfaCode.trim());
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Autentikasi gagal.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -97,6 +105,7 @@ export function AdminLoginView({
               </label>
               <div className="relative">
                 <select
+                  disabled
                   id="admin-role-select"
                   value={role}
                   onChange={(e) => setRole(e.target.value as SuperAdminRoleKey)}
@@ -193,9 +202,10 @@ export function AdminLoginView({
 
             <button
               type="submit"
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#17324D] text-sm font-semibold text-white transition hover:bg-[#245477]"
+              disabled={isSubmitting}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#17324D] text-sm font-semibold text-white transition hover:bg-[#245477] disabled:opacity-60"
             >
-              <span>Masuk ke Control Plane</span>
+              <span>{isSubmitting ? 'Memverifikasi…' : 'Masuk ke Control Plane'}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
