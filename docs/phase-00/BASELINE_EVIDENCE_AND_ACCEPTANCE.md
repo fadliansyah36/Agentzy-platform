@@ -19,12 +19,12 @@ User delivery constraint: direct work on `main`; no staging or real-world/UAT te
 ## 2. Repository snapshot
 
 - Recursive Git tree at commit `a9482d864aa6683027bbec02321ca469f1251596`: 282 entries, `truncated=false`.
-- Existing application areas: `apps/admin/` (55 paths), `apps/corporate/` (49), `apps/ai-workforce/` (42), root `app/` (28).
-- Present: root `AGENTS.md`, root README, PRD, Blueprint, backlog, audit and ADR register.
+- Existing application areas: `apps/admin/` (55 paths), `apps/corporate/` (49), `apps/ai-workforce/` (42), root `app/` (28). Root `app/` is the Next.js App Router and already contains landing/workforce route wrappers; do not create duplicate portals or move these routes without a route-by-route ownership review.
+- Present: root `AGENTS.md`, root README, PRD, Blueprint, backlog, audit and ADR register. Root also contains `components/`, `hooks/`, `lib/`, `public/`, `src/`, `package.json`, and canonical Bun lockfile `bun.lock` (274,134 bytes; blob SHA `635cf4455bc8f37bafd73f4c6e82f77dd492da07`).
 - Not present in the recursive tree: `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `packages/api-client/`, `packages/api-contracts/`, `packages/design-tokens/`, `workers/`, `services/`, `infrastructure/`.
 - Root app contains Next.js route handlers for AI content generation, maps config and reverse geocoding. Direct source review confirms the AI handler invokes Google GenAI directly, hardcodes a model, and accepts tenantName from the request body. This violates the intended FastAPI gateway/server-resolved tenant boundary and is tracked for implementation remediation.
 - Maps config GET handler may return the server-side GOOGLE_MAPS_API_KEY if the NEXT_PUBLIC key is absent; treat as a credential-exposure risk and move provider calls/configuration behind a restricted backend contract. A browser key must be separately referrer/API restricted.
-- package.json currently declares Next.js ^15.4.9 and eslint-config-next ^16.0.8; version alignment and full lockfile/license reconciliation remain open.
+- `package.json` declares Next.js `^15.4.9`, React `^19.2.1`, TypeScript `5.9.3`, Tailwind `4.1.11`, and `eslint-config-next` `16.0.8`; this Next/ESLint-config major mismatch requires compatibility review. `bun.lock` is the only root lockfile observed; no pnpm/npm/yarn lockfile was found. Full resolved dependency license/SBOM reconciliation remains open.
 - Existing admin/corporate/AI workforce screens and portal modules remain the UI baseline; no redesign is authorized.
 
 This is a structural inventory. It does not claim every source file has been line-by-line reviewed.
@@ -67,15 +67,15 @@ Source: `app/globals.css` at the recorded Phase 00 snapshot. Component-specific 
 - No `pg_policies` rows observed for `public` or `storage`; no Storage buckets or objects; no Realtime publication tables or active subscriptions observed.
 - Database setting observations: `row_security=on`, `ssl=on`, `statement_timeout=120000`, `default_transaction_isolation=read committed`.
 - Event trigger `ensure_rls` is enabled for CREATE TABLE / CREATE TABLE AS / SELECT INTO and owned by postgres. It is attached to `public.rls_auto_enable()`.
-- `public.rls_auto_enable()` is SECURITY DEFINER; its function ACL allows EXECUTE to PUBLIC, anon, authenticated, service_role and postgres. Security Advisor reports two WARN findings for anon/authenticated. It enables RLS on newly created tables in public. Do not invoke manually. A privilege remediation needs reviewed impact analysis to ensure event-trigger behavior remains intact.
+- `public.rls_auto_enable()` is SECURITY DEFINER, owned by postgres; its ACL allows EXECUTE to PUBLIC, anon, authenticated, service_role and postgres. Security Advisor reports two WARN findings for anon/authenticated. Current audit confirms `ensure_rls` is enabled and bound to this function. Proposed disposition for review: preserve the event trigger/function, remove only unnecessary API execution grants for PUBLIC/anon/authenticated, and retain trigger operation. Do not apply until the privilege behavior is verified against the live event-trigger ownership and a controlled non-production reproduction; no ACL change has been made.
 - Catalog inspection shows platform-owned objects and grants in managed schemas. Do not change platform-managed grants/policies as a shortcut for Agentzy setup.
 - Auth users currently 0; Realtime subscriptions 0; Storage objects 0 (as observed in the project snapshot).
 
 ## 6. Outstanding audit limitations (explicit)
 
 The connected Supabase tools expose project metadata, database catalogs, migrations, extensions and advisors, but this run has not obtained authoritative project-level configuration for:
-- Auth provider enablement, redirect allowlists, password/MFA/SMTP/security settings.
-- Data API exposed schemas and API-level configuration.
+- Auth provider enablement, redirect allowlists, password/MFA/SMTP/security settings (not exposed by the connected project metadata/catalog tools; requires Dashboard evidence or supported settings endpoint).
+- Data API exposed schemas and API-level configuration (not exposed by the connected project metadata/catalog tools; requires Dashboard evidence or supported settings endpoint).
 - Complete role/database ACL and default-privilege review across all objects, with provider-specific grant interpretation.
 - Storage service-level configuration beyond catalogued buckets/policies.
 - Full inventory of all database functions and triggers across every platform schema, beyond the public function and observed storage/realtime triggers.
