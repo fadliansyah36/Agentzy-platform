@@ -102,16 +102,16 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     status: 'Teraktivasi',
   });
 
-  const activeTenant = useMemo(() => {
-    const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
-    if (!tenant) return null;
-    return {
-      id: tenant.id,
-      code: tenant.slug,
-      name: tenant.name,
-      status: tenant.status === 'active' ? 'Aktif' as const : 'Onboarding' as const,
-    };
-  }, [auth.tenants, activeTenantId]);
+  const tenantOptions = useMemo(() => auth.tenants.map((tenant) => ({
+    id: tenant.id,
+    code: tenant.slug,
+    name: tenant.name,
+    status: tenant.status === 'active' ? 'Aktif' as const : 'Onboarding' as const,
+  })), [auth.tenants]);
+  const activeTenant = useMemo(
+    () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
+    [tenantOptions, activeTenantId]
+  );
 
   useEffect(() => {
     if (auth.loading) return;
@@ -339,7 +339,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       setModal({ type: 'none' });
       showToast(`Laporan ${payload.category} (${payload.format}) berhasil dibuat.`);
     },
-    [activeTenant.code, activeTenant.name, showToast]
+    [activeTenant?.code, activeTenant?.name, showToast]
   );
 
   return {
@@ -347,6 +347,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     authLoading: auth.loading,
     authError: auth.error,
     activeTenant,
+    tenantOptions,
     activeTenantId,
     activeSection,
     modal,
