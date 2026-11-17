@@ -148,8 +148,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
 
   // Finance, Top Up AI Credits, Contracts, Corporate Compensation & Tech Bonus
-  const [platformCreditsBalance, setPlatformCreditsBalance] = useState<number>(1250000);
-  const [platformCreditsUsedMonth] = useState<number>(749500);
+  const [platformCreditsBalance, setPlatformCreditsBalance] = useState<number>(0);
+  const [platformCreditsUsedMonth] = useState<number>(0);
   const [creditPricingRules, setCreditPricingRules] = useState<CreditPricingRuleRecord[]>(
     initial.creditPricingRules
   );
@@ -191,8 +191,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogRecord[]>(initial.webhookLogs);
   const [mfaEnforced, setMfaEnforced] = useState<boolean>(true);
-  const [activeSessionsCount, setActiveSessionsCount] = useState<number>(18);
-  const [ipAllowlistEnabled, setIpAllowlistEnabled] = useState<boolean>(true);
+  const [activeSessionsCount, setActiveSessionsCount] = useState<number>(0);
+  const [ipAllowlistEnabled, setIpAllowlistEnabled] = useState<boolean>(false);
   const [sessionTtlMinutes, setSessionTtlMinutes] = useState<number>(120);
   const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>(
     initial.breakGlassRequests
