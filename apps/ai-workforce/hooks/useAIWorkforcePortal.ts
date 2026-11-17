@@ -987,7 +987,7 @@ export function useAIWorkforcePortal(
         setIsGeneratingContent(false);
       }
     },
-    [activeTenant.name, appendAudit, showToast]
+    [activeTenant?.name, appendAudit, showToast]
   );
 
   return {
