@@ -36,7 +36,7 @@ export function CorporatePortalClient({
   }
 
   if (!portal.isAuthenticated || !portal.activeTenant || portal.activeSection === 'login') {
-    return <CorporateLoginView onLogin={portal.handleLogin} />;
+    return <CorporateLoginView onLogin={portal.handleLogin} systemError={portal.authError} />;
   }
 
   const backToOverview = () => portal.navigateTo('overview');
