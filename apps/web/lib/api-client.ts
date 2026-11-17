@@ -52,6 +52,7 @@ export type AgentzyTenantMembership = {
   tenant_id: string;
   user_id: string;
   display_name: string | null;
+  email: string | null;
   status: string;
   joined_at: string | null;
   created_at: string;
