@@ -285,13 +285,17 @@ export function AdminPortalClient({
         )}
 
         {portal.activeSection === 'memory-governance' && (
-          <MemoryGovernanceView
-            policy={portal.memoryPolicy}
-            onChangePolicy={portal.setMemoryPolicy}
-            layers={portal.memoryLayers}
-            onNotify={portal.showToast}
-            onBack={backToOverview}
-          />
+          portal.memoryPolicy ? (
+            <MemoryGovernanceView
+              policy={portal.memoryPolicy}
+              onChangePolicy={portal.setMemoryPolicy}
+              layers={portal.memoryLayers}
+              onNotify={portal.showToast}
+              onBack={backToOverview}
+            />
+          ) : (
+            <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Kebijakan memory belum dikonfigurasi di backend Agentzy.</div>
+          )
         )}
 
         {portal.activeSection === 'knowledge-rag' && (
