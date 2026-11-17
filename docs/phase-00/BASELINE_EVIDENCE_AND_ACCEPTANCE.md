@@ -112,3 +112,14 @@ These are not marked complete. If the connector cannot expose a configuration ca
 ## 9. Phase 00 completion rule
 
 Phase 00 remains **IN PROGRESS** until all mandatory acceptance criteria are closed with inspectable evidence. No source code, Supabase schema, data, grants, policies, functions, project settings or migrations were changed by this read-only baseline record. No staging or real-world/UAT testing was performed.
+
+## 8. Continuation evidence update — 2026-11-18
+
+The current continuation evidence, including the resolved dependency inventory, environment-variable findings, asset metadata, Supabase Auth/Data API evidence gap, and `rls_auto_enable()` disposition is recorded in:
+
+- `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.md`
+- `docs/phase-00/sbom/bun-lock.cdx.json` — 1,037 unique resolved package coordinates; license status remains `NOASSERTION` pending reconciliation.
+- `docs/phase-00/ASSET_METADATA_INVENTORY_2026-11-18.md` — 31 raster assets, byte sizes, Git blob hashes, duplicate groups and targeted usage references; dimensions remain pending binary inspection.
+- `docs/phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md` — verified existing frontend folder mapping; backend/platform target paths unchanged.
+
+A targeted security fix removed the server-only Maps key fallback from `app/api/config/maps/route.ts` (commit `00592945136770307b17d4e87b5db1ad112748c3`). No Supabase configuration, schema, ACL, policy, function or trigger was changed. Phase 00 remains IN PROGRESS and Phase 01 remains blocked on acceptance/sign-off.
