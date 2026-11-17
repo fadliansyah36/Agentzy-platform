@@ -11,7 +11,7 @@ export const adminPortalService = {
       breakGlassRequests: [], featureFlags: [], auditLogs: [], incidents: [],
       dsrRequests: [], vendors: [],
     };
-  }
+  },
 
   simulateModelRouting(params: {
     taskType: string;
