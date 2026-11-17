@@ -6,7 +6,7 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 
 ## 1. Audit findings and blockers
 
-- Repository default branch is `main`; latest verified HEAD at Phase 00 alignment: `a63b1a3592ae886a52aa6dbb2a26da093307f09c`.
+- Repository default branch is `main`; latest structural inventory snapshot tree commit: `a9482d864aa6683027bbec02321ca469f1251596` (282 entries, not truncated).
 - GitHub binding `link_6af361418a4481919cc84f9f7e0d522b` (account `fadliansyah36`) has repository write access; `main` updates are available. Branch protection is not enabled at the time of inspection.
 - Existing UI modules are present under `apps/admin`, `apps/corporate`, and `apps/ai-workforce`; root `app/` contains public and workforce routes.
 - No `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `docs/`, or root `AGENTS.md` found in the 272-entry recursive tree.
@@ -26,7 +26,7 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | BLK-004 | No Supabase migration source | **OPEN — repository gap**, not an access blocker. | Establish `supabase/migrations/` after live baseline and migration strategy approval; never invent an initial schema from assumptions. |
 | BLK-005 | Local demo data paths | **OPEN — integration debt**. | Replace incrementally with typed FastAPI API clients; do not mask unavailable APIs with demo fallback. |
 
-**Revision note (2026-11-17):** This section supersedes the stale access statements in the original audit snapshot. It does not claim Phase 00 complete and does not authorize schema changes.
+**Revision note (2026-11-17):** This section supersedes the stale access statements in the original audit snapshot. The detailed Phase 00 evidence and acceptance matrix is `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md`; Blueprint-aligned ADRs are in `docs/adr/README.md`. It does not claim Phase 00 complete and does not authorize schema changes.
 
 ## 2. Backlog task registry
 
