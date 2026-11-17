@@ -8,6 +8,8 @@ Repository implementation baseline for the Agentzy platform.
 - `docs/AGENTZY_TECHNICAL_IMPLEMENTATION_BLUEPRINT_v1.0.md` — architecture, data model, API, security and design system
 - `docs/AGENTZY_IMPLEMENTATION_BACKLOG_PER_PHASE.md` — phase 00–23 task registry and current blocker status
 - `docs/AGENTZY_REPOSITORY_SUPABASE_AUDIT_2026-11-17.md` — repository and live Supabase audit snapshot
+- `docs/adr/README.md` — Blueprint-aligned architecture decision register
+- `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md` — Phase 00 baseline evidence, ownership proposal, migration strategy and acceptance checklist
 
 ## Canonical resources
 - GitHub repository: `fadliansyah36/Agentzy-platform`, branch `main`
