@@ -41,7 +41,12 @@ async def list_organizations(
           where m.tenant_id = :tenant_id
             and m.user_id = :user_id
             and m.status = 'active'
-            and rp.permission_key in ('corporate.organization.read','platform.tenants.read')
+            and rp.permission_key = 'corporate.organization.read'
+        ) or exists (
+          select 1 from public.memberships pm
+          join public.membership_roles pmr on pmr.membership_id=pm.id
+          join public.role_permissions prp on prp.role_id=pmr.role_id
+          where pm.user_id=:user_id and pm.status='active' and prp.permission_key='platform.tenants.read'
         )
     """), {"tenant_id": tenant_id, "user_id": UUID(claims["sub"])})
     if not permission.scalar_one():
