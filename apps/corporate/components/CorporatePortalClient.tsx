@@ -206,6 +206,9 @@ export function CorporatePortalClient({
           <OrganizationUsersView
             tenant={portal.activeTenant}
             users={portal.users}
+            organizations={portal.organizations}
+            canManageOrganization={portal.canManageOrganizations}
+            onCreateOrganization={portal.handleCreateOrganization}
             onOpenInviteModal={() => portal.setModal({ type: 'invite-user' })}
             onBack={backToOverview}
           />
