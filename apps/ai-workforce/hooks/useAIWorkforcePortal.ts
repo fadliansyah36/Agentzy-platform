@@ -2,24 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import {
-  INITIAL_AI_WORKERS,
-  INITIAL_APPROVALS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_COLLAB_MESSAGES,
-  INITIAL_CONTENT_ARTIFACTS,
-  INITIAL_CONTENT_CHAT,
-  INITIAL_HANDOFFS,
-  INITIAL_KNOWLEDGE_SOURCES,
-  INITIAL_MEMORY_LAYERS,
-  INITIAL_ROUTING_RULES,
-  INITIAL_RUNS,
-  INITIAL_SKILLS,
-  INITIAL_TASKS_GOALS,
-  INITIAL_TOOLS,
-  INITIAL_WORKFLOWS,
-  MODEL_PROVIDERS,
-} from '../lib/ai-workforce-data';
+
 import type {
   AIWMTenant,
   AIWorkerEntity,
@@ -43,7 +26,6 @@ import type {
   WorkflowRunItem,
 } from '../lib/ai-workforce-types';
 import {
-  INITIAL_HUMAN_AI_BINDINGS,
   loadHumanAIBindings,
   saveHumanAIBindings,
   type AgentzyManagerRole,
@@ -74,56 +56,38 @@ export function useAIWorkforcePortal(
   const [activeTenantId, setActiveTenantId] = useState('');
 
   // Core states
-  const [aiWorkers, setAiWorkers] =
-    useState<AIWorkerEntity[]>(INITIAL_AI_WORKERS);
-  const [selectedWorkerId, setSelectedWorkerId] = useState(
-    INITIAL_AI_WORKERS[0].id
-  );
-  const [providers] = useState(MODEL_PROVIDERS);
-  const [routingRules, setRoutingRules] = useState<ModelRoutingRule[]>(
-    INITIAL_ROUTING_RULES
-  );
-  const [skills, setSkills] = useState<SkillPackageItem[]>(INITIAL_SKILLS);
-  const [tools, setTools] = useState<ToolIntegrationItem[]>(INITIAL_TOOLS);
-  const [memoryLayers, setMemoryLayers] = useState<MemoryLayerItem[]>(
-    INITIAL_MEMORY_LAYERS
-  );
+  const [aiWorkers, setAiWorkers] = useState<AIWorkerEntity[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState('');
+  const [providers] = useState<string[]>([]);
+  const [routingRules, setRoutingRules] = useState<ModelRoutingRule[]>([]);
+  const [skills, setSkills] = useState<SkillPackageItem[]>([]);
+  const [tools, setTools] = useState<ToolIntegrationItem[]>([]);
+  const [memoryLayers, setMemoryLayers] = useState<MemoryLayerItem[]>([]);
   const [knowledgeSources, setKnowledgeSources] = useState<
     KnowledgeSourceItem[]
-  >(INITIAL_KNOWLEDGE_SOURCES);
-  const [workflows, setWorkflows] =
-    useState<WorkflowDefinitionItem[]>(INITIAL_WORKFLOWS);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState(
-    INITIAL_WORKFLOWS[0].id
-  );
-  const [runs, setRuns] = useState<WorkflowRunItem[]>(INITIAL_RUNS);
-  const [approvals, setApprovals] =
-    useState<ApprovalInboxItem[]>(INITIAL_APPROVALS);
-  const [handoffs, setHandoffs] =
-    useState<HandoffAssignmentItem[]>(INITIAL_HANDOFFS);
-  const [tasksGoals, setTasksGoals] =
-    useState<AIWMTaskGoalItem[]>(INITIAL_TASKS_GOALS);
-  const [collabMessages, setCollabMessages] = useState<
-    CollaborationMessageItem[]
-  >(INITIAL_COLLAB_MESSAGES);
-  const [auditLogs, setAuditLogs] =
-    useState<AuditIncidentItem[]>(INITIAL_AUDIT_LOGS);
+  >([]);
+  const [workflows, setWorkflows] = useState<WorkflowDefinitionItem[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+  const [runs, setRuns] = useState<WorkflowRunItem[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalInboxItem[]>([]);
+  const [handoffs, setHandoffs] = useState<HandoffAssignmentItem[]>([]);
+  const [tasksGoals, setTasksGoals] = useState<AIWMTaskGoalItem[]>([]);
+  const [collabMessages, setCollabMessages] = useState<CollaborationMessageItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditIncidentItem[]>([]);
 
   // AI Credits & Budget
-  const [aiCreditsBalance, setAiCreditsBalance] = useState(1250000);
-  const [monthlySoftLimit, setMonthlySoftLimit] = useState(1800000);
-  const [monthlyHardLimit, setMonthlyHardLimit] = useState(2000000);
+  const [aiCreditsBalance, setAiCreditsBalance] = useState(0);
+  const [monthlySoftLimit, setMonthlySoftLimit] = useState(0);
+  const [monthlyHardLimit, setMonthlyHardLimit] = useState(0);
   const [offlinePwaMode, setOfflinePwaMode] = useState(true);
 
   // Content Studio (Chat + Artifact for Staff Sales)
   const [contentArtifacts, setContentArtifacts] = useState<
     ContentArtifactItem[]
-  >(INITIAL_CONTENT_ARTIFACTS);
-  const [selectedArtifactId, setSelectedArtifactId] = useState(
-    INITIAL_CONTENT_ARTIFACTS[0].id
-  );
+  >([]);
+  const [selectedArtifactId, setSelectedArtifactId] = useState('');
   const [contentChat, setContentChat] =
-    useState<ContentChatMessage[]>(INITIAL_CONTENT_CHAT);
+    useState<ContentChatMessage[]>([]);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
 
@@ -131,7 +95,7 @@ export function useAIWorkforcePortal(
   const [managerRole, setManagerRole] =
     useState<AgentzyManagerRole>('HRD Agentzy');
   const [humanAiBindings, setHumanAiBindings] = useState<HumanAIBindingRecord[]>(
-    INITIAL_HUMAN_AI_BINDINGS
+    []
   );
 
   useEffect(() => {
