@@ -13,19 +13,14 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
-import { SUPER_ADMIN_ROLES } from '../../lib/admin-data';
-import type { SuperAdminRoleKey } from '../../lib/admin-types';
 
 export function AdminLoginView({
-  initialRole,
   onLogin,
   systemError,
 }: {
-  initialRole: SuperAdminRoleKey;
   systemError?: string | null;
-  onLogin: (role: SuperAdminRoleKey, email: string, password: string, mfaCode: string) => Promise<void>;
+  onLogin: (email: string, password: string, mfaCode: string) => Promise<void>;
 }) {
-  const [role, setRole] = useState<SuperAdminRoleKey>(initialRole);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mfaCode, setMfaCode] = useState('');
@@ -33,8 +28,7 @@ export function AdminLoginView({
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const selectedRole =
-    SUPER_ADMIN_ROLES.find((r) => r.key === role) ?? SUPER_ADMIN_ROLES[0];
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +39,7 @@ export function AdminLoginView({
     setErrorMsg(null);
     setIsSubmitting(true);
     try {
-      await onLogin(role, email.trim(), password, mfaCode.trim());
+      await onLogin(email.trim(), password, mfaCode.trim());
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Autentikasi gagal.');
     } finally {
@@ -99,30 +93,8 @@ export function AdminLoginView({
 
           {systemError && <p className="mt-4 rounded-[8px] border border-[#A96816]/30 bg-[#A96816]/10 px-3 py-2 text-xs font-medium text-[#A96816]">{systemError}</p>}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label
-                htmlFor="admin-role-select"
-                className="mb-1.5 block text-xs font-semibold text-[#172B3A]"
-              >
-                Role Kontrol Platform
-              </label>
-              <div className="relative">
-                <select
-                  disabled
-                  id="admin-role-select"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as SuperAdminRoleKey)}
-                  className="h-11 w-full appearance-none rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3.5 pr-10 text-sm font-bold text-[#17324D] outline-none transition focus:border-[#0284C7] focus:bg-white"
-                >
-                  {SUPER_ADMIN_ROLES.map((r) => (
-                    <option key={r.key} value={r.key}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#526675]" />
-              </div>
-              <p className="mt-1 text-xs text-[#526675]">{selectedRole.scope}</p>
+            <div className="rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3.5 py-3 text-xs leading-relaxed text-[#526675]">
+              Role Super Admin ditentukan dari membership dan permission yang diverifikasi backend, bukan dipilih dari browser.
             </div>
 
             <div>
