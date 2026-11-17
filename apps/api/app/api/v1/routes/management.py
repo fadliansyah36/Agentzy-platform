@@ -254,3 +254,71 @@ async def list_platform_tenants(
         from public.tenants order by created_at desc
     """))
     return [dict(row) for row in result.mappings().all()]
+
+
+class TenantUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    slug: str | None = Field(default=None, min_length=2, max_length=80)
+    tenant_type: str | None = Field(default=None, pattern="^(corporate|provider|internal|other)$")
+    status: str | None = Field(default=None, pattern="^(pending|active|suspended|archived)$")
+
+
+@router.patch("/tenants/{tenant_id}", tags=["Tenant Administration"])
+async def update_tenant(
+    tenant_id: UUID,
+    payload: TenantUpdate,
+    request: Request,
+    claims: dict = Depends(current_claims),
+    session: AsyncSession = Depends(user_session),
+):
+    user_id = UUID(claims["sub"])
+    if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
+        raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
+    values = payload.model_dump(exclude_unset=True)
+    if not values:
+        raise HTTPException(status_code=422, detail="Tidak ada field tenant yang diperbarui.")
+    if "slug" in values and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", values["slug"]):
+        raise HTTPException(status_code=422, detail="Slug hanya boleh berisi huruf kecil, angka dan tanda hubung.")
+    assignments = ", ".join(f"{key}=:{key}" for key in values)
+    values["tenant_id"] = tenant_id
+    async with engine.begin() as connection:
+        result = await connection.execute(text(f"""
+            update public.tenants set {assignments},updated_at=now()
+            where id=:tenant_id
+            returning id,name,slug,tenant_type,status,created_at,updated_at
+        """), values)
+        row = result.mappings().first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Tenant tidak ditemukan.")
+        await connection.execute(text("""
+            insert into public.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,ip_address,metadata)
+            values(:actor,'tenant.updated','tenant',:resource_id,:request_id,:ip,cast(:metadata as jsonb))
+        """), {"actor": user_id, "resource_id": str(tenant_id), "request_id": request.headers.get("x-request-id"),
+               "ip": request.client.host if request.client else None, "metadata": __import__('json').dumps(values, default=str)})
+    return dict(row)
+
+
+@router.delete("/tenants/{tenant_id}", tags=["Tenant Administration"])
+async def archive_tenant(
+    tenant_id: UUID,
+    request: Request,
+    claims: dict = Depends(current_claims),
+    session: AsyncSession = Depends(user_session),
+):
+    user_id = UUID(claims["sub"])
+    if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
+        raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
+    async with engine.begin() as connection:
+        result = await connection.execute(text("""
+            update public.tenants set status='archived',updated_at=now()
+            where id=:tenant_id returning id,name,slug,status
+        """), {"tenant_id": tenant_id})
+        row = result.mappings().first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Tenant tidak ditemukan.")
+        await connection.execute(text("""
+            insert into public.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,ip_address)
+            values(:actor,'tenant.archived','tenant',:resource_id,:request_id,:ip)
+        """), {"actor": user_id, "resource_id": str(tenant_id), "request_id": request.headers.get("x-request-id"),
+               "ip": request.client.host if request.client else None})
+    return dict(row)
