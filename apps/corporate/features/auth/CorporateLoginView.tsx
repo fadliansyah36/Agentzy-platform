@@ -14,8 +14,10 @@ import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 
 export function CorporateLoginView({
   onLogin,
+  systemError,
 }: {
   onLogin: (email: string, password: string, method: 'password' | 'sso') => Promise<void>;
+  systemError?: string | null;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,6 +99,7 @@ export function CorporateLoginView({
             </p>
           </div>
 
+          {systemError && <p className="mt-4 rounded-[8px] border border-[#A96816]/30 bg-[#A96816]/10 px-3 py-2 text-xs font-medium text-[#A96816]">{systemError}</p>}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
               <label
