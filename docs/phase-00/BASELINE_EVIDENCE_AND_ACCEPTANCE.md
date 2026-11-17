@@ -22,7 +22,9 @@ User delivery constraint: direct work on `main`; no staging or real-world/UAT te
 - Existing application areas: `apps/admin/` (55 paths), `apps/corporate/` (49), `apps/ai-workforce/` (42), root `app/` (28).
 - Present: root `AGENTS.md`, root README, PRD, Blueprint, backlog, audit and ADR register.
 - Not present in the recursive tree: `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `packages/api-client/`, `packages/api-contracts/`, `packages/design-tokens/`, `workers/`, `services/`, `infrastructure/`.
-- Root app contains Next.js route handlers for AI content generation, maps config and reverse geocoding. AI content handler was identified in prior source audit as directly invoking Google GenAI; this is a backend-boundary issue for the relevant implementation phase.
+- Root app contains Next.js route handlers for AI content generation, maps config and reverse geocoding. Direct source review confirms the AI handler invokes Google GenAI directly, hardcodes a model, and accepts tenantName from the request body. This violates the intended FastAPI gateway/server-resolved tenant boundary and is tracked for implementation remediation.
+- Maps config GET handler may return the server-side GOOGLE_MAPS_API_KEY if the NEXT_PUBLIC key is absent; treat as a credential-exposure risk and move provider calls/configuration behind a restricted backend contract. A browser key must be separately referrer/API restricted.
+- package.json currently declares Next.js ^15.4.9 and eslint-config-next ^16.0.8; version alignment and full lockfile/license reconciliation remain open.
 - Existing admin/corporate/AI workforce screens and portal modules remain the UI baseline; no redesign is authorized.
 
 This is a structural inventory. It does not claim every source file has been line-by-line reviewed.
@@ -43,7 +45,20 @@ Canonical rule: browser portal → typed frontend API client → FastAPI `/api/v
 **Contract conventions:** `/api/v1`, typed Pydantic request/response schemas, generated OpenAPI, standard error envelope, cursor pagination, allowlisted filters/sorts, UTC timestamps, Decimal money, request/correlation/trace IDs, idempotency keys for sensitive commands.  
 **Important:** exact endpoint paths and DTOs are to be specified by each phase contract; this matrix establishes ownership, not an assertion that endpoints already exist.
 
-## 4. Supabase live baseline (read-only)
+## 4. Existing design-token baseline
+
+The current global CSS establishes a light, clean blue/azure visual system. Preserve and reuse these existing tokens rather than introducing a competing palette:
+- Brand: sky-light `#ADD8E6`, sky `#87CEEB`, azure `#0284C7`, azure-hover `#0369A1`, navy `#17324D`, deep-blue `#245477`, muted-blue `#5F879E`.
+- Surfaces: canvas `#F5F8FA`, default `#FFFFFF`, subtle `#EAF2F6`, sky `#E6F4F9`.
+- Borders: default `#D8E3E9`, strong `#B8C9D3`.
+- Text: primary `#172B3A`, secondary `#526675`, muted `#718391`, inverse `#FFFFFF`.
+- Status/data colors: success `#247A55`, warning `#A96816`, danger `#B23A48`, info `#2D6F91`; data teal `#3B8C91`, amber `#C18A3A`, violet `#786A9C`, slate `#718391`.
+- Radius: 6/10/14/20px; shadows use existing `--az-shadow-sm` and `--az-shadow-md`.
+- Typography: Plus Jakarta Sans for UI; JetBrains Mono for tabular technical values.
+
+Source: `app/globals.css` at the recorded Phase 00 snapshot. Component-specific button/form tokens still require component inventory.
+
+## 5. Supabase live baseline (read-only)
 
 - Project: `cwhjdnkotuhueeudpgeu`, `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
 - No Agentzy application relations observed in `public`; project migration history empty.
@@ -56,7 +71,7 @@ Canonical rule: browser portal → typed frontend API client → FastAPI `/api/v
 - Catalog inspection shows platform-owned objects and grants in managed schemas. Do not change platform-managed grants/policies as a shortcut for Agentzy setup.
 - Auth users currently 0; Realtime subscriptions 0; Storage objects 0 (as observed in the project snapshot).
 
-## 5. Outstanding audit limitations (explicit)
+## 6. Outstanding audit limitations (explicit)
 
 The connected Supabase tools expose project metadata, database catalogs, migrations, extensions and advisors, but this run has not obtained authoritative project-level configuration for:
 - Auth provider enablement, redirect allowlists, password/MFA/SMTP/security settings.
@@ -68,7 +83,7 @@ The connected Supabase tools expose project metadata, database catalogs, migrati
 
 These are not marked complete. If the connector cannot expose a configuration category, record the dashboard evidence required rather than guessing.
 
-## 6. Migration strategy decision
+## 7. Migration strategy decision
 
 1. No migration is applied in Phase 00.
 2. No synthetic M000 schema is generated from assumptions. M000 must be a reviewed baseline after reconciliation of Blueprint migration batches M000–M220 with live catalog state.
@@ -79,14 +94,14 @@ These are not marked complete. If the connector cannot expose a configuration ca
 7. Keep Supabase service-role keys and provider secrets server-side. Private Storage by default; signed URLs are short-lived and issued only after authorization.
 8. Supabase-managed schemas/migration histories are excluded from Agentzy migration numbering.
 
-## 7. Acceptance criteria and evidence checklist
+## 8. Acceptance criteria and evidence checklist
 
 | ID | Acceptance criterion | Evidence required | Status |
 |---|---|---|---|
 | P00-AC-01 | PRD/Blueprint/AGENTS authority and phase sequence are explicit. | Source references and repo governance docs | PARTIAL |
 | P00-AC-02 | Repository tree and application boundaries inventoried. | Recursive tree SHA, count, path inventory | PARTIAL — structural tree captured; source-level review pending |
-| P00-AC-03 | Dependency, license, environment-name, asset and design-token inventory complete. | Generated inventories, license reconciliation, token map | OPEN |
-| P00-AC-04 | Portal-to-domain-to-API ownership agreed. | This matrix plus owner sign-off and route inventory | PARTIAL |
+| P00-AC-03 | Dependency, license, environment-name, asset and design-token inventory complete. | Generated inventories, license reconciliation, token map | PARTIAL — CSS tokens and package/env names sampled; lockfile license and full asset inventory pending |
+| P00-AC-04 | Portal-to-domain-to-API ownership agreed. | This matrix plus owner sign-off and route inventory | PARTIAL — proposed boundaries documented; endpoint inventory and owner sign-off pending |
 | P00-AC-05 | Supabase schema, migration history, extensions, RLS, grants, functions, triggers, Storage and Realtime reviewed. | Read-only SQL outputs, advisor snapshots, config evidence | PARTIAL — project catalogs reviewed; configuration categories listed above open |
 | P00-AC-06 | Security Advisor findings disposition approved. | Finding, impact analysis, remediation approval/commit and re-advisor evidence | OPEN |
 | P00-AC-07 | ADR register aligned with Blueprint IDs and defaults. | `docs/adr/README.md` | COMPLETE — proposed choices remain explicitly open |
@@ -94,6 +109,6 @@ These are not marked complete. If the connector cannot expose a configuration ca
 | P00-AC-09 | Phase 00 Definition of Done evidence is complete. | Task checklist, commit SHA, API/permission/UI/observability artifacts where applicable | OPEN |
 | P00-AC-10 | Phase 01 scope/dependencies are ready. | Approved Phase 01 scope and dependency list | OPEN |
 
-## 8. Phase 00 completion rule
+## 9. Phase 00 completion rule
 
 Phase 00 remains **IN PROGRESS** until all mandatory acceptance criteria are closed with inspectable evidence. No source code, Supabase schema, data, grants, policies, functions, project settings or migrations were changed by this read-only baseline record. No staging or real-world/UAT testing was performed.
