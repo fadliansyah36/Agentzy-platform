@@ -94,7 +94,9 @@ async def create_organization(
     session: AsyncSession = Depends(user_session),
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage", "platform.tenants.manage"))
+    allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage",))
+    if not allowed:
+        allowed = await _has_platform_permission(session, user_id, "platform.tenants.manage")
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant organization management permission.")
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload.slug):
@@ -124,9 +126,9 @@ async def invite_tenant_member(
     session: AsyncSession = Depends(user_session),
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_tenant_permission(
-        session, user_id, tenant_id, ("corporate.organization.manage", "platform.memberships.manage")
-    )
+    allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage",))
+    if not allowed:
+        allowed = await _has_platform_permission(session, user_id, "platform.memberships.manage")
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant membership management permission.")
     role_key = payload.role_key.strip().lower()
@@ -222,9 +224,9 @@ async def list_tenant_memberships(
     session: AsyncSession = Depends(user_session),
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_tenant_permission(
-        session, user_id, tenant_id, ("corporate.organization.read","platform.memberships.read")
-    )
+    allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.read",))
+    if not allowed:
+        allowed = await _has_platform_permission(session, user_id, "platform.memberships.read")
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant membership read permission.")
     async with engine.connect() as connection:
