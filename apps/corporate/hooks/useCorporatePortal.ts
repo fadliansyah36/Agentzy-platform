@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CORPORATE_ROLE_OPTIONS,
-  CORPORATE_TENANTS,
 } from '../lib/corporate-data';
 import { corporatePortalService } from '../services/corporate-service';
+import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import type {
   AICreditTransaction,
   AIWorkerRecord,
@@ -58,13 +58,14 @@ export type CorporateModalState =
   | { type: 'settings-modal'; key: 'profile' | 'integrations' | 'notifications' | 'security' | 'api' | 'tenant' | 'audit' };
 
 export function useCorporatePortal(initialSection: CorporateSectionId = 'overview') {
+  const auth = useAgentzyAuth();
   const initialCollections = useMemo(
     () => corporatePortalService.getInitialDomainCollections(),
     []
   );
 
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [activeTenantId, setActiveTenantId] = useState<string>(CORPORATE_TENANTS[0].id);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeTenantId, setActiveTenantId] = useState<string>('');
   const [activeSection, setActiveSection] = useState<CorporateSectionId>(initialSection);
   const [modal, setModal] = useState<CorporateModalState>({ type: 'none' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -101,10 +102,31 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     status: 'Teraktivasi',
   });
 
-  const activeTenant = useMemo(
-    () => CORPORATE_TENANTS.find((t) => t.id === activeTenantId) ?? CORPORATE_TENANTS[0],
-    [activeTenantId]
-  );
+  const activeTenant = useMemo(() => {
+    const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
+    if (!tenant) return null;
+    return {
+      id: tenant.id,
+      code: tenant.slug,
+      name: tenant.name,
+      status: tenant.status === 'active' ? 'Aktif' as const : 'Onboarding' as const,
+    };
+  }, [auth.tenants, activeTenantId]);
+
+  useEffect(() => {
+    if (auth.loading) return;
+    if (auth.session && auth.identity && auth.tenants.length > 0) {
+      const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
+      setActiveTenantId(tenant.id);
+      setIsAuthenticated(true);
+      setActiveSection((current) => current === 'login' ? 'overview' : current);
+    } else {
+      setIsAuthenticated(false);
+      if (auth.session && auth.identity && auth.tenants.length === 0) {
+        setActiveSection('login');
+      }
+    }
+  }, [auth.loading, auth.session, auth.identity, auth.tenants, activeTenantId]);
 
   const overviewSnapshot = useMemo(
     () => corporatePortalService.getExecutiveOverviewSnapshot(activeTenantId),
@@ -129,31 +151,43 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   }, []);
 
   const handleLogin = useCallback(
-    (tenantId: string, email: string, method: 'password' | 'sso') => {
-      setActiveTenantId(tenantId);
+    async (email: string, password: string, method: 'password' | 'sso') => {
+      if (method === 'sso') {
+        await auth.signInWithOAuth();
+        return;
+      }
+      const context = await auth.signIn(email, password);
+      if (!context.tenants.length) {
+        await auth.signOut();
+        throw new Error('Akun berhasil diverifikasi, tetapi belum memiliki membership tenant aktif.');
+      }
+      setActiveTenantId(context.tenants[0].id);
       setIsAuthenticated(true);
       setActiveSection('overview');
-      const tenant = CORPORATE_TENANTS.find((t) => t.id === tenantId);
-      showToast(
-        `Berhasil masuk ke ${tenant?.name ?? 'Corporate Portal'} (${method === 'sso' ? 'SSO Enterprise' : email}).`
-      );
+      showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
     },
-    [showToast]
+    [auth.signIn, auth.signInWithOAuth, auth.signOut, showToast]
   );
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    await auth.signOut();
     setIsAuthenticated(false);
+    setActiveTenantId('');
     setActiveSection('login');
     setModal({ type: 'none' });
-  }, []);
+  }, [auth.signOut]);
 
   const handleSwitchTenant = useCallback(
     (tenantId: string) => {
-      setActiveTenantId(tenantId);
-      const tenant = CORPORATE_TENANTS.find((t) => t.id === tenantId);
-      showToast(`Konteks tenant aktif berpindah ke ${tenant?.name} (${tenant?.code}).`);
+      const tenant = auth.tenants.find((item) => item.id === tenantId);
+      if (!tenant) {
+        showToast('Tenant tidak termasuk membership akun ini.');
+        return;
+      }
+      setActiveTenantId(tenant.id);
+      showToast(`Konteks tenant aktif berpindah ke ${tenant.name}.`);
     },
-    [showToast]
+    [auth.tenants, showToast]
   );
 
   const handleToggleAIWorkerStatus = useCallback(
@@ -308,6 +342,8 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   return {
     isAuthenticated,
+    authLoading: auth.loading,
+    authError: auth.error,
     activeTenant,
     activeTenantId,
     activeSection,
