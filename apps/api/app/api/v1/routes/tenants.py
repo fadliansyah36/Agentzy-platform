@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import current_claims
-from app.db.session import user_session
+from app.db.session import engine, user_session
 from app.schemas.identity import OrganizationRead, TenantRead
 
 router = APIRouter()
@@ -52,10 +52,15 @@ async def list_organizations(
     if not permission.scalar_one():
         raise HTTPException(status_code=403, detail="Missing tenant organization read permission.")
 
-    result = await session.execute(text("""
+    query = text("""
         select id, tenant_id, parent_id, name, slug, organization_type, status
         from public.organizations
         where tenant_id = :tenant_id and status = 'active'
         order by name
-    """), {"tenant_id": tenant_id})
+    """)
+    if claims.get("aal") == "aal2":
+        async with engine.connect() as connection:
+            result = await connection.execute(query, {"tenant_id": tenant_id})
+    else:
+        result = await session.execute(query, {"tenant_id": tenant_id})
     return [OrganizationRead(**dict(row)) for row in result.mappings().all()]
