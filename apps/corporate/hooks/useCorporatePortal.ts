@@ -139,6 +139,20 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     [activeTenant]
   );
 
+
+
+  const nextId = (prefix: string) => {
+    idCounter.current += 1;
+    return `${prefix}-${idCounter.current}`;
+  };
+
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3600);
+  }, []);
+
   useEffect(() => {
     const accessToken = auth.session?.access_token;
     if (!accessToken || !activeTenantId) return;
@@ -166,18 +180,6 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     });
     return () => { active = false; };
   }, [auth.session?.access_token, activeTenantId, showToast]);
-
-  const nextId = (prefix: string) => {
-    idCounter.current += 1;
-    return `${prefix}-${idCounter.current}`;
-  };
-
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3600);
-  }, []);
 
   const navigateTo = useCallback((section: CorporateSectionId) => {
     setActiveSection(section);
