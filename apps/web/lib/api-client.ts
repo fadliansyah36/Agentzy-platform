@@ -36,3 +36,54 @@ export const getMyIdentity = (accessToken: string) =>
   apiRequest<AgentzyIdentity>("/me", { method: "GET", accessToken });
 export const getMyTenants = (accessToken: string) =>
   apiRequest<AgentzyTenant[]>("/tenants", { method: "GET", accessToken });
+
+
+export type AgentzyRoleTemplate = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  permissions: string[];
+};
+
+export type AgentzyTenantMembership = {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  display_name: string | null;
+  status: string;
+  joined_at: string | null;
+  created_at: string;
+  role_keys: string[];
+};
+
+export type CreateTenantInput = { name: string; slug: string; tenant_type: 'corporate' | 'provider' | 'internal' | 'other' };
+export type CreateOrganizationInput = {
+  name: string;
+  slug: string;
+  organization_type?: 'company' | 'division' | 'department' | 'branch' | 'team';
+  parent_id?: string | null;
+};
+export type InviteTenantMemberInput = { email: string; full_name: string; role_key: string };
+
+export const createTenant = (accessToken: string, payload: CreateTenantInput) =>
+  apiRequest<AgentzyTenant>("/tenants", { method: "POST", accessToken, body: JSON.stringify(payload) });
+
+export const createOrganization = (accessToken: string, tenantId: string, payload: CreateOrganizationInput) =>
+  apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
+    method: "POST", accessToken, body: JSON.stringify(payload),
+  });
+
+export const inviteTenantMember = (accessToken: string, tenantId: string, payload: InviteTenantMemberInput) =>
+  apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/memberships/invite`, {
+    method: "POST", accessToken, body: JSON.stringify(payload),
+  });
+
+export const listTenantMemberships = (accessToken: string, tenantId: string) =>
+  apiRequest<AgentzyTenantMembership[]>(`/tenants/${encodeURIComponent(tenantId)}/memberships`, {
+    method: "GET", accessToken,
+  });
+
+export const listRoleTemplates = (accessToken: string) =>
+  apiRequest<AgentzyRoleTemplate[]>("/roles", { method: "GET", accessToken });
