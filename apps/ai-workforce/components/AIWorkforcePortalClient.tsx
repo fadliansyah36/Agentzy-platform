@@ -62,6 +62,7 @@ export function AIWorkforcePortalClient({
     <>
       <AIWorkforceAppShell
         activeTenant={portal.activeTenant}
+        tenants={portal.tenantOptions}
         activeSection={portal.activeSection}
         pendingApprovalsCount={pendingApprovalsCount}
         failedRunsCount={failedRunsCount}
