@@ -52,3 +52,7 @@ Existing portal UI is present and must be preserved. The repository is a Next.js
 6. Phase 00 remains IN PROGRESS. No staging or real-world/UAT testing was performed.
 
 See `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md` for the detailed acceptance matrix and evidence limitations.
+
+## Frontend structure errata
+
+The authoritative frontend folder mapping is recorded in [`docs/phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md`](phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md). It documents the existing root `app/` route surfaces and `apps/admin/`, `apps/corporate/`, `apps/ai-workforce/` feature modules. Backend/API and platform target paths remain unchanged.
