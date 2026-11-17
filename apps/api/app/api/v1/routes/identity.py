@@ -25,10 +25,15 @@ async def read_identity(claims: dict = Depends(current_claims), session: AsyncSe
         order by t.name
     """), {"user_id": UUID(claims["sub"])})
     memberships = [MembershipRead(**dict(row)) for row in result.mappings().all()]
+    profile_result = await session.execute(
+        text("select email, display_name from public.profiles where user_id=:user_id"),
+        {"user_id": UUID(claims["sub"])},
+    )
+    profile = profile_result.mappings().first()
     metadata = claims.get("user_metadata") or {}
     return IdentityRead(
         user_id=UUID(claims["sub"]),
-        email=claims.get("email"),
-        display_name=metadata.get("full_name") or metadata.get("name"),
+        email=(profile["email"] if profile else None) or claims.get("email"),
+        display_name=(profile["display_name"] if profile else None) or metadata.get("full_name") or metadata.get("name"),
         memberships=memberships,
     )
