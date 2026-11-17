@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
-  AIWM_TENANTS,
   INITIAL_AI_WORKERS,
   INITIAL_APPROVALS,
   INITIAL_AUDIT_LOGS,
@@ -887,6 +886,8 @@ export function useAIWorkforcePortal(
       kind: ContentArtifactKind,
       channel: string
     ) => {
+    if (!activeTenant) throw new Error('Tenant context belum tersedia.');
+
       const trimmed = prompt.trim();
       if (!trimmed) return;
       setContentError(null);
