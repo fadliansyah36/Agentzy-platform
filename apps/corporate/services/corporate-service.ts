@@ -1,97 +1,52 @@
-import {
-  BUSINESS_TREND_SERIES,
-  CORPORATE_TENANTS,
-  INITIAL_AI_RUNS,
-  INITIAL_AI_WORKERS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_CORPORATE_ALERTS,
-  INITIAL_CORPORATE_USERS,
-  INITIAL_CORP_WORK_ORDERS,
-  INITIAL_CREDIT_TRANSACTIONS,
-  INITIAL_INTEGRATIONS,
-  INITIAL_INVOICES,
-  INITIAL_PAYMENTS,
-  INITIAL_REPORT_HISTORY,
-} from '../lib/corporate-data';
-import type {
-  AnalyticsFilterState,
-  CorporateTenant,
-} from '../lib/corporate-types';
+import type { AnalyticsFilterState, CorporateTenant } from '../lib/corporate-types';
 
-/**
- * Typed service adapter boundary for Corporate/ISP Portal.
- * In production monorepo deployment, each method forwards authenticated requests
- * with tenant resolution headers to FastAPI (`/api/v1/corporate/*`).
- */
+/** API-backed service boundary. Until a domain endpoint is provisioned, collections remain empty. */
 export const corporatePortalService = {
-  listTenants(): CorporateTenant[] {
-    return CORPORATE_TENANTS;
-  },
-
-  getExecutiveOverviewSnapshot(tenantId: string) {
-    const tenant =
-      CORPORATE_TENANTS.find((t) => t.id === tenantId) ?? CORPORATE_TENANTS[0];
+  getExecutiveOverviewSnapshot(tenant: CorporateTenant) {
     return {
       tenant,
-      humanWorkers: 1240,
-      staffSalesCount: 420,
-      affiliateCount: 480,
-      technicianCount: 340,
-      humanDeltaPct: 8,
-      aiWorkers: 24,
-      aiDeltaPct: 20,
-      leadsCount: 8920,
-      leadsDeltaPct: 12,
-      ordersCount: 3280,
-      ordersDeltaPct: 16,
-      kpiTarget: 3000,
-      kpiActual: 3280,
-      kpiAchievementPct: 109,
-      productivityPct: 118,
-      slaPct: 98.6,
-      corporateRevenueIdr: 5420000000,
-      agentzyServiceFeeIdr: 412000000,
-      aiCreditsBalance: 1250000,
-      estimatedTokens: 312500,
-      contractExpiryDays: tenant.contractExpiryDays,
-      sourceFreshness: {
-        status: 'near_realtime',
-        computedAt: '17 Nov 2026 · 10:15 WIB',
-      },
+      humanWorkers: 0,
+      staffSalesCount: 0,
+      affiliateCount: 0,
+      technicianCount: 0,
+      humanDeltaPct: 0,
+      aiWorkers: 0,
+      aiDeltaPct: 0,
+      leadsCount: 0,
+      leadsDeltaPct: 0,
+      ordersCount: 0,
+      ordersDeltaPct: 0,
+      kpiTarget: 0,
+      kpiActual: 0,
+      kpiAchievementPct: 0,
+      productivityPct: 0,
+      slaPct: 0,
+      corporateRevenueIdr: 0,
+      agentzyServiceFeeIdr: 0,
+      aiCreditsBalance: 0,
+      estimatedTokens: 0,
+      contractExpiryDays: 0,
+      sourceFreshness: { status: 'Belum tersedia', computedAt: 'Belum ada data domain' },
     };
   },
 
-  getAnalyticsSeries(filter: AnalyticsFilterState) {
-    const multiplier =
-      filter.region === 'Semua Wilayah'
-        ? 1
-        : filter.region === 'Jabodetabek'
-          ? 0.34
-          : filter.region === 'Jawa Barat'
-            ? 0.24
-            : 0.21;
-
-    return BUSINESS_TREND_SERIES.map((row) => ({
-      ...row,
-      aktivasi: Math.round(row.aktivasi * multiplier),
-      target: Math.round(row.target * multiplier),
-      order: Math.round(row.order * multiplier),
-    }));
+  getAnalyticsSeries(_filter: AnalyticsFilterState) {
+    return [];
   },
 
   getInitialDomainCollections() {
     return {
-      aiWorkers: INITIAL_AI_WORKERS,
-      aiRuns: INITIAL_AI_RUNS,
-      workOrders: INITIAL_CORP_WORK_ORDERS,
-      invoices: INITIAL_INVOICES,
-      payments: INITIAL_PAYMENTS,
-      creditTransactions: INITIAL_CREDIT_TRANSACTIONS,
-      users: INITIAL_CORPORATE_USERS,
-      alerts: INITIAL_CORPORATE_ALERTS,
-      integrations: INITIAL_INTEGRATIONS,
-      auditLogs: INITIAL_AUDIT_LOGS,
-      reportHistory: INITIAL_REPORT_HISTORY,
+      aiWorkers: [],
+      aiRuns: [],
+      workOrders: [],
+      invoices: [],
+      payments: [],
+      creditTransactions: [],
+      users: [],
+      alerts: [],
+      integrations: [],
+      auditLogs: [],
+      reportHistory: [],
     };
   },
 };
