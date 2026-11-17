@@ -157,11 +157,16 @@ export function useAIWorkforcePortal(
     return () => clearTimeout(t);
   }, [toastMessage]);
 
-  const tenantOptions = useMemo<AIWMTenant[]>(() => auth.tenants.map((tenant) => ({
-    id: tenant.id,
-    code: tenant.slug,
-    name: tenant.name,
-  })), [auth.tenants]);
+  const tenantOptions = useMemo<AIWMTenant[]>(() => {
+    const allowed = new Set((auth.identity?.memberships ?? [])
+      .filter((membership) => membership.permissions.includes('ai.workers.read'))
+      .map((membership) => membership.tenant_id));
+    return auth.tenants.filter((tenant) => allowed.has(tenant.id)).map((tenant) => ({
+      id: tenant.id,
+      code: tenant.slug,
+      name: tenant.name,
+    }));
+  }, [auth.identity, auth.tenants]);
   const activeTenant = useMemo(
     () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
     [tenantOptions, activeTenantId]
@@ -169,15 +174,15 @@ export function useAIWorkforcePortal(
 
   useEffect(() => {
     if (auth.loading) return;
-    if (auth.session && auth.identity && auth.tenants.length > 0) {
-      const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
+    if (auth.session && auth.identity && tenantOptions.length > 0) {
+      const tenant = tenantOptions.find((item) => item.id === activeTenantId) ?? tenantOptions[0];
       setActiveTenantId(tenant.id);
       setIsAuthenticated(true);
       setActiveSection((current) => current === 'login' || current === 'splash' ? 'overview' : current);
     } else {
       setIsAuthenticated(false);
     }
-  }, [auth.loading, auth.session, auth.identity, auth.tenants, activeTenantId]);
+  }, [auth.loading, auth.session, auth.identity, tenantOptions, activeTenantId]);
 
   const selectedWorker = useMemo(
     () => aiWorkers.find((w) => w.id === selectedWorkerId) ?? aiWorkers[0],
@@ -234,11 +239,15 @@ export function useAIWorkforcePortal(
         return;
       }
       const context = await auth.signIn(email, password);
-      if (!context.tenants.length) {
+      const allowed = new Set(context.identity.memberships
+        .filter((membership) => membership.permissions.includes('ai.workers.read'))
+        .map((membership) => membership.tenant_id));
+      const tenant = context.tenants.find((item) => allowed.has(item.id));
+      if (!tenant) {
         await auth.signOut();
-        throw new Error('Akun belum memiliki membership tenant aktif untuk AI Workforce.');
+        throw new Error('Akun belum memiliki permission ai.workers.read pada tenant aktif.');
       }
-      setActiveTenantId(context.tenants[0].id);
+      setActiveTenantId(tenant.id);
       setIsAuthenticated(true);
       setActiveSection('overview');
       showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
@@ -256,13 +265,14 @@ export function useAIWorkforcePortal(
 
   const handleSwitchTenant = useCallback((tenantId: string) => {
     const tenant = auth.tenants.find((item) => item.id === tenantId);
-    if (!tenant) {
-      showToast('Tenant tidak termasuk membership akun ini.');
+    const membership = auth.identity?.memberships.find((item) => item.tenant_id === tenantId);
+    if (!tenant || !membership?.permissions.includes('ai.workers.read')) {
+      showToast('Tenant tidak memiliki permission AI Workforce untuk akun ini.');
       return;
     }
     setActiveTenantId(tenant.id);
     showToast(`Workspace tenant aktif berpindah ke ${tenant.name}.`);
-  }, [auth.tenants, showToast]);
+  }, [auth.tenants, auth.identity, showToast]);
 
   const handleToggleWorkerStatus = useCallback(
     (workerId: string) => {
