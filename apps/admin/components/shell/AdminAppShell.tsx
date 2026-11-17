@@ -67,7 +67,6 @@ export function AdminAppShell({
   activeBreakGlassCount,
   toastMessage,
   onNavigate,
-  onChangeAdminRole,
   onOpenQuickAction,
   onOpenBreakGlass,
   onLogout,
@@ -81,14 +80,12 @@ export function AdminAppShell({
   activeBreakGlassCount: number;
   toastMessage: string | null;
   onNavigate: (section: AdminSectionId) => void;
-  onChangeAdminRole: (role: SuperAdminRoleKey) => void;
   onOpenQuickAction: () => void;
   onOpenBreakGlass: () => void;
   onLogout: () => void;
   children: React.ReactNode;
 }) {
   const [showMobileMenuSheet, setShowMobileMenuSheet] = useState(false);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const currentRoleMeta =
@@ -320,55 +317,19 @@ export function AdminAppShell({
                   <AgentzyLogo variant="light" size="sm" />
                 </div>
 
-                {/* Desktop Role Switcher */}
+                {/* Role is resolved from the verified membership; it is not user-selectable. */}
                 <div className="relative hidden lg:block">
-                  <button
-                    type="button"
-                    onClick={() => setShowRoleDropdown((v) => !v)}
-                    className="flex items-center gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3 py-1.5 text-left transition hover:border-[#87CEEB]"
-                  >
+                  <div className="flex items-center gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-3 py-1.5 text-left">
                     <UserCheck className="h-4 w-4 text-[#0284C7]" />
                     <div className="leading-tight">
                       <span className="block text-xs font-bold text-[#17324D] whitespace-nowrap">
                         {currentRoleMeta.label}
                       </span>
                       <span className="block text-[10px] text-[#526675] whitespace-nowrap">
-                        Unified Control Plane · Tenant Isolation Aktif
+                        Role terverifikasi · Akses berbasis permission
                       </span>
                     </div>
-                    <ChevronDown className="h-3.5 w-3.5 text-[#526675]" />
-                  </button>
-
-                  {showRoleDropdown && (
-                    <div className="absolute left-0 top-12 z-40 w-80 rounded-[14px] border border-[#D8E3E9] bg-white p-2 shadow-lg">
-                      <p className="px-2.5 py-1 text-[11px] font-semibold text-[#718391]">
-                        Ganti Perspektif Role Platform
-                      </p>
-                      {SUPER_ADMIN_ROLES.map((r) => (
-                        <button
-                          key={r.key}
-                          type="button"
-                          onClick={() => {
-                            onChangeAdminRole(r.key);
-                            setShowRoleDropdown(false);
-                          }}
-                          className={`mt-1 flex w-full items-center justify-between rounded-[10px] px-2.5 py-2 text-left text-xs transition ${
-                            r.key === adminRole
-                              ? 'bg-[#E6F4F9] font-bold text-[#17324D]'
-                              : 'text-[#526675] hover:bg-[#F5F8FA]'
-                          }`}
-                        >
-                          <div>
-                            <p className="font-semibold text-[#17324D]">{r.label}</p>
-                            <p className="text-[11px] text-[#718391]">{r.scope}</p>
-                          </div>
-                          {r.key === adminRole && (
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-[#0284C7]" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
