@@ -135,6 +135,10 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     }
   }, [auth.loading, auth.session, auth.identity, tenantOptions, activeTenantId]);
 
+  const canManageOrganizations = auth.identity?.memberships.some((membership) =>
+    membership.tenant_id === activeTenantId && membership.permissions.includes('corporate.organization.manage')
+  ) ?? false;
+
   const overviewSnapshot = useMemo(
     () => activeTenant ? corporatePortalService.getExecutiveOverviewSnapshot(activeTenant) : null,
     [activeTenant]
@@ -447,6 +451,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     payments,
     users,
     organizations,
+    canManageOrganizations,
     alerts,
     reportHistory,
     analyticsFilter,
