@@ -58,7 +58,7 @@ export function CorporatePortalClient({
           <ExecutiveOverviewView
             tenant={portal.activeTenant}
             aiCreditsBalance={portal.aiCreditsBalance}
-            snapshot={portal.overviewSnapshot}
+            snapshot={portal.overviewSnapshot!}
             onNavigate={portal.navigateTo}
             onOpenTopUp={() => portal.setModal({ type: 'ai-credits-topup' })}
             onOpenContractModal={() =>
