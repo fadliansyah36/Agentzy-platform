@@ -42,13 +42,13 @@ async def list_organizations(
             and m.user_id = :user_id
             and m.status = 'active'
             and rp.permission_key = 'corporate.organization.read'
-        ) or exists (
+        ) or ( :aal2 = 'aal2' and exists (
           select 1 from public.memberships pm
           join public.membership_roles pmr on pmr.membership_id=pm.id
           join public.role_permissions prp on prp.role_id=pmr.role_id
           where pm.user_id=:user_id and pm.status='active' and prp.permission_key='platform.tenants.read'
-        )
-    """), {"tenant_id": tenant_id, "user_id": UUID(claims["sub"])})
+        ))
+    """), {"tenant_id": tenant_id, "user_id": UUID(claims["sub"]), "aal2": claims.get("aal")})
     if not permission.scalar_one():
         raise HTTPException(status_code=403, detail="Missing tenant organization read permission.")
 
