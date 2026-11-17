@@ -15,7 +15,7 @@ Source evidence:
 - Lockfile contains 1,130 package locator entries; deduplication by exact package name + version produces **1,037 unique resolved npm package coordinates**.
 - CycloneDX 1.6 SBOM: `docs/phase-00/sbom/bun-lock.cdx.json`.
 
-**Important qualification:** this is a resolved dependency inventory, not a completed license compliance reconciliation. The Bun lockfile contains package identities, exact versions, dependency metadata and integrity values, but no license declarations. SBOM components therefore use `NOASSERTION` and explicitly mark license status unresolved. Before acceptance, each package's authoritative package metadata, LICENSE file, NOTICE/attribution and transitive obligations must be reconciled; exceptions must be recorded. Do not infer licenses from package names or websites alone.
+**Important qualification:** this is a resolved dependency inventory, not a completed license reconciliation. The Bun lockfile contains package identities, exact versions, dependency metadata and integrity values, but no license declarations. SBOM components therefore use `NOASSERTION` as unresolved metadata. A proportionate automated Dependency & License Risk Review is now implemented in `docs/phase-00/DEPENDENCY_LICENSE_RISK_REVIEW.md`, `scripts/audit-dependency-licenses.mjs`, and `.github/workflows/dependency-license-review.yml`. It scans direct, transitive and development dependencies, reconciles exact package/version coordinates, flags unknown/copy-left/manual-review signals, and records LICENSE/NOTICE/COPYING evidence. **The workflow has not yet been executed; package-level results and keep/replace/exception decisions remain open.** Do not infer licenses from package names.
 
 Manifest compatibility issue remains: `next ^15.4.9` and `eslint-config-next 16.0.8` are different major lines; compatibility review is open. No dependency versions were changed.
 
@@ -114,3 +114,8 @@ Fresh read-only evidence:
 - No asset was deleted or moved.
 - No backend FastAPI or new frontend portal structure was created as part of this evidence pass.
 - The Maps config secret fallback was removed as a targeted source security fix.
+
+
+## 8. Dependency/license review implementation delta — 2026-11-18
+
+Committed automated workflow and normalizer. The workflow is designed to fail if the installed dependency tree does not exactly reconcile with all 1,037 unique SBOM package coordinates. It uploads collected upstream license-file evidence and commits generated JSON/Markdown review reports to `main` when changed. No dependency versions or application code were changed. The workflow has not been run in this session; this task remains PARTIAL pending the actual report and review decisions.
