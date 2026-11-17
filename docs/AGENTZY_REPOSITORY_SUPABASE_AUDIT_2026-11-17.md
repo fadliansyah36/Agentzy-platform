@@ -4,14 +4,14 @@ Date: 17 November 2026
 Repository: `fadliansyah36/Agentzy-platform`  
 Branch: `main`  
 Initial source audit HEAD: `110f5d923507fe02c0740cdd8f548f630f03d4e0`  
-Governance update HEAD (after backlog/README alignment): `c4660837f75a6d2a24ffe2e016598c13c75e0aa4`  
+Governance update HEAD (Phase 00 evidence and ADR alignment): `d3000bfd093d64318f6f0ae3957826fdd4dbea2f`  
 Supabase ref: `cwhjdnkotuhueeudpgeu`
 
 ## Executive result
 Existing portal UI is present. Implementation should be backend-first, not a UI redesign. No Python/FastAPI backend or Supabase migration directory was found in the audited repository tree. Portal hooks/services contain local initial collections and local React state. Corrected GitHub write access and Supabase project access are now available.
 
 ## Repository
-- 272 entries in recursive tree, not truncated.
+- 282 entries in recursive tree at the latest Phase 00 snapshot, not truncated (tree SHA `a9482d864aa6683027bbec02321ca469f1251596`). Existing portal path counts: `apps/admin` 55, `apps/corporate` 49, `apps/ai-workforce` 42, root `app` 28. The counts are paths, including directories, not source-file counts.
 - `apps/admin/`, `apps/corporate/`, and `apps/ai-workforce/` contain UI feature modules.
 - Root `app/` contains wrappers for admin, AI workforce, corporate, workforce and root landing route.
 - Missing: `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `docs/`, and root `AGENTS.md`.
@@ -49,4 +49,4 @@ Existing portal UI is present. Implementation should be backend-first, not a UI 
 5. The exposed SECURITY DEFINER function and remaining Auth/Storage/Realtime/Data API settings require a reviewed security baseline before migrations.
 6. Do not apply migrations or invent schema until the Master PRD and Technical Blueprint domain model is reconciled with the full live Supabase inventory.
 
-This report is an updated partial live audit. It is not a complete source review, security assessment, or Phase 00 completion claim.
+See `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md` for the portal/domain/API ownership proposal, migration strategy, explicit audit limitations and Phase 00 acceptance matrix. This report remains a partial source/security audit, not a Phase 00 completion claim.
