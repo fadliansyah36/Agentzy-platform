@@ -80,7 +80,7 @@ export function useAIWorkforcePortal(
   const [aiCreditsBalance, setAiCreditsBalance] = useState(0);
   const [monthlySoftLimit, setMonthlySoftLimit] = useState(0);
   const [monthlyHardLimit, setMonthlyHardLimit] = useState(0);
-  const [offlinePwaMode, setOfflinePwaMode] = useState(true);
+  const [offlinePwaMode, setOfflinePwaMode] = useState(false);
 
   // Content Studio (Chat + Artifact for Staff Sales)
   const [contentArtifacts, setContentArtifacts] = useState<
