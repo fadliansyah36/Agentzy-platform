@@ -24,7 +24,7 @@ User delivery constraint: direct work on `main`; no staging or real-world/UAT te
 - Not present in the recursive tree: `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `packages/api-client/`, `packages/api-contracts/`, `packages/design-tokens/`, `workers/`, `services/`, `infrastructure/`.
 - Root app contains Next.js route handlers for AI content generation, maps config and reverse geocoding. Direct source review confirms the AI handler invokes Google GenAI directly, hardcodes a model, and accepts tenantName from the request body. This violates the intended FastAPI gateway/server-resolved tenant boundary and is tracked for implementation remediation.
 - Maps config GET handler may return the server-side GOOGLE_MAPS_API_KEY if the NEXT_PUBLIC key is absent; treat as a credential-exposure risk and move provider calls/configuration behind a restricted backend contract. A browser key must be separately referrer/API restricted.
-- `package.json` declares Next.js `^15.4.9`, React `^19.2.1`, TypeScript `5.9.3`, Tailwind `4.1.11`, and `eslint-config-next` `16.0.8`; this Next/ESLint-config major mismatch requires compatibility review. `bun.lock` is the only root lockfile observed; no pnpm/npm/yarn lockfile was found. Full resolved dependency license/SBOM reconciliation remains open.
+- `package.json` declares Next.js `^15.4.9`, React `^19.2.1`, TypeScript `5.9.3`, Tailwind `4.1.11`, and `eslint-config-next` `16.0.8`; this Next/ESLint-config major mismatch requires compatibility review. `bun.lock` is the only root lockfile observed; no pnpm/npm/yarn lockfile was found. Resolved dependency inventory is present (1,037 exact package coordinates). Automated license/NOTICE risk-review script and workflow are now committed; package-by-package reconciliation remains pending workflow execution and exact-set evidence.
 - Existing admin/corporate/AI workforce screens and portal modules remain the UI baseline; no redesign is authorized.
 
 This is a structural inventory. It does not claim every source file has been line-by-line reviewed.
@@ -100,7 +100,7 @@ These are not marked complete. If the connector cannot expose a configuration ca
 |---|---|---|---|
 | P00-AC-01 | PRD/Blueprint/AGENTS authority and phase sequence are explicit. | Source references and repo governance docs | PARTIAL |
 | P00-AC-02 | Repository tree and application boundaries inventoried. | Recursive tree SHA, count, path inventory | PARTIAL — structural tree captured; source-level review pending |
-| P00-AC-03 | Dependency, license, environment-name, asset and design-token inventory complete. | Generated inventories, license reconciliation, token map | PARTIAL — CSS tokens and package/env names sampled; lockfile license and full asset inventory pending |
+| P00-AC-03 | Dependency, license-risk, environment-name, asset and design-token inventory complete. | Generated inventories, license-risk reconciliation, notice/attribution evidence, token map | PARTIAL — 1,037-package inventory exists and automated license-risk workflow is committed; package results await workflow execution; full asset metadata/usage remains pending |
 | P00-AC-04 | Portal-to-domain-to-API ownership agreed. | This matrix plus owner sign-off and route inventory | PARTIAL — proposed boundaries documented; endpoint inventory and owner sign-off pending |
 | P00-AC-05 | Supabase schema, migration history, extensions, RLS, grants, functions, triggers, Storage and Realtime reviewed. | Read-only SQL outputs, advisor snapshots, config evidence | PARTIAL — project catalogs reviewed; configuration categories listed above open |
 | P00-AC-06 | Security Advisor findings disposition approved. | Finding, impact analysis, remediation approval/commit and re-advisor evidence | OPEN |
@@ -123,3 +123,8 @@ The current continuation evidence, including the resolved dependency inventory, 
 - `docs/phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md` — verified existing frontend folder mapping; backend/platform target paths unchanged.
 
 A targeted security fix removed the server-only Maps key fallback from `app/api/config/maps/route.ts` (commit `00592945136770307b17d4e87b5db1ad112748c3`). No Supabase configuration, schema, ACL, policy, function or trigger was changed. Phase 00 remains IN PROGRESS and Phase 01 remains blocked on acceptance/sign-off.
+
+
+## 9. Dependency/license review implementation — 2026-11-18
+
+A proportionate Dependency & License Risk Review has been added at `docs/phase-00/DEPENDENCY_LICENSE_RISK_REVIEW.md`. The automated scanner and GitHub Actions workflow are committed at `scripts/audit-dependency-licenses.mjs` and `.github/workflows/dependency-license-review.yml`. The workflow scans installed direct/transitive/development packages, reconciles exact package coordinates against the 1,037-component SBOM, records license and NOTICE/COPYING evidence, and publishes a per-package report. **The workflow has not yet been executed in this session; no license classifications or keep/replace decisions are claimed. P00-AC-03 remains PARTIAL.**
