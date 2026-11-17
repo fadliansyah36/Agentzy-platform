@@ -79,10 +79,6 @@ export function AdminPortalClient({
         activeBreakGlassCount={activeBreakGlassCount}
         toastMessage={portal.toastMessage}
         onNavigate={portal.navigateTo}
-        onChangeAdminRole={(role) => {
-          portal.setAdminRole(role);
-          portal.showToast(`Perspektif role diubah ke ${role}.`);
-        }}
         onOpenQuickAction={() => portal.setModal({ type: 'quick-action' })}
         onOpenBreakGlass={() => portal.setModal({ type: 'break-glass-request' })}
         onLogout={portal.handleLogout}
