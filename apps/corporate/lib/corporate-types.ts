@@ -33,13 +33,13 @@ export interface CorporateTenant {
   id: string;
   code: string;
   name: string;
-  legalName: string;
-  industry: string;
+  legalName?: string;
+  industry?: string;
   status: 'Aktif' | 'Onboarding';
-  primaryContactEmail: string;
-  region: string;
-  contractExpiryDays: number;
-  logoInitials: string;
+  primaryContactEmail?: string;
+  region?: string;
+  contractExpiryDays?: number;
+  logoInitials?: string;
 }
 
 export interface AnalyticsFilterState {
