@@ -133,3 +133,44 @@ A proportionate Dependency & License Risk Review has been added at `docs/phase-0
 ## 10. Dependency/license automated results — 2026-11-18
 
 GitHub Actions run `44138463292` completed successfully. Exact SBOM reconciliation: 1,037/1,037 packages; 960 installed-tree packages plus 77 platform-specific registry fallbacks; zero unresolved registry lookups. Risk counts: 966 permissive/attribution-check, 26 LGPL/MPL review, 5 manual-expression review, 40 declared MIT/Apache packages without a detected package LICENSE file. 988 license texts are consolidated in `docs/phase-00/reports/THIRD_PARTY_LICENSES.generated.md`; two NOTICE files were detected and retained. See `docs/phase-00/DEPENDENCY_LICENSE_FINDINGS_2026-11-18.md` and machine report. P00-AC-03 remains PARTIAL pending review of 26/5/40 entries and attribution/distribution decisions.
+
+
+## 10. Execution continuation evidence — 2026-11-18
+
+Latest connector-confirmed evidence supersedes the earlier repository tree count in §2 where it differs. Detailed re-audit: docs/phase-00/PHASE00_REAUDIT_DELTA_2026-11-18.md.
+
+### Repository
+
+- main commit at re-audit: 71bc1920afdec076f4818dc092a9fcdd4e417a46; recursive tree has 1,302 entries (101 directories, 1,201 files), truncated=false.
+- The large docs/ subtree (1,017 files) includes the retained upstream-notice/license bundle; it must not be interpreted as additional app source.
+- Targeted portal source audit is extended in docs/AGENTZY_SOURCE_CODE_DEEP_DIVE_AUDIT_2026-11-17.md. It confirms local INITIAL_* collections, local authentication/tenant defaults and no FastAPI client integration in the inspected Super Admin and Corporate hooks/services. AI Workforce uses a Next.js content-generation route that invokes Google GenAI directly.
+- Existing app/globals.css tokens were re-opened and confirmed. Preserve existing portal styles and do not create duplicate portal roots.
+
+### Supabase read-only refresh
+
+- Agentzy migration list: empty. public application tables: zero.
+- Storage buckets and objects: zero. auth.users: zero.
+- No pg_policies rows for public or storage.
+- supabase_realtime publication exists; no tables are currently attached to it.
+- Installed extensions reconfirmed: vector 0.8.2, pgcrypto 1.3, pg_stat_statements 1.11, supabase_vault 0.3.2, uuid-ossp 1.1.
+- Performance Advisor returned no lints; Security Advisor continues to report two WARN findings for public.rls_auto_enable().
+- Function ACL, event trigger and SECURITY DEFINER attributes were rechecked read-only; no database change was made.
+
+### Updated acceptance status
+
+| ID | Status | Latest disposition |
+|---|---|---|
+| P00-AC-01 | PARTIAL | Governance documents are present; final sign-off remains open. |
+| P00-AC-02 | PARTIAL | Recursive tree refreshed and targeted portal hooks/services inspected; complete source, route, component, environment and asset ownership inventory remains open. |
+| P00-AC-03 | PARTIAL | SBOM and risk triage exist; package exception dispositions, asset dimensions/provenance/use, and deployment environment reconciliation remain open. |
+| P00-AC-04 | PARTIAL | Portal service/hook findings added; full screen/action-to-domain/API matrix and owner sign-off remain open. |
+| P00-AC-05 | PARTIAL | Database catalogs rechecked; Auth provider settings, Data API exposed schemas, complete grants/default privileges and Storage service configuration remain unverified. |
+| P00-AC-06 | OPEN | Two Security Advisor WARN findings and fail-open RLS trigger behavior remain unresolved. |
+| P00-AC-07 | COMPLETE | ADR register exists; relevant future decisions remain explicitly open. |
+| P00-AC-08 | PARTIAL | M000–M220 mapping exists; M000 policy and full reconciliation/sign-off remain open. |
+| P00-AC-09 | OPEN | Definition of Done evidence is incomplete. |
+| P00-AC-10 | OPEN | Phase 01 readiness is not approved. |
+
+### Non-actions
+
+No Supabase migration, DDL, grant, policy, function, trigger, project setting, seed, or business data was changed. No application code was changed during this continuation. No staging, UAT, real-world, load, security-acceptance, or production deployment test was run. Phase 01 has not started.
