@@ -21,8 +21,10 @@ export function AIWorkforceLoginView({
   onStartFromSplash,
   onLogin,
   onSwitchMode,
+  systemError,
 }: {
   mode: 'splash' | 'login';
+  systemError?: string | null;
   onStartFromSplash: () => void;
   onLogin: (email: string, password: string, method: 'password' | 'sso') => Promise<void>;
   onSwitchMode: (mode: 'splash' | 'login') => void;
@@ -154,6 +156,7 @@ export function AIWorkforceLoginView({
           </p>
         </div>
 
+        {systemError && <p className="mt-4 rounded-[8px] border border-[#A96816]/30 bg-[#A96816]/10 px-3 py-2 text-xs font-medium text-[#A96816]">{systemError}</p>}
         <form
           onSubmit={async (e) => {
             e.preventDefault();
