@@ -242,7 +242,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     const assignedRoles = auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? [];
     const verifiedRole = (['platform_super_admin','platform_security_admin','platform_finance_admin','platform_operations_admin'] as SuperAdminRoleKey[])
       .find((candidate) => assignedRoles.includes(candidate));
-    if (auth.session && auth.identity && verifiedRole) {
+    if (auth.session && auth.identity && verifiedRole && auth.aal === 'aal2') {
       setAdminRole(verifiedRole);
       setAdminEmail(auth.identity.email ?? auth.session.user.email ?? '');
       setIsAuthenticated(true);
@@ -252,11 +252,12 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       setAdminEmail('');
       if (auth.session && auth.identity && !verifiedRole) void auth.signOut();
     }
-  }, [auth.loading, auth.session, auth.identity, auth.signOut]);
+  }, [auth.loading, auth.session, auth.identity, auth.aal, auth.signOut]);
 
   const handleLogin = useCallback(
     async (_requestedRole: SuperAdminRoleKey, email: string, password: string, mfaCode: string) => {
       const context = await auth.signIn(email, password, true, mfaCode);
+      if (context.aal !== 'aal2') throw new Error('MFA TOTP wajib diaktifkan. Gunakan menu Setup MFA TOTP sebelum masuk Super Admin.');
       const assignedRoles = context.identity.memberships.flatMap((membership) => membership.role_keys);
       const verifiedRole = (['platform_super_admin','platform_security_admin','platform_finance_admin','platform_operations_admin'] as SuperAdminRoleKey[])
         .find((candidate) => assignedRoles.includes(candidate));
