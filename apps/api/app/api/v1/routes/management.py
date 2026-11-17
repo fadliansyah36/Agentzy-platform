@@ -239,3 +239,18 @@ async def list_tenant_memberships(
         order by m.created_at desc
     """), {"tenant_id": tenant_id})
     return [dict(row) for row in result.mappings().all()]
+
+
+@router.get("/tenants/directory", tags=["Tenant Administration"])
+async def list_platform_tenants(
+    claims: dict = Depends(current_claims),
+    session: AsyncSession = Depends(user_session),
+):
+    user_id = UUID(claims["sub"])
+    if not await _has_platform_permission(session, user_id, "platform.tenants.read"):
+        raise HTTPException(status_code=403, detail="Missing platform.tenants.read permission.")
+    result = await session.execute(text("""
+        select id,name,slug,tenant_type,status,created_at,updated_at
+        from public.tenants order by created_at desc
+    """))
+    return [dict(row) for row in result.mappings().all()]
