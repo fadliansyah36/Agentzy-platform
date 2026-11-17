@@ -59,6 +59,18 @@ async def _has_platform_permission(session: AsyncSession, user_id: UUID, permiss
     return bool(result.scalar_one())
 
 
+async def _has_tenant_role(session: AsyncSession, user_id: UUID, tenant_id: UUID, role_key: str) -> bool:
+    result = await session.execute(text("""
+        select exists (
+          select 1 from public.memberships m
+          join public.membership_roles mr on mr.membership_id=m.id
+          join public.roles r on r.id=mr.role_id
+          where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active' and r.key=:role_key
+        )
+    """), {"user_id": user_id, "tenant_id": tenant_id, "role_key": role_key})
+    return bool(result.scalar_one())
+
+
 async def _has_tenant_permission(session: AsyncSession, user_id: UUID, tenant_id: UUID, permissions: tuple[str, ...]) -> bool:
     result = await session.execute(text("""
         select exists (
@@ -156,6 +168,13 @@ async def invite_tenant_member(
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing tenant membership management permission.")
     role_key = payload.role_key.strip().lower()
+    if role_key in ("corporate_owner", "corporate_admin", "corporate_ai_manager", "ai_workforce_admin"):
+            is_owner = await _has_tenant_role(session, user_id, tenant_id, "corporate_owner")
+            is_platform_manager = await _has_platform_permission(session, user_id, "platform.memberships.manage")
+            if is_platform_manager:
+                _require_aal2(claims)
+            if not is_owner and not is_platform_manager:
+                raise HTTPException(status_code=403, detail="Only the tenant owner or platform membership administrator may assign this role.")
     if role_key.startswith("platform_"):
         raise HTTPException(status_code=422, detail="Platform roles cannot be assigned inside a tenant.")
     role_result = await session.execute(text("""
@@ -233,11 +252,12 @@ async def list_role_templates(
         allowed = bool(result.scalar_one())
     if not allowed:
         raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
-    result = await session.execute(text("""
+    role_filter = "" if allowed else "and r.key not like 'platform_%'"
+    result = await session.execute(text(f"""
         select r.id,r.key,r.name,r.description,r.is_system,
-               coalesce(array_agg(rp.permission_key) filter (where rp.permission_key is not null),'{}') as permissions
+               coalesce(array_agg(rp.permission_key) filter (where rp.permission_key is not null),'{{}}') as permissions
         from public.roles r left join public.role_permissions rp on rp.role_id=r.id
-        where r.tenant_id is null
+        where r.tenant_id is null {role_filter}
         group by r.id order by r.key
     """))
     return [dict(row) for row in result.mappings().all()]
