@@ -169,12 +169,12 @@ async def invite_tenant_member(
         raise HTTPException(status_code=403, detail="Missing tenant membership management permission.")
     role_key = payload.role_key.strip().lower()
     if role_key in ("corporate_owner", "corporate_admin", "corporate_ai_manager", "ai_workforce_admin"):
-            is_owner = await _has_tenant_role(session, user_id, tenant_id, "corporate_owner")
-            is_platform_manager = await _has_platform_permission(session, user_id, "platform.memberships.manage")
-            if is_platform_manager:
-                _require_aal2(claims)
-            if not is_owner and not is_platform_manager:
-                raise HTTPException(status_code=403, detail="Only the tenant owner or platform membership administrator may assign this role.")
+        is_owner = await _has_tenant_role(session, user_id, tenant_id, "corporate_owner")
+        is_platform_manager = await _has_platform_permission(session, user_id, "platform.memberships.manage")
+        if is_platform_manager:
+            _require_aal2(claims)
+        if not is_owner and not is_platform_manager:
+            raise HTTPException(status_code=403, detail="Only the tenant owner or platform membership administrator may assign this role.")
     if role_key.startswith("platform_"):
         raise HTTPException(status_code=422, detail="Platform roles cannot be assigned inside a tenant.")
     role_result = await session.execute(text("""
