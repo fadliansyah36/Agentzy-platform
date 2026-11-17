@@ -102,12 +102,17 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     status: 'Teraktivasi',
   });
 
-  const tenantOptions = useMemo(() => auth.tenants.map((tenant) => ({
-    id: tenant.id,
-    code: tenant.slug,
-    name: tenant.name,
-    status: tenant.status === 'active' ? 'Aktif' as const : 'Onboarding' as const,
-  })), [auth.tenants]);
+  const tenantOptions = useMemo(() => {
+    const allowed = new Set((auth.identity?.memberships ?? [])
+      .filter((membership) => membership.permissions.includes('corporate.overview.read'))
+      .map((membership) => membership.tenant_id));
+    return auth.tenants.filter((tenant) => allowed.has(tenant.id)).map((tenant) => ({
+      id: tenant.id,
+      code: tenant.slug,
+      name: tenant.name,
+      status: tenant.status === 'active' ? 'Aktif' as const : 'Onboarding' as const,
+    }));
+  }, [auth.identity, auth.tenants]);
   const activeTenant = useMemo(
     () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
     [tenantOptions, activeTenantId]
@@ -115,18 +120,18 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   useEffect(() => {
     if (auth.loading) return;
-    if (auth.session && auth.identity && auth.tenants.length > 0) {
-      const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
+    if (auth.session && auth.identity && tenantOptions.length > 0) {
+      const tenant = tenantOptions.find((item) => item.id === activeTenantId) ?? tenantOptions[0];
       setActiveTenantId(tenant.id);
       setIsAuthenticated(true);
       setActiveSection((current) => current === 'login' ? 'overview' : current);
     } else {
       setIsAuthenticated(false);
-      if (auth.session && auth.identity && auth.tenants.length === 0) {
+      if (auth.session && auth.identity && tenantOptions.length === 0) {
         setActiveSection('login');
       }
     }
-  }, [auth.loading, auth.session, auth.identity, auth.tenants, activeTenantId]);
+  }, [auth.loading, auth.session, auth.identity, tenantOptions, activeTenantId]);
 
   const overviewSnapshot = useMemo(
     () => corporatePortalService.getExecutiveOverviewSnapshot(activeTenantId),
@@ -157,11 +162,15 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
         return;
       }
       const context = await auth.signIn(email, password);
-      if (!context.tenants.length) {
+      const allowed = new Set(context.identity.memberships
+        .filter((membership) => membership.permissions.includes('corporate.overview.read'))
+        .map((membership) => membership.tenant_id));
+      const tenant = context.tenants.find((item) => allowed.has(item.id));
+      if (!tenant) {
         await auth.signOut();
-        throw new Error('Akun berhasil diverifikasi, tetapi belum memiliki membership tenant aktif.');
+        throw new Error('Akun belum memiliki permission corporate.overview.read pada tenant aktif.');
       }
-      setActiveTenantId(context.tenants[0].id);
+      setActiveTenantId(tenant.id);
       setIsAuthenticated(true);
       setActiveSection('overview');
       showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
@@ -180,14 +189,15 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   const handleSwitchTenant = useCallback(
     (tenantId: string) => {
       const tenant = auth.tenants.find((item) => item.id === tenantId);
-      if (!tenant) {
-        showToast('Tenant tidak termasuk membership akun ini.');
+      const membership = auth.identity?.memberships.find((item) => item.tenant_id === tenantId);
+      if (!tenant || !membership?.permissions.includes('corporate.overview.read')) {
+        showToast('Tenant tidak memiliki permission Corporate Portal untuk akun ini.');
         return;
       }
       setActiveTenantId(tenant.id);
       showToast(`Konteks tenant aktif berpindah ke ${tenant.name}.`);
     },
-    [auth.tenants, showToast]
+    [auth.tenants, auth.identity, showToast]
   );
 
   const handleToggleAIWorkerStatus = useCallback(
