@@ -176,7 +176,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           department: '',
           branchScope: '',
           status: row.status === 'active' ? 'Aktif' as const : 'Menunggu Aktivasi' as const,
-          mfaEnabled: false,
+          mfaEnabled: null,
           lastActive: 'Belum ada aktivitas',
         };
       }));
