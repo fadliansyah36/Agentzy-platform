@@ -49,7 +49,6 @@ export function AdminPortalClient({
   if (!portal.isAuthenticated || portal.activeSection === 'login') {
     return (
       <AdminLoginView
-        initialRole={portal.adminRole}
         onLogin={portal.handleLogin}
         systemError={portal.authError}
       />
