@@ -56,3 +56,13 @@ See `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md` for the detailed accepta
 ## Frontend structure errata
 
 The authoritative frontend folder mapping is recorded in [`docs/phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md`](phase-00/FRONTEND_STRUCTURE_ALIGNMENT.md). It documents the existing root `app/` route surfaces and `apps/admin/`, `apps/corporate/`, `apps/ai-workforce/` feature modules. Backend/API and platform target paths remain unchanged.
+
+## Phase 00 continuation evidence — 2026-11-18
+
+- Resolved dependency inventory: CycloneDX 1.6 file at `docs/phase-00/sbom/bun-lock.cdx.json` with 1,037 unique exact npm name/version coordinates. License/NOTICE obligations remain unresolved because the lockfile has no license metadata.
+- Asset metadata: `docs/phase-00/ASSET_METADATA_INVENTORY_2026-11-18.md` records 31 raster files, 29,037,921 bytes, Git blob hashes and six duplicate blob pairs. Pixel dimensions and complete provenance/use mapping remain open.
+- Environment review: `.env.example` contains GEMINI_API_KEY, GOOGLE_MAPS_API_KEY and NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. Selected source references were reviewed; full repository source scan and deployment-secret reconciliation remain open. `DISABLE_HMR` is also referenced by `next.config.ts`.
+- Targeted source security fix: `app/api/config/maps/route.ts` now exposes only NEXT_PUBLIC_GOOGLE_MAPS_API_KEY and no longer falls back to the server-only GOOGLE_MAPS_API_KEY. Commit `00592945136770307b17d4e87b5db1ad112748c3`.
+- Fresh Supabase read-only inspection confirms the existing `ensure_rls` event trigger and the `public.rls_auto_enable()` SECURITY DEFINER function/ACL. Two Security Advisor WARN findings remain; no ACL/function/trigger/schema change was applied pending privilege-semantics validation without violating the no-staging constraint.
+- Auth provider/security and Data API exposed-schema settings remain unverified because they are not exposed by the connected Supabase tool surface. Obtain authorized Dashboard evidence before sign-off.
+- Full detail: `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.md`.
