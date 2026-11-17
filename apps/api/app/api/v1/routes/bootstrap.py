@@ -65,7 +65,7 @@ async def bootstrap_platform_admin(
         async with httpx.AsyncClient(timeout=25) as client:
             response = await client.post(
                 invite_url,
-                params={"redirect_to": f"{settings.app_base_url.rstrip('/')}/auth/callback"},
+                params={"redirect_to": f"{settings.app_base_url.rstrip('/')}/admin"},
                 headers=headers,
                 json={"email": payload.email, "data": {"full_name": payload.full_name}},
             )
