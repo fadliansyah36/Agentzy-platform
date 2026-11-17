@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 from uuid import uuid4
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.api.v1.router import router as v1_router
@@ -33,6 +34,25 @@ async def request_context(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     structlog.contextvars.clear_contextvars()
     return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    code = "REQUEST_REJECTED" if exc.status_code < 500 else "API_ERROR"
+    message = exc.detail if isinstance(exc.detail, str) else "Permintaan tidak dapat diproses."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": code, "message": message}},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"error": {"code": "VALIDATION_ERROR", "message": "Data permintaan tidak valid.", "details": exc.errors()}},
+    )
 
 
 @app.exception_handler(Exception)
