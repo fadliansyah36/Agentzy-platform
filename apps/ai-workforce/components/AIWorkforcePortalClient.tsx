@@ -46,6 +46,7 @@ export function AIWorkforcePortalClient({
         mode={portal.activeSection === 'splash' ? 'splash' : 'login'}
         onStartFromSplash={() => portal.navigateTo('login')}
         onLogin={portal.handleLogin}
+        systemError={portal.authError}
         onSwitchMode={(m) => portal.navigateTo(m)}
       />
     );
