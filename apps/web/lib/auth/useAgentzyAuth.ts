@@ -5,36 +5,47 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { getMyIdentity, getMyTenants, type AgentzyIdentity, type AgentzyTenant } from '@/apps/web/lib/api-client';
 import { getSupabaseBrowserClient } from '@/apps/web/lib/supabase/client';
 
-type AuthSnapshot = { session: Session | null; identity: AgentzyIdentity | null; tenants: AgentzyTenant[] };
-type AuthContext = { session: Session; identity: AgentzyIdentity; tenants: AgentzyTenant[] };
+type AuthSnapshot = {
+  session: Session | null;
+  identity: AgentzyIdentity | null;
+  tenants: AgentzyTenant[];
+  aal: string | null;
+};
+type AuthContext = {
+  session: Session;
+  identity: AgentzyIdentity;
+  tenants: AgentzyTenant[];
+  aal: string | null;
+};
 
-async function loadContext(session: Session): Promise<AuthContext> {
-  const [identity, tenants] = await Promise.all([
+async function loadContext(client: SupabaseClient, session: Session): Promise<AuthContext> {
+  const [identity, tenants, assurance] = await Promise.all([
     getMyIdentity(session.access_token),
     getMyTenants(session.access_token),
+    client.auth.mfa.getAuthenticatorAssuranceLevel(),
   ]);
-  return { session, identity, tenants };
+  if (assurance.error) throw assurance.error;
+  return { session, identity, tenants, aal: assurance.data.currentLevel };
 }
 
 export function useAgentzyAuth() {
-  const [snapshot, setSnapshot] = useState<AuthSnapshot>({ session: null, identity: null, tenants: [] });
+  const [snapshot, setSnapshot] = useState<AuthSnapshot>({ session: null, identity: null, tenants: [], aal: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const hydrate = useCallback(async (_client: SupabaseClient, session: Session | null) => {
+  const hydrate = useCallback(async (client: SupabaseClient, session: Session | null) => {
     if (!session) {
-      setSnapshot({ session: null, identity: null, tenants: [] });
+      setSnapshot({ session: null, identity: null, tenants: [], aal: null });
       setError(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const context = await loadContext(session);
-      setSnapshot(context);
+      setSnapshot(await loadContext(client, session));
       setError(null);
     } catch (cause) {
-      setSnapshot({ session, identity: null, tenants: [] });
+      setSnapshot({ session, identity: null, tenants: [], aal: null });
       setError(cause instanceof Error ? cause.message : 'Gagal memuat identitas Agentzy.');
     } finally {
       setLoading(false);
@@ -69,6 +80,7 @@ export function useAgentzyAuth() {
     const { data, error: signInError } = await client.auth.signInWithPassword({ email, password });
     if (signInError) throw signInError;
     if (!data.session) throw new Error('Supabase tidak mengembalikan session aktif.');
+    let session = data.session;
 
     if (requireMfa) {
       const { data: assurance, error: assuranceError } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -77,18 +89,29 @@ export function useAgentzyAuth() {
         const { data: factors, error: factorsError } = await client.auth.mfa.listFactors();
         if (factorsError) throw factorsError;
         const factor = factors.totp.find((item) => item.status === 'verified');
-        if (!factor) throw new Error('Akun Super Admin wajib memiliki MFA TOTP terverifikasi.');
-        if (!mfaCode || !/^\\d{6}$/.test(mfaCode)) throw new Error('Masukkan kode MFA 6 digit dari authenticator.');
+        if (!factor) {
+          const context = await loadContext(client, session);
+          setSnapshot(context);
+          setError('MFA TOTP belum terdaftar. Selesaikan pendaftaran MFA sebelum membuka Super Admin.');
+          setLoading(false);
+          return context;
+        }
+        if (!mfaCode || !/^\\d{6}$/.test(mfaCode)) {
+          throw new Error('Masukkan kode MFA 6 digit dari authenticator.');
+        }
         const { data: challenge, error: challengeError } = await client.auth.mfa.challenge({ factorId: factor.id });
         if (challengeError) throw challengeError;
         const { error: verifyError } = await client.auth.mfa.verify({
           factorId: factor.id, challengeId: challenge.id, code: mfaCode,
         });
         if (verifyError) throw verifyError;
+        const refreshed = await client.auth.getSession();
+        if (refreshed.error) throw refreshed.error;
+        session = refreshed.data.session ?? session;
       }
     }
 
-    const context = await loadContext(data.session);
+    const context = await loadContext(client, session);
     setSnapshot(context);
     setError(null);
     setLoading(false);
@@ -110,7 +133,7 @@ export function useAgentzyAuth() {
       const { error: signOutError } = await client.auth.signOut();
       if (signOutError) throw signOutError;
     }
-    setSnapshot({ session: null, identity: null, tenants: [] });
+    setSnapshot({ session: null, identity: null, tenants: [], aal: null });
     setError(null);
     setLoading(false);
   }, []);
