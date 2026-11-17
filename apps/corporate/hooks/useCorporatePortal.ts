@@ -6,6 +6,7 @@ import {
 } from '../lib/corporate-data';
 import { corporatePortalService } from '../services/corporate-service';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
+import { inviteTenantMember, listTenantMemberships } from '@/apps/web/lib/api-client';
 import type {
   AICreditTransaction,
   AIWorkerRecord,
@@ -138,6 +139,34 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     [activeTenant]
   );
 
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) return;
+    let active = true;
+    void listTenantMemberships(accessToken, activeTenantId).then((rows) => {
+      if (!active) return;
+      setUsers(rows.map((row) => {
+        const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? 'corporate_auditor') as CorporateRoleKey;
+        const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
+        return {
+          id: row.id,
+          name: row.display_name ?? row.email ?? row.user_id,
+          email: row.email ?? '',
+          roleKey,
+          roleLabel: roleMeta?.label ?? roleKey,
+          department: '',
+          branchScope: '',
+          status: row.status === 'active' ? 'Aktif' as const : 'Menunggu Aktivasi' as const,
+          mfaEnabled: false,
+          lastActive: 'Belum ada aktivitas',
+        };
+      }));
+    }).catch((error) => {
+      if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat membership tenant.');
+    });
+    return () => { active = false; };
+  }, [auth.session?.access_token, activeTenantId, showToast]);
+
   const nextId = (prefix: string) => {
     idCounter.current += 1;
     return `${prefix}-${idCounter.current}`;
@@ -263,31 +292,41 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   );
 
   const handleInviteUser = useCallback(
-    (payload: {
+    async (payload: {
       name: string;
       email: string;
       roleKey: CorporateRoleKey;
       department: string;
       branchScope: string;
     }) => {
-      const roleMeta = CORPORATE_ROLE_OPTIONS.find((r) => r.key === payload.roleKey);
-      const nextUser: CorporateUserMember = {
-        id: nextId('USR'),
-        name: payload.name,
+      const accessToken = auth.session?.access_token;
+      if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+      await inviteTenantMember(accessToken, activeTenantId, {
         email: payload.email,
-        roleKey: payload.roleKey,
-        roleLabel: roleMeta?.label ?? payload.roleKey,
-        department: payload.department,
-        branchScope: payload.branchScope,
-        status: 'Menunggu Aktivasi',
-        mfaEnabled: true,
-        lastActive: 'Undangan terkirim',
-      };
-      setUsers((prev) => [nextUser, ...prev]);
+        full_name: payload.name,
+        role_key: payload.roleKey,
+      });
+      const rows = await listTenantMemberships(accessToken, activeTenantId);
+      setUsers(rows.map((row) => {
+        const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? 'corporate_auditor') as CorporateRoleKey;
+        const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
+        return {
+          id: row.id,
+          name: row.display_name ?? row.email ?? row.user_id,
+          email: row.email ?? '',
+          roleKey,
+          roleLabel: roleMeta?.label ?? roleKey,
+          department: '',
+          branchScope: '',
+          status: row.status === 'active' ? 'Aktif' as const : 'Menunggu Aktivasi' as const,
+          mfaEnabled: false,
+          lastActive: 'Undangan dikirim',
+        };
+      }));
       setModal({ type: 'none' });
-      showToast(`Undangan RBAC dikirim ke ${payload.email} (${nextUser.roleLabel}).`);
+      showToast(`Undangan Supabase dikirim ke ${payload.email}.`);
     },
-    [showToast]
+    [auth.session?.access_token, activeTenantId, showToast]
   );
 
   const handleMarkAlertRead = useCallback((alertId: string) => {
