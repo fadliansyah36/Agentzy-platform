@@ -16,7 +16,7 @@ Verified read-only project metadata on 18 Nov 2026: project `Agentzy-db`, status
 
 ## Recursive repository inventory
 
-GitHub recursive tree API on `main`: 284 entries, `truncated=false`. This is the full returned tree at the time of capture.
+GitHub recursive tree API on `main`: 286 entries, `truncated=false` after adding the Phase 00 evidence documents. Earlier pre-documentation inventory was 284 entries.
 
 Existing application structure:
 - `app/` — Next.js App Router, including root landing route, portal wrappers and Next.js API route handlers.
@@ -85,6 +85,10 @@ Source: `app/globals.css` at the inspected `main` tree.
 - Radius: 6/10/14/20px; shadows `--az-shadow-sm` and `--az-shadow-md`.
 - Typography: Plus Jakarta Sans; JetBrains Mono for technical/tabular values.
 - Google sign-in button baseline: white background, 1px #B8C9D3 border, 10px radius, 14px text, 44px height, full width, 600 font weight; hover uses canvas surface and muted blue border.
+
+## Asset path inventory (structural, not full media audit)
+
+Latest recursive tree contains 31 raster image files by extension: 11 PNG, 13 JPG/JPEG, and 7 WebP. Relevant directories include `public/images/`, `public/assets/aistudio/`, and `src/assets/images/`. The asset paths include Agentzy logos/icons, PWA icons, ecosystem/hero/workforce illustrations and uploaded AI Studio references. The tree inventory contains no GLB/GLTF, video, or font files by extension. Several files under `public/assets/aistudio/` are Markdown or uploaded reference files, not production image assets. Dimensions, byte sizes, hashes, duplicate detection and component usage mapping remain pending; do not infer asset usage from names.
 
 ## Remaining Phase 00 inventory work
 
