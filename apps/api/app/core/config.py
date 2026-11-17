@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_secret: str | None = None
+    supabase_service_role_key: str | None = None
+    platform_bootstrap_token: str | None = None
+    app_base_url: str = 'http://localhost:3000'
     database_url: str
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
