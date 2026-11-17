@@ -30,16 +30,20 @@ export function AIWorkforcePortalClient({
 }) {
   const portal = useAIWorkforcePortal(initialSection);
 
-  // Screens 1 & 2: Splash Onboarding or Login & Pilih Tenant
+  if (portal.authLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#F5F8FA] text-sm font-medium text-[#526675]">Memverifikasi sesi Agentzy…</div>;
+  }
+
+  // Screens 1 & 2: Splash Onboarding or Login
   if (
     !portal.isAuthenticated ||
+    !portal.activeTenant ||
     portal.activeSection === 'splash' ||
     portal.activeSection === 'login'
   ) {
     return (
       <AIWorkforceLoginView
         mode={portal.activeSection === 'splash' ? 'splash' : 'login'}
-        initialTenantId={portal.activeTenantId}
         onStartFromSplash={() => portal.navigateTo('login')}
         onLogin={portal.handleLogin}
         onSwitchMode={(m) => portal.navigateTo(m)}
@@ -64,18 +68,11 @@ export function AIWorkforcePortalClient({
         toastMessage={portal.toastMessage}
         onNavigate={portal.navigateTo}
         onSwitchTenant={(tenantId) => {
-          portal.setActiveTenantId(tenantId);
-          portal.showToast('Workspace tenant AI Workforce berhasil diganti');
+          portal.handleSwitchTenant(tenantId);
         }}
         onOpenQuickAction={() => portal.setModal({ type: 'quick-action' })}
-        onOpenLoginScreen={() => {
-          portal.setIsAuthenticated(false);
-          portal.navigateTo('login');
-        }}
-        onOpenSplashScreen={() => {
-          portal.setIsAuthenticated(false);
-          portal.navigateTo('splash');
-        }}
+        onOpenLoginScreen={portal.handleLogout}
+        onOpenSplashScreen={portal.handleLogout}
       >
         {portal.activeSection === 'overview' && (
           <AIWorkforceOverviewView
