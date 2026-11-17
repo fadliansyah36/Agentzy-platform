@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   MapPin,
   CheckCircle2,
@@ -21,6 +21,9 @@ import {
   LogOut,
   X,
   Plus,
+  LocateFixed,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import {
   INITIAL_COURSES,
@@ -29,19 +32,267 @@ import {
 } from '@/lib/agentzy-data';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
+import { AttendanceGeolocationMap } from '@/components/maps/AttendanceGeolocationMap';
 import type { GmailMessageSummary, CalendarEventSummary } from '@/lib/google-workspace';
 
-// --- 1. ABSENSI STAFF & TEKNISI (Image 2 Screen 15 & Image 4 Screen 14) ---
+interface GeoCoordinates {
+  lat: number;
+  lng: number;
+}
+
+interface AttendanceHistoryEntry {
+  date: string;
+  inTime: string;
+  outTime: string;
+  status: string;
+  coordsLabel: string;
+  accuracyLabel: string;
+  areaLabel: string;
+}
+
+function calculateDistanceMeters(a: GeoCoordinates, b: GeoCoordinates): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h =
+    sinLat * sinLat +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
+  return Math.round(2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
+}
+
+// --- 1. ABSENSI STAFF SALES & TEKNISI (Image 2 Screen 15 & Image 4 Screen 14) ---
 export function AttendanceView({ roleMode }: { roleMode: WorkforceRoleMode }) {
+  const isTech = roleMode === 'technician';
+  const hubPosition: GeoCoordinates = isTech
+    ? { lat: -6.265, lng: 106.812 }
+    : { lat: -6.2615, lng: 106.8106 };
+  const hubLabel = isTech
+    ? 'Pos Operasional Teknisi Jakarta Selatan'
+    : 'Hub Sales Agentzy Jakarta Selatan';
+  const geofenceRadiusMeters = 5000;
+
   const [tab, setTab] = useState<'hari_ini' | 'riwayat' | 'rekap'>('hari_ini');
-  const [checkedIn, setCheckedIn] = useState(roleMode === 'technician');
+  const [checkedIn, setCheckedIn] = useState(isTech);
   const [checkInTime, setCheckInTime] = useState('08:00');
+  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
   const [checkedOut, setCheckedOut] = useState(false);
+
+  // Geolocation live detection state
+  const [geoStatus, setGeoStatus] = useState<
+    'detecting' | 'granted' | 'fallback' | 'denied' | 'unavailable'
+  >(() =>
+    typeof navigator !== 'undefined' && 'geolocation' in navigator
+      ? 'detecting'
+      : 'unavailable'
+  );
+  const [geoCoords, setGeoCoords] = useState<GeoCoordinates | null>(null);
+  const [geoAccuracy, setGeoAccuracy] = useState<number | null>(null);
+  const [geoAddress, setGeoAddress] = useState<string | null>(null);
+  const [geoCapturedAt, setGeoCapturedAt] = useState<string | null>(null);
+  const [geoErrorMsg, setGeoErrorMsg] = useState<string | null>(null);
+  const [geoSource, setGeoSource] = useState<'gps' | 'demo_fallback' | null>(null);
+
+  const [checkInStamp, setCheckInStamp] = useState<{
+    time: string;
+    coords: GeoCoordinates;
+    accuracy: number | null;
+    area: string;
+    source: string;
+  } | null>(() =>
+    isTech
+      ? {
+          time: '08:00',
+          coords: { lat: -6.265, lng: 106.812 },
+          accuracy: 8,
+          area: 'Pos Operasional Teknisi Jakarta Selatan',
+          source: 'GPS Awal Shift',
+        }
+      : null
+  );
+
+  const [checkOutStamp, setCheckOutStamp] = useState<{
+    time: string;
+    coords: GeoCoordinates;
+    accuracy: number | null;
+    area: string;
+  } | null>(null);
+
+  const [historyEntries, setHistoryEntries] = useState<AttendanceHistoryEntry[]>([
+    {
+      date: 'Kemarin',
+      inTime: '08:02',
+      outTime: '17:08',
+      status: 'Hadir Tepat Waktu',
+      coordsLabel: isTech ? '-6.2651, 106.8122' : '-6.2616, 106.8108',
+      accuracyLabel: '±9 m',
+      areaLabel: 'Cilandak, Jakarta Selatan',
+    },
+    {
+      date: '2 hari lalu',
+      inTime: '07:55',
+      outTime: '17:15',
+      status: 'Hadir Tepat Waktu',
+      coordsLabel: isTech ? '-6.2712, 106.8054' : '-6.2584, 106.8141',
+      accuracyLabel: '±11 m',
+      areaLabel: 'Kemang, Jakarta Selatan',
+    },
+    {
+      date: '3 hari lalu',
+      inTime: '08:00',
+      outTime: '18:30',
+      status: 'Hadir + Lembur',
+      coordsLabel: isTech ? '-6.2640, 106.8190' : '-6.2621, 106.8099',
+      accuracyLabel: '±7 m',
+      areaLabel: 'Pasar Minggu, Jakarta Selatan',
+    },
+  ]);
+
   const [leaveModal, setLeaveModal] = useState<'Izin' | 'Cuti' | 'Lembur' | null>(
     null
   );
   const [leaveNote, setLeaveNote] = useState('');
   const [submittedNotice, setSubmittedNotice] = useState<string | null>(null);
+
+  const resolveAddressForCoords = async (coords: GeoCoordinates) => {
+    try {
+      const res = await fetch(
+        `/api/maps/reverse-geocode?lat=${coords.lat}&lng=${coords.lng}`
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        address?: string | null;
+        district?: string | null;
+      };
+      if (data.address || data.district) {
+        setGeoAddress(data.district || data.address || null);
+      }
+    } catch {
+      // Tetap tampilkan koordinat GPS apabila reverse geocoding tidak tersedia
+    }
+  };
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      return;
+    }
+
+    let cancelled = false;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        const coords: GeoCoordinates = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        };
+        setGeoCoords(coords);
+        setGeoAccuracy(pos.coords.accuracy);
+        setGeoStatus('granted');
+        setGeoSource('gps');
+        setGeoErrorMsg(null);
+        setGeoCapturedAt(
+          new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })
+        );
+        void resolveAddressForCoords(coords);
+      },
+      (err) => {
+        if (cancelled) return;
+        setGeoStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable');
+        setGeoErrorMsg(
+          err.code === err.PERMISSION_DENIED
+            ? 'Izin akses lokasi perangkat ditolak. Aktifkan izin lokasi browser untuk mencatat absensi GPS.'
+            : 'Sinyal GPS belum terdeteksi secara otomatis. Coba deteksi ulang atau gunakan titik pos demo.'
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleDetectLocation = () => {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setGeoStatus('unavailable');
+      setGeoErrorMsg('Browser tidak mendukung Geolocation API.');
+      return;
+    }
+
+    setGeoStatus('detecting');
+    setGeoErrorMsg(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords: GeoCoordinates = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        };
+        setGeoCoords(coords);
+        setGeoAccuracy(pos.coords.accuracy);
+        setGeoStatus('granted');
+        setGeoSource('gps');
+        setGeoCapturedAt(
+          new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })
+        );
+        void resolveAddressForCoords(coords);
+      },
+      (err) => {
+        setGeoStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable');
+        setGeoErrorMsg(
+          err.code === err.PERMISSION_DENIED
+            ? 'Izin lokasi ditolak pada browser Anda. Izinkan akses lokasi lalu klik Deteksi Ulang GPS.'
+            : 'Gagal memperoleh koordinat GPS perangkat. Pastikan layanan lokasi aktif lalu coba lagi.'
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const handleUseDemoPoint = () => {
+    const fallbackCoords: GeoCoordinates = {
+      lat: hubPosition.lat + 0.0008,
+      lng: hubPosition.lng - 0.0005,
+    };
+    setGeoCoords(fallbackCoords);
+    setGeoAccuracy(12);
+    setGeoStatus('fallback');
+    setGeoSource('demo_fallback');
+    setGeoAddress(hubLabel);
+    setGeoErrorMsg(null);
+    setGeoCapturedAt(
+      new Date().toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    );
+  };
+
+  const distanceMeters = geoCoords
+    ? calculateDistanceMeters(geoCoords, hubPosition)
+    : 0;
+  const withinRadius = distanceMeters <= geofenceRadiusMeters;
+  const hasVerifiedLocation = Boolean(geoCoords);
 
   const todayFormatted = new Date().toLocaleDateString('id-ID', {
     weekday: 'long',
@@ -50,11 +301,96 @@ export function AttendanceView({ roleMode }: { roleMode: WorkforceRoleMode }) {
     year: 'numeric',
   });
 
+  const handleCheckIn = () => {
+    if (!geoCoords) {
+      handleDetectLocation();
+      return;
+    }
+    const now = new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const areaText = geoAddress || hubLabel;
+    setCheckInTime(now);
+    setCheckedIn(true);
+    setCheckInStamp({
+      time: now,
+      coords: geoCoords,
+      accuracy: geoAccuracy,
+      area: areaText,
+      source: geoSource === 'gps' ? 'GPS Perangkat' : 'Titik Pos Demo',
+    });
+    setHistoryEntries((prev) => {
+      const filtered = prev.filter((item) => item.date !== 'Hari Ini');
+      return [
+        {
+          date: 'Hari Ini',
+          inTime: now,
+          outTime: 'Aktif',
+          status: withinRadius ? 'Check-in GPS Valid' : 'Tugas Lapangan (GPS)',
+          coordsLabel: `${geoCoords.lat.toFixed(4)}, ${geoCoords.lng.toFixed(4)}`,
+          accuracyLabel: geoAccuracy !== null ? `±${Math.round(geoAccuracy)} m` : 'Terverifikasi',
+          areaLabel: areaText,
+        },
+        ...filtered,
+      ];
+    });
+    setSubmittedNotice(
+      `Absen masuk berhasil dicatat pada ${now} di koordinat ${geoCoords.lat.toFixed(
+        5
+      )}, ${geoCoords.lng.toFixed(5)}.`
+    );
+  };
+
+  const handleCheckOut = () => {
+    if (!geoCoords) {
+      handleDetectLocation();
+      return;
+    }
+    const now = new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const areaText = geoAddress || hubLabel;
+    setCheckOutTime(now);
+    setCheckedOut(true);
+    setCheckOutStamp({
+      time: now,
+      coords: geoCoords,
+      accuracy: geoAccuracy,
+      area: areaText,
+    });
+    setHistoryEntries((prev) => {
+      const existingToday = prev.find((item) => item.date === 'Hari Ini');
+      const nextToday: AttendanceHistoryEntry = {
+        date: 'Hari Ini',
+        inTime: existingToday?.inTime || checkInTime,
+        outTime: now,
+        status: 'Shift Selesai · GPS Terverifikasi',
+        coordsLabel: `${geoCoords.lat.toFixed(4)}, ${geoCoords.lng.toFixed(4)}`,
+        accuracyLabel: geoAccuracy !== null ? `±${Math.round(geoAccuracy)} m` : 'Terverifikasi',
+        areaLabel: areaText,
+      };
+      return [nextToday, ...prev.filter((item) => item.date !== 'Hari Ini')];
+    });
+    setSubmittedNotice(
+      `Check-out tercatat pada ${now} di koordinat ${geoCoords.lat.toFixed(
+        5
+      )}, ${geoCoords.lng.toFixed(5)}.`
+    );
+  };
+
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-[#17324D]">
-        Absensi {roleMode === 'technician' ? 'Teknisi' : 'Staff'}
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-bold text-[#17324D]">
+          Absensi {isTech ? 'Teknisi' : 'Staff Sales'}
+        </h1>
+        <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#ADD8E6] bg-[#E6F4F9] px-2.5 py-1 text-[11px] font-bold text-[#17324D]">
+          <LocateFixed className="h-3.5 w-3.5 text-[#0284C7]" />
+          <span>Verifikasi Geolocation GPS</span>
+        </span>
+      </div>
 
       <div className="grid grid-cols-3 rounded-[10px] border border-[#D8E3E9] bg-white p-1">
         {(
@@ -86,75 +422,257 @@ export function AttendanceView({ roleMode }: { roleMode: WorkforceRoleMode }) {
       )}
 
       {tab === 'hari_ini' && (
-        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-6 space-y-5 text-center">
-          <div className="inline-flex items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-4 py-2 text-xs font-semibold text-[#17324D]">
-            <Calendar className="h-4 w-4 text-[#0284C7]" />
-            <span>{todayFormatted}</span>
-          </div>
+        <div className="space-y-4">
+          <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-5 text-center sm:p-6">
+            <div className="inline-flex items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] px-4 py-2 text-xs font-semibold text-[#17324D]">
+              <Calendar className="h-4 w-4 text-[#0284C7]" />
+              <span>{todayFormatted}</span>
+            </div>
 
-          <div className="mx-auto flex max-w-sm flex-col items-center">
-            <div
-              className={`flex h-16 w-16 items-center justify-center rounded-full ${
-                checkedIn
-                  ? 'bg-emerald-50 text-[#247A55]'
-                  : 'bg-[#E6F4F9] text-[#0284C7]'
-              }`}
-            >
-              {checkedIn ? (
-                <CheckCircle2 className="h-8 w-8" />
-              ) : (
-                <MapPin className="h-8 w-8" />
+            <div className="mx-auto flex max-w-md flex-col items-center">
+              <div
+                className={`flex h-16 w-16 items-center justify-center rounded-full ${
+                  checkedOut
+                    ? 'bg-emerald-50 text-[#247A55]'
+                    : checkedIn
+                      ? 'bg-emerald-50 text-[#247A55]'
+                      : geoStatus === 'detecting'
+                        ? 'bg-[#E6F4F9] text-[#0284C7]'
+                        : hasVerifiedLocation
+                          ? 'bg-[#E6F4F9] text-[#0284C7]'
+                          : 'bg-amber-50 text-[#A96816]'
+                }`}
+              >
+                {geoStatus === 'detecting' ? (
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                ) : checkedIn ? (
+                  <CheckCircle2 className="h-8 w-8" />
+                ) : (
+                  <MapPin className="h-8 w-8" />
+                )}
+              </div>
+              <h2 className="mt-3 text-lg font-bold text-[#17324D]">
+                {checkedOut
+                  ? `Shift Selesai · Check-out (${checkOutTime || '-'})`
+                  : checkedIn
+                    ? `Sudah Check-in (${checkInTime})`
+                    : 'Belum Absen Masuk'}
+              </h2>
+              <p className="mt-1 text-xs text-[#526675]">
+                {geoStatus === 'detecting'
+                  ? 'Mendeteksi koordinat geolocation perangkat Anda...'
+                  : hasVerifiedLocation && geoCoords
+                    ? `${geoAddress || hubLabel} · Akurasi ±${
+                        geoAccuracy !== null ? Math.round(geoAccuracy) : 10
+                      } m`
+                    : 'Menunggu izin & deteksi lokasi GPS perangkat'}
+              </p>
+            </div>
+
+            {/* Panel Deteksi Geolocation Real-Time */}
+            <div className="mx-auto max-w-xl rounded-[12px] border border-[#D8E3E9] bg-[#F5F8FA] p-4 text-left space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <LocateFixed className="h-4 w-4 text-[#0284C7]" />
+                  <span className="text-xs font-bold text-[#17324D]">
+                    Status Geolocation {isTech ? 'Teknisi' : 'Staff Sales'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                      geoStatus === 'granted'
+                        ? 'bg-emerald-100 text-[#247A55]'
+                        : geoStatus === 'fallback'
+                          ? 'bg-[#E6F4F9] text-[#0284C7]'
+                          : geoStatus === 'detecting'
+                            ? 'bg-[#E6F4F9] text-[#0284C7]'
+                            : 'bg-amber-100 text-[#A96816]'
+                    }`}
+                  >
+                    {geoStatus === 'granted'
+                      ? 'GPS Perangkat Aktif'
+                      : geoStatus === 'fallback'
+                        ? 'Titik Pos Demo'
+                        : geoStatus === 'detecting'
+                          ? 'Mendeteksi...'
+                          : 'Perlu Akses Lokasi'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleDetectLocation}
+                    disabled={geoStatus === 'detecting'}
+                    className="inline-flex items-center gap-1 rounded-[8px] border border-[#B8C9D3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#17324D] hover:bg-[#EAF2F6] disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`h-3 w-3 ${
+                        geoStatus === 'detecting' ? 'animate-spin' : ''
+                      }`}
+                    />
+                    <span>Deteksi Ulang GPS</span>
+                  </button>
+                </div>
+              </div>
+
+              {geoErrorMsg && (
+                <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A96816]" />
+                    <p>{geoErrorMsg}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleDetectLocation}
+                      className="rounded-[8px] bg-[#0284C7] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#0369A1]"
+                    >
+                      Coba Deteksi Ulang
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUseDemoPoint}
+                      className="rounded-[8px] border border-[#B8C9D3] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#17324D] hover:bg-[#F5F8FA]"
+                    >
+                      Gunakan Titik Pos Demo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {geoCoords && (
+                <>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="rounded-[10px] border border-[#D8E3E9] bg-white p-2.5">
+                      <p className="text-[10px] font-semibold text-[#526675]">
+                        Koordinat (Lat, Lng)
+                      </p>
+                      <p className="mt-0.5 font-mono-tabular text-xs font-bold text-[#17324D]">
+                        {geoCoords.lat.toFixed(5)}, {geoCoords.lng.toFixed(5)}
+                      </p>
+                    </div>
+                    <div className="rounded-[10px] border border-[#D8E3E9] bg-white p-2.5">
+                      <p className="text-[10px] font-semibold text-[#526675]">
+                        Akurasi &amp; Waktu
+                      </p>
+                      <p className="mt-0.5 font-mono-tabular text-xs font-bold text-[#0284C7]">
+                        ±{geoAccuracy !== null ? Math.round(geoAccuracy) : 10} m ·{' '}
+                        {geoCapturedAt || 'Baru saja'}
+                      </p>
+                    </div>
+                    <div className="rounded-[10px] border border-[#D8E3E9] bg-white p-2.5">
+                      <p className="text-[10px] font-semibold text-[#526675]">
+                        Radius Hub Operasional
+                      </p>
+                      <p
+                        className={`mt-0.5 font-mono-tabular text-xs font-bold ${
+                          withinRadius ? 'text-[#247A55]' : 'text-[#A96816]'
+                        }`}
+                      >
+                        {withinRadius
+                          ? `Dalam Zona (${distanceMeters} m)`
+                          : `Lapangan (${(distanceMeters / 1000).toFixed(1)} km)`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <AttendanceGeolocationMap
+                    position={geoCoords}
+                    hubPosition={hubPosition}
+                    hubLabel={hubLabel}
+                    userLabel={
+                      isTech ? 'Posisi Teknisi Saat Ini' : 'Posisi Staff Sales Saat Ini'
+                    }
+                    accuracyMeters={geoAccuracy}
+                    distanceMeters={distanceMeters}
+                    withinRadius={withinRadius}
+                  />
+                </>
               )}
             </div>
-            <h2 className="mt-3 text-lg font-bold text-[#17324D]">
-              {checkedOut
-                ? 'Shift Selesai · Sudah Check-out'
-                : checkedIn
-                  ? `Sudah Check-in (${checkInTime})`
-                  : 'Belum Absen Masuk'}
-            </h2>
-            <p className="mt-1 text-xs text-[#526675]">
-              Lokasi Anda: Area Jakarta Selatan · Akurasi lokasi: 8 m
-            </p>
-          </div>
 
-          <div className="mx-auto max-w-sm space-y-3">
-            {!checkedIn ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const now = new Date().toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-                  setCheckInTime(now);
-                  setCheckedIn(true);
-                }}
-                className="h-11 w-full rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white hover:bg-[#0369A1]"
-              >
-                Absen Masuk Sekarang
-              </button>
-            ) : !checkedOut ? (
-              <button
-                type="button"
-                onClick={() => setCheckedOut(true)}
-                className="h-11 w-full rounded-[10px] bg-[#17324D] text-sm font-semibold text-white hover:bg-[#245477]"
-              >
-                Check-out Sekarang
-              </button>
-            ) : null}
+            {/* Stamp Hasil Check-in / Check-out */}
+            {(checkInStamp || checkOutStamp) && (
+              <div className="mx-auto max-w-xl grid grid-cols-1 gap-2 sm:grid-cols-2 text-left">
+                {checkInStamp && (
+                  <div className="rounded-[10px] border border-[#247A55]/25 bg-emerald-50/70 p-3 text-xs">
+                    <p className="font-bold text-[#247A55]">
+                      Bukti Lokasi Check-in · {checkInStamp.time}
+                    </p>
+                    <p className="mt-0.5 font-mono-tabular text-[11px] text-[#17324D]">
+                      {checkInStamp.coords.lat.toFixed(5)},{' '}
+                      {checkInStamp.coords.lng.toFixed(5)} (
+                      {checkInStamp.accuracy !== null
+                        ? `±${Math.round(checkInStamp.accuracy)} m`
+                        : 'Terverifikasi'}
+                      )
+                    </p>
+                    <p className="truncate text-[11px] text-[#526675]">
+                      {checkInStamp.area} · {checkInStamp.source}
+                    </p>
+                  </div>
+                )}
+                {checkOutStamp && (
+                  <div className="rounded-[10px] border border-[#0284C7]/25 bg-[#E6F4F9] p-3 text-xs">
+                    <p className="font-bold text-[#0284C7]">
+                      Bukti Lokasi Check-out · {checkOutStamp.time}
+                    </p>
+                    <p className="mt-0.5 font-mono-tabular text-[11px] text-[#17324D]">
+                      {checkOutStamp.coords.lat.toFixed(5)},{' '}
+                      {checkOutStamp.coords.lng.toFixed(5)} (
+                      {checkOutStamp.accuracy !== null
+                        ? `±${Math.round(checkOutStamp.accuracy)} m`
+                        : 'Terverifikasi'}
+                      )
+                    </p>
+                    <p className="truncate text-[11px] text-[#526675]">
+                      {checkOutStamp.area}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
-            <div className="grid grid-cols-3 gap-2">
-              {(['Izin', 'Cuti', 'Lembur'] as const).map((act) => (
+            <div className="mx-auto max-w-md space-y-3">
+              {!checkedIn ? (
                 <button
-                  key={act}
                   type="button"
-                  onClick={() => setLeaveModal(act)}
-                  className="rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] py-2.5 text-xs font-semibold text-[#17324D] hover:bg-[#E6F4F9]"
+                  onClick={handleCheckIn}
+                  disabled={geoStatus === 'detecting'}
+                  className="h-11 w-full rounded-[10px] bg-[#0284C7] text-sm font-semibold text-white hover:bg-[#0369A1] disabled:opacity-50"
                 >
-                  {act}
+                  {geoStatus === 'detecting'
+                    ? 'Mendeteksi Lokasi GPS...'
+                    : hasVerifiedLocation
+                      ? 'Absen Masuk dengan Geolocation'
+                      : 'Aktifkan GPS untuk Absen Masuk'}
                 </button>
-              ))}
+              ) : !checkedOut ? (
+                <button
+                  type="button"
+                  onClick={handleCheckOut}
+                  disabled={geoStatus === 'detecting'}
+                  className="h-11 w-full rounded-[10px] bg-[#17324D] text-sm font-semibold text-white hover:bg-[#245477] disabled:opacity-50"
+                >
+                  {geoStatus === 'detecting'
+                    ? 'Mendeteksi Lokasi GPS...'
+                    : hasVerifiedLocation
+                      ? 'Check-out dengan Geolocation'
+                      : 'Deteksi GPS untuk Check-out'}
+                </button>
+              ) : null}
+
+              <div className="grid grid-cols-3 gap-2">
+                {(['Izin', 'Cuti', 'Lembur'] as const).map((act) => (
+                  <button
+                    key={act}
+                    type="button"
+                    onClick={() => setLeaveModal(act)}
+                    className="rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] py-2.5 text-xs font-semibold text-[#17324D] hover:bg-[#E6F4F9]"
+                  >
+                    {act}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -162,16 +680,15 @@ export function AttendanceView({ roleMode }: { roleMode: WorkforceRoleMode }) {
 
       {tab === 'riwayat' && (
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 divide-y divide-[#EAF2F6] text-sm">
-          {[
-            { date: 'Kemarin', inTime: '08:02', outTime: '17:08', status: 'Hadir Tepat Waktu' },
-            { date: '2 hari lalu', inTime: '07:55', outTime: '17:15', status: 'Hadir Tepat Waktu' },
-            { date: '3 hari lalu', inTime: '08:00', outTime: '18:30', status: 'Hadir + Lembur' },
-          ].map((r) => (
-            <div key={r.date} className="flex items-center justify-between py-3">
+          {historyEntries.map((r) => (
+            <div key={r.date} className="flex flex-wrap items-center justify-between gap-2 py-3">
               <div>
                 <p className="font-bold text-[#17324D]">{r.date}</p>
                 <p className="font-mono-tabular text-xs text-[#526675]">
                   Masuk {r.inTime} · Keluar {r.outTime}
+                </p>
+                <p className="mt-0.5 font-mono-tabular text-[11px] text-[#718391]">
+                  GPS: {r.coordsLabel} ({r.accuracyLabel}) · {r.areaLabel}
                 </p>
               </div>
               <span className="text-xs font-semibold text-[#247A55]">
@@ -186,7 +703,7 @@ export function AttendanceView({ roleMode }: { roleMode: WorkforceRoleMode }) {
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4 text-center">
             <p className="font-mono-tabular text-2xl font-bold text-[#247A55]">
-              20
+              {checkedIn ? 21 : 20}
             </p>
             <p className="text-xs text-[#526675]">Hari Hadir</p>
           </div>
