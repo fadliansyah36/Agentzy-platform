@@ -255,7 +255,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   }, [auth.loading, auth.session, auth.identity, auth.aal, auth.signOut]);
 
   const handleLogin = useCallback(
-    async (_requestedRole: SuperAdminRoleKey, email: string, password: string, mfaCode: string) => {
+    async (email: string, password: string, mfaCode: string) => {
       const context = await auth.signIn(email, password, true, mfaCode);
       if (context.aal !== 'aal2') throw new Error('MFA TOTP wajib diaktifkan. Gunakan menu Setup MFA TOTP sebelum masuk Super Admin.');
       const assignedRoles = context.identity.memberships.flatMap((membership) => membership.role_keys);
