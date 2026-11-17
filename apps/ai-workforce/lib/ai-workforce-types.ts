@@ -33,9 +33,9 @@ export interface AIWMTenant {
   id: string;
   code: string;
   name: string;
-  environment: 'Production' | 'Staging';
-  industry: string;
-  region: string;
+  environment?: 'Production' | 'Staging';
+  industry?: string;
+  region?: string;
 }
 
 export interface AIWorkerVersionItem {
