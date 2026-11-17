@@ -51,6 +51,7 @@ export function AdminPortalClient({
       <AdminLoginView
         initialRole={portal.adminRole}
         onLogin={portal.handleLogin}
+        systemError={portal.authError}
       />
     );
   }
