@@ -1,9 +1,10 @@
 import re
 from uuid import UUID
+import json
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +37,14 @@ class MembershipInvite(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     full_name: str = Field(min_length=1, max_length=120)
     role_key: str = Field(min_length=2, max_length=80)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+            raise ValueError("Alamat email tidak valid.")
+        return normalized
 
 
 async def _has_platform_permission(session: AsyncSession, user_id: UUID, permission: str) -> bool:
@@ -108,6 +117,13 @@ async def create_organization(
         raise HTTPException(status_code=403, detail="Missing tenant organization management permission.")
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload.slug):
         raise HTTPException(status_code=422, detail="Slug hanya boleh berisi huruf kecil, angka dan tanda hubung.")
+    if payload.parent_id:
+        async with engine.connect() as connection:
+            parent = await connection.execute(text("""
+                select exists(select 1 from public.organizations where id=:parent_id and tenant_id=:tenant_id)
+            """), {"parent_id": payload.parent_id, "tenant_id": tenant_id})
+            if not parent.scalar_one():
+                raise HTTPException(status_code=422, detail="Parent organization harus berada pada tenant yang sama.")
     async with engine.begin() as connection:
         result = await connection.execute(text("""
             insert into public.organizations(tenant_id,parent_id,name,slug,organization_type)
@@ -159,7 +175,7 @@ async def invite_tenant_member(
         async with httpx.AsyncClient(timeout=25) as client:
             response = await client.post(
                 invite_url,
-                params={"redirect_to": f"{settings.app_base_url.rstrip('/')}/corporate"},
+                params={"redirect_to": f"{settings.app_base_url.rstrip('/')}/{'ai-workforce' if role_key.startswith('ai_') or role_key == 'corporate_ai_manager' else 'corporate'}"},
                 headers=headers,
                 json={"email": payload.email.strip().lower(), "data": {"full_name": payload.full_name.strip()}},
             )
@@ -311,7 +327,7 @@ async def update_tenant(
             insert into public.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,ip_address,metadata)
             values(:actor,'tenant.updated','tenant',:resource_id,:request_id,:ip,cast(:metadata as jsonb))
         """), {"actor": user_id, "resource_id": str(tenant_id), "request_id": request.headers.get("x-request-id"),
-               "ip": request.client.host if request.client else None, "metadata": __import__('json').dumps(values, default=str)})
+               "ip": request.client.host if request.client else None, "metadata": json.dumps(values, default=str)})
     return dict(row)
 
 
