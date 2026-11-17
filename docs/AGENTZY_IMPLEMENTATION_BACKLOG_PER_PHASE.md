@@ -8,14 +8,14 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 
 **Phase 00 status: IN PROGRESS.** Governance artifacts are being finalized; repository/source, dependency/license, Supabase configuration and security acceptance gates remain open. See `docs/phase-00/BASELINE_EVIDENCE_AND_ACCEPTANCE.md`.
 
-- Repository default branch is `main`; latest structural inventory snapshot tree commit: `a9482d864aa6683027bbec02321ca469f1251596` (282 entries, not truncated).
+- Repository default branch is `main`; prior tree snapshot `a9482d864aa6683027bbec02321ca469f1251596` (282 entries) was refreshed 2026-11-18: recursive tree has 284 entries, `truncated=false`. See `docs/phase-00/VERIFIED_REPOSITORY_INVENTORY_2026-11-18.md`.
 - GitHub binding `link_6af361418a4481919cc84f9f7e0d522b` (account `fadliansyah36`) has repository write access; `main` updates are available. Branch protection is not enabled at the time of inspection.
 - Existing UI modules are present under `apps/admin`, `apps/corporate`, and `apps/ai-workforce`; root `app/` contains public and workforce routes.
-- No `apps/api/`, `apps/landing/`, `apps/workforce/`, `supabase/`, `docs/`, or root `AGENTS.md` found in the 272-entry recursive tree.
+- No `apps/api/`, `supabase/`, `packages/api-client/`, `packages/api-contracts/`, `packages/design-tokens/`, `workers/`, `services/`, or `infrastructure/` found in the latest structural inventory. `app/` already contains root landing and workforce route wrappers; `docs/` and root `AGENTS.md` are present. Do not create duplicate portal folders.
 - Existing portal hooks/services initialize `INITIAL_*` demo collections and local state. Replace these with real FastAPI API adapters incrementally.
 - `app/api/ai-workforce/generate-content/route.ts` calls Google GenAI directly from Next.js, hardcodes model ID and accepts tenantName from request body; move to FastAPI AI Gateway with server-resolved tenant context.
 - Next.js Maps handlers exist under `app/api/maps/` and `app/api/config/maps/`; audit/consolidate behind FastAPI adapters.
-- `package.json`: Next.js 15, React 19, TypeScript 5.9, Tailwind 4; Firebase and Google GenAI dependencies. `.env.example` includes Gemini and Google Maps keys.
+- `package.json` and canonical `bun.lock` were inventoried; Next.js 15 / eslint-config-next 16 mismatch requires compatibility review. `.env.example` names are inventoried; full SBOM/license and source-wide environment reference scans remain open. See `docs/phase-00/VERIFIED_REPOSITORY_INVENTORY_2026-11-18.md`.
 - Supabase binding `link_6afc797a7c44819192023bb809b8cae1` resolves the canonical project `cwhjdnkotuhueeudpgeu` (`ACTIVE_HEALTHY`, PostgreSQL 17.12). Initial live inspection confirms no application tables in `public`, no project migration entries, and no Storage buckets; platform-managed `auth`, `storage`, and `realtime` schemas must be distinguished from application-owned schema.
 
 ### Access status and tracked implementation gaps
