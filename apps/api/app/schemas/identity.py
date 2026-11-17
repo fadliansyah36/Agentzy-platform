@@ -8,6 +8,7 @@ class MembershipRead(BaseModel):
     tenant_name: str
     organization_id: UUID | None = None
     role_keys: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
     status: str
 
 
