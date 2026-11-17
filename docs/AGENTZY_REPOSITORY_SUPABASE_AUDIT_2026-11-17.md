@@ -3,7 +3,8 @@
 Date: 17 November 2026  
 Repository: `fadliansyah36/Agentzy-platform`  
 Branch: `main`  
-Observed HEAD at initial audit: `110f5d923507fe02c0740cdd8f548f630f03d4e0`  
+Initial source audit HEAD: `110f5d923507fe02c0740cdd8f548f630f03d4e0`  
+Governance update HEAD (after backlog/README alignment): `c4660837f75a6d2a24ffe2e016598c13c75e0aa4`  
 Supabase ref: `cwhjdnkotuhueeudpgeu`
 
 ## Executive result
@@ -32,16 +33,20 @@ Existing portal UI is present. Implementation should be backend-first, not a UI 
 - `public` schema table inventory: empty. Supabase project migration history: empty. This does not mean the platform-managed schemas are empty.
 - All-schema inventory includes Supabase-managed `auth`, `storage`, `realtime`, and `vault` relations. `auth.schema_migrations` (84 rows), `storage.migrations` (81 rows), and `realtime.schema_migrations` (97 rows) are platform-managed migration histories, not Agentzy application migrations. `storage.buckets` and `storage.objects` currently contain 0 rows; Auth users and Realtime subscriptions also report 0 rows.
 - Extensions observed installed: `vector` 0.8.2 and `pgcrypto` 1.3 in `extensions`, `pg_stat_statements` 1.11, `supabase_vault` 0.3.2, and `uuid-ossp` 1.1. PostGIS 3.3.7 is available but not installed.
-- Security Advisor reports two WARN findings for the same function: `public.rls_auto_enable()` is `SECURITY DEFINER` and executable by both `anon` and `authenticated` through RPC. Do not invoke it as part of the Agentzy setup. Inspect its definition, ownership, grants and intended purpose; remediate through a reviewed migration/privilege change after impact analysis. [Advisor: SECURITY DEFINER RPC exposure](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable).
+- Security Advisor reports two WARN findings for the same function: `public.rls_auto_enable()` is `SECURITY DEFINER` and executable by `anon` and `authenticated` through RPC. Its current definition is an event-trigger function that enables RLS on newly created tables in `public`; its ACL includes execute for `PUBLIC` (shown as `=X/postgres`), `anon`, `authenticated`, `service_role`, and `postgres`. Do not invoke it as part of Agentzy setup. Determine whether the event trigger is attached and intended, inspect ownership/dependencies, then remediate with a reviewed privilege/function change only after impact analysis. [Advisor: SECURITY DEFINER RPC exposure](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable).
 - Performance and health advisors returned no lints at audit time.
 - No database changes have been applied by this audit.
-- Still pending: detailed grants and policies, full function/trigger definitions, Auth provider/configuration settings, Storage bucket policies, Realtime publication configuration, Data API exposure settings, and review of `public.rls_auto_enable()`.
+- Read-only catalog inspection returned no rows from `pg_policies`; this currently indicates no row policies are catalogued for the queried schemas. Do not interpret platform-managed table grants as application grants. `information_schema.role_table_grants` includes broad platform-managed role grants on `storage`/`realtime` internals; these require provider-aware interpretation and must not be modified as Agentzy policy.
+- Trigger inventory currently shows platform-managed triggers only in `storage` and `realtime`; no application-owned triggers were identified by that query. The public function above is the only public routine found.
+- Security Advisor: 2 WARN lint records, both for `public.rls_auto_enable()` (anon and authenticated execution). Performance and health advisors: no lints.
+- Still pending: determine whether `rls_auto_enable()` is attached as an event trigger and inspect its owner/dependencies; verify Auth provider and security configuration, Storage policy catalog, Realtime publication settings, Data API exposed schemas/grants, database-level grants/default privileges, and branch-wide source inventory. No changes have been applied to Supabase.
 
 ## Current blockers / readiness
-1. Connector-access blockers are closed.
-2. FastAPI backend is absent from the audited tree and must be established under the approved modular-monolith architecture.
-3. Supabase `public` schema and migration history are empty, but this is not proof that all project schemas/services are empty. Complete the remaining Supabase baseline audit before designing migrations.
+1. Connector-access blockers are closed; use the verified GitHub and Supabase bindings documented in the backlog.
+2. FastAPI backend and `supabase/` migration source are absent from the initial audited tree; these are implementation gaps, not connector blockers.
+3. Supabase application `public` schema and project migration history are empty. Platform-managed `auth`, `storage`, `realtime`, and `vault` schemas remain present and must not be mistaken for Agentzy-owned schema.
 4. Existing demo/local-state paths must be replaced phase-by-phase by typed FastAPI API clients.
-5. Do not apply migrations or invent schema until the Master PRD and Technical Blueprint domain model is reconciled with the full live Supabase inventory.
+5. The exposed SECURITY DEFINER function and remaining Auth/Storage/Realtime/Data API settings require a reviewed security baseline before migrations.
+6. Do not apply migrations or invent schema until the Master PRD and Technical Blueprint domain model is reconciled with the full live Supabase inventory.
 
-This report covers repository metadata/tree and selected files plus a partial live Supabase audit. It is not a complete source review, security assessment, or phase-completion claim.
+This report is an updated partial live audit. It is not a complete source review, security assessment, or Phase 00 completion claim.
