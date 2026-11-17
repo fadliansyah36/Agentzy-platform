@@ -11,6 +11,7 @@ import {
   type TechnicianBonusRule,
 } from '@/lib/corporate-compensation';
 import { adminPortalService } from '../services/admin-service';
+import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import type {
   AdminAIWorkerRecord,
   AdminCreditLedgerItem,
@@ -92,6 +93,7 @@ export type AdminModalState =
 
 export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const initial = useMemo(() => adminPortalService.getInitialCollections(), []);
+  const auth = useAgentzyAuth();
   const idCounter = useRef(800);
 
   const nextId = (prefix: string) => {
@@ -99,9 +101,9 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     return `${prefix}-${idCounter.current}`;
   };
 
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminRole, setAdminRole] = useState<SuperAdminRoleKey>('platform_super_admin');
-  const [adminEmail, setAdminEmail] = useState('superadmin@agentzy.id');
+  const [adminEmail, setAdminEmail] = useState('');
   const [activeSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const [modal, setModal] = useState<AdminModalState>({ type: 'none' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -235,22 +237,49 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     setModal({ type: 'none' });
   }, []);
 
+  useEffect(() => {
+    if (auth.loading) return;
+    const assignedRoles = auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? [];
+    const verifiedRole = (['platform_super_admin','platform_security_admin','platform_finance_admin','platform_operations_admin'] as SuperAdminRoleKey[])
+      .find((candidate) => assignedRoles.includes(candidate));
+    if (auth.session && auth.identity && verifiedRole) {
+      setAdminRole(verifiedRole);
+      setAdminEmail(auth.identity.email ?? auth.session.user.email ?? '');
+      setIsAuthenticated(true);
+      setActiveSection((current) => current === 'login' ? 'overview' : current);
+    } else {
+      setIsAuthenticated(false);
+      setAdminEmail('');
+      if (auth.session && auth.identity && !verifiedRole) void auth.signOut();
+    }
+  }, [auth.loading, auth.session, auth.identity, auth.signOut]);
+
   const handleLogin = useCallback(
-    (role: SuperAdminRoleKey, email: string) => {
-      setAdminRole(role);
-      setAdminEmail(email);
+    async (_requestedRole: SuperAdminRoleKey, email: string, password: string, mfaCode: string) => {
+      const context = await auth.signIn(email, password, true, mfaCode);
+      const assignedRoles = context.identity.memberships.flatMap((membership) => membership.role_keys);
+      const verifiedRole = (['platform_super_admin','platform_security_admin','platform_finance_admin','platform_operations_admin'] as SuperAdminRoleKey[])
+        .find((candidate) => assignedRoles.includes(candidate));
+      if (!verifiedRole) {
+        await auth.signOut();
+        throw new Error('Akun ini tidak memiliki role Super Admin platform yang sah.');
+      }
+      setAdminRole(verifiedRole);
+      setAdminEmail(context.identity.email ?? email);
       setIsAuthenticated(true);
       setActiveSection('overview');
-      showToast(`Masuk ke Super Admin Control Plane sebagai ${email}.`);
+      showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
     },
-    [showToast]
+    [auth.signIn, auth.signOut, showToast]
   );
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    await auth.signOut();
     setIsAuthenticated(false);
+    setAdminEmail('');
     setActiveSection('login');
     setModal({ type: 'none' });
-  }, []);
+  }, [auth.signOut]);
 
   // Tenant CRUD
   const upsertTenant = useCallback(
@@ -1372,6 +1401,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
 
   return {
     isAuthenticated,
+    authLoading: auth.loading,
+    authError: auth.error,
     adminRole,
     setAdminRole,
     adminEmail,
