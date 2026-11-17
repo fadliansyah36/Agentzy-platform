@@ -1,0 +1,6 @@
+{
+  "name": "Agentzy",
+  "description": "Satu Platform Enterprise untuk Mengelola Tim Lapangan dan Agen AI Secara Terpadu — SaaS, Partnership Acquisition, dan Human Workforce Portal.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
