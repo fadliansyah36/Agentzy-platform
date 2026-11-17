@@ -33,7 +33,6 @@ import {
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
-import { CORPORATE_TENANTS } from '../../lib/corporate-data';
 import type {
   CorporateAlertItem,
   CorporateSectionId,
@@ -52,6 +51,7 @@ interface NavGroup {
 
 export function CorporateAppShell({
   activeTenant,
+  tenants,
   activeSection,
   alerts,
   toastMessage,
@@ -62,6 +62,7 @@ export function CorporateAppShell({
   children,
 }: {
   activeTenant: CorporateTenant;
+  tenants: CorporateTenant[];
   activeSection: CorporateSectionId;
   alerts: CorporateAlertItem[];
   toastMessage: string | null;
@@ -310,7 +311,7 @@ export function CorporateAppShell({
                       <p className="px-2.5 py-1 text-[11px] font-semibold text-[#718391]">
                         Pilih Tenant Perusahaan
                       </p>
-                      {CORPORATE_TENANTS.map((t) => (
+                      {tenants.map((t) => (
                         <button
                           key={t.id}
                           type="button"
