@@ -31,13 +31,12 @@ export function CorporatePortalClient({
 }) {
   const portal = useCorporatePortal(initialSection);
 
-  if (!portal.isAuthenticated || portal.activeSection === 'login') {
-    return (
-      <CorporateLoginView
-        initialTenantId={portal.activeTenantId}
-        onLogin={portal.handleLogin}
-      />
-    );
+  if (portal.authLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#F5F8FA] text-sm font-medium text-[#526675]">Memverifikasi sesi Agentzy…</div>;
+  }
+
+  if (!portal.isAuthenticated || !portal.activeTenant || portal.activeSection === 'login') {
+    return <CorporateLoginView onLogin={portal.handleLogin} />;
   }
 
   const backToOverview = () => portal.navigateTo('overview');
