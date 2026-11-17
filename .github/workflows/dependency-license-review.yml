@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Install exact lockfile dependency tree
         run: bun install --frozen-lockfile
       - name: Inspect licenses and collect license texts
