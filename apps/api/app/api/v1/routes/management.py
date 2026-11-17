@@ -1,6 +1,6 @@
+import json
 import re
 from uuid import UUID
-import json
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -307,7 +307,7 @@ async def update_tenant(
     _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
-    values = payload.model_dump(exclude_unset=True)
+    values = {key: value for key, value in payload.model_dump(exclude_unset=True).items() if value is not None}
     if not values:
         raise HTTPException(status_code=422, detail="Tidak ada field tenant yang diperbarui.")
     if "slug" in values and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", values["slug"]):
