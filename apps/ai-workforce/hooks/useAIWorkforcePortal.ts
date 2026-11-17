@@ -157,11 +157,15 @@ export function useAIWorkforcePortal(
     return () => clearTimeout(t);
   }, [toastMessage]);
 
-  const activeTenant: AIWMTenant | null = useMemo(() => {
-    const tenant = auth.tenants.find((item) => item.id === activeTenantId) ?? auth.tenants[0];
-    if (!tenant) return null;
-    return { id: tenant.id, code: tenant.slug, name: tenant.name };
-  }, [auth.tenants, activeTenantId]);
+  const tenantOptions = useMemo<AIWMTenant[]>(() => auth.tenants.map((tenant) => ({
+    id: tenant.id,
+    code: tenant.slug,
+    name: tenant.name,
+  })), [auth.tenants]);
+  const activeTenant = useMemo(
+    () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
+    [tenantOptions, activeTenantId]
+  );
 
   useEffect(() => {
     if (auth.loading) return;
@@ -1018,6 +1022,7 @@ export function useAIWorkforcePortal(
     authError: auth.error,
     activeTenantId,
     activeTenant,
+    tenantOptions,
     aiWorkers,
     selectedWorker,
     providers,
