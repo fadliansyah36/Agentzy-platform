@@ -38,8 +38,8 @@ export function AdminLoginView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim() || mfaCode.trim().length !== 6) {
-      setErrorMsg('Email, kata sandi, dan kode MFA 6 digit wajib diisi.');
+    if (!email.trim() || !password.trim() || (mfaCode.trim().length > 0 && mfaCode.trim().length !== 6)) {
+      setErrorMsg('Email dan kata sandi wajib diisi; jika MFA aktif, masukkan kode 6 digit.');
       return;
     }
     setErrorMsg(null);
@@ -213,6 +213,7 @@ export function AdminLoginView({
             </button>
           </form>
 
+          <div className="mt-4 text-xs text-[#526675]"><Link href="/mfa-setup" className="font-semibold text-[#0284C7] hover:underline">Setup / Aktivasi MFA TOTP untuk akun Super Admin</Link></div>
           <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-[#EAF2F6] pt-4 text-xs text-[#526675]">
             <Link href="/" className="font-medium hover:text-[#17324D] hover:underline">
               Kembali ke Landing Page
