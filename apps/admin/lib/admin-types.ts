@@ -139,10 +139,15 @@ export interface PlatformUserRecord {
   name: string;
   email: string;
   roleId: string;
+  roleKey: string;
   roleName: string;
   department: string;
+  organizationId: string | null;
+  organizationUnitId: string | null;
+  branchId: string | null;
+  departmentId: string | null;
   mfaEnabled: boolean | null;
-  status: 'Aktif' | 'Suspended' | 'Pending';
+  status: 'Aktif' | 'Suspended' | 'Pending' | 'Dicabut';
   lastLogin: string | null;
 }
 
