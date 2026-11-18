@@ -26,6 +26,17 @@ from app.db.session import engine, user_session
 router = APIRouter()
 
 
+def _audit_metadata(request: Request, metadata: dict | None = None) -> str:
+    return json.dumps(
+        {
+            **(metadata or {}),
+            "correlation_id": getattr(request.state, "correlation_id", None),
+            "trace_id": getattr(request.state, "trace_id", None),
+        },
+        default=str,
+    )
+
+
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
 
@@ -906,7 +917,7 @@ async def replace_role_permissions(
                 "actor": actor,
                 "resource_id": str(role_id),
                 "request_id": _request_id(request),
-                "metadata": json.dumps({"permission_keys": permission_keys}),
+                "metadata": _audit_metadata(request, {"permission_keys": permission_keys}),
             },
         )
         response_body = {"role_id": str(role_id), "permission_keys": permission_keys}
@@ -1218,7 +1229,7 @@ async def update_tenant(
                 "resource_id": str(tenant_id),
                 "request_id": _request_id(request),
                 "ip": request.client.host if request.client else None,
-                "metadata": json.dumps(values, default=str),
+                "metadata": _audit_metadata(request, values),
             },
         )
         response_body = dict(row)
@@ -1377,7 +1388,7 @@ async def create_role(
                 "actor": actor,
                 "resource_id": str(row["id"]),
                 "request_id": _request_id(request),
-                "metadata": json.dumps({"key": row["key"], "scope_type": row["scope_type"]}),
+                "metadata": _audit_metadata(request, {"key": row["key"], "scope_type": row["scope_type"]}),
             },
         )
         await complete_idempotency(
@@ -1477,7 +1488,7 @@ async def update_role(
                 "actor": actor,
                 "resource_id": str(role_id),
                 "request_id": _request_id(request),
-                "metadata": json.dumps({"fields": sorted(values)}),
+                "metadata": _audit_metadata(request, {"fields": sorted(values)}),
             },
         )
         await complete_idempotency(
@@ -1562,7 +1573,7 @@ async def delete_role(
                 "actor": actor,
                 "resource_id": str(role_id),
                 "request_id": _request_id(request),
-                "metadata": json.dumps({"key": role["key"]}),
+                "metadata": _audit_metadata(request, {"key": role["key"]}),
             },
         )
         response_body = {"id": str(role_id), "status": "deleted"}
