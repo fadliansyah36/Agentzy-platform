@@ -17,6 +17,7 @@ import type {
   BreakGlassRequestRecord,
   FeatureFlagRecord,
 } from '../../lib/admin-types';
+import type { AgentzySecurityAlert } from '@/apps/web/lib/api-client';
 
 export function SecurityCenterView({
   mfaEnforced,
@@ -26,6 +27,8 @@ export function SecurityCenterView({
   ipAllowlistEnabled,
   sessionTtlMinutes,
   breakGlassRequests,
+  securityAlerts,
+  onAcknowledgeSecurityAlert,
   onOpenBreakGlassModal,
   onDecideBreakGlass,
   currentUserId,
@@ -41,6 +44,8 @@ export function SecurityCenterView({
   ipAllowlistEnabled: boolean;
   sessionTtlMinutes: number;
   breakGlassRequests: BreakGlassRequestRecord[];
+  securityAlerts: AgentzySecurityAlert[];
+  onAcknowledgeSecurityAlert: (alertId: string) => Promise<void>;
   onOpenBreakGlassModal: () => void;
   onDecideBreakGlass: (
     id: string,
@@ -148,6 +153,46 @@ export function SecurityCenterView({
             Semua aksi diaudit
           </p>
         </div>
+      </div>
+
+      {/* Security alert feed — source is the durable FastAPI/Supabase event feed. */}
+      <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EAF2F6] pb-3">
+          <div>
+            <h2 className="text-sm font-bold text-[#17324D]">Security Alert Feed</h2>
+            <p className="text-xs text-[#526675]">Alert dari audit decision, break-glass, perubahan akses, dan event Supabase Auth yang terhubung dengan request/correlation/trace ID.</p>
+          </div>
+          <span className="font-mono-tabular text-xs font-bold text-[#17324D]">{securityAlerts.filter((alert) => alert.status === 'open').length} open</span>
+        </div>
+        {securityAlerts.length === 0 && (
+          <p className="rounded-lg border border-dashed border-[#B8C9D3] p-4 text-xs text-[#718391]">Belum ada security alert pada event feed. Tidak ada alert demo yang ditampilkan.</p>
+        )}
+        {securityAlerts.map((alert) => (
+          <div key={alert.id} className="flex flex-col gap-3 rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] p-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-[#17324D]">{alert.title}</span>
+                <AdminStatusText
+                  tone={alert.severity === 'critical' || alert.severity === 'high' ? 'danger' : alert.severity === 'medium' ? 'warning' : 'neutral'}
+                  label={`${alert.severity.toUpperCase()} · ${alert.status}`}
+                />
+              </div>
+              <p className="text-xs text-[#526675]">{alert.summary}</p>
+              <p className="font-mono-tabular text-[10px] text-[#718391]">
+                {alert.occurred_at} · {alert.tenant_id ?? 'Platform'} · {alert.alert_key}
+              </p>
+              <p className="font-mono-tabular break-all text-[10px] text-[#718391]">
+                Request: {alert.request_id ?? '—'} · Correlation: {alert.correlation_id ?? '—'} · Trace: {alert.trace_id ?? '—'}
+              </p>
+            </div>
+            {alert.status === 'open' && (
+              <button type="button" onClick={() => void onAcknowledgeSecurityAlert(alert.id)}
+                className="h-8 shrink-0 rounded-lg border border-[#B8C9D3] bg-white px-3 text-xs font-semibold text-[#17324D] hover:bg-[#EAF2F6]">
+                Acknowledge
+              </button>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Break-Glass Governance Queue */}
