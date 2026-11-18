@@ -10,9 +10,10 @@ from app.core.security import current_claims
 settings = get_settings()
 engine = create_async_engine(settings.database_url, pool_pre_ping=True, pool_size=5, max_overflow=10)
 SessionFactory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+current_claims_dependency = Depends(current_claims)
 
 
-async def user_session(claims: dict[str, Any] = Depends(current_claims)) -> AsyncIterator[AsyncSession]:
+async def user_session(claims: dict[str, Any] = current_claims_dependency) -> AsyncIterator[AsyncSession]:
     async with SessionFactory() as session:
         async with session.begin():
             await session.execute(text("SET LOCAL ROLE authenticated"))
