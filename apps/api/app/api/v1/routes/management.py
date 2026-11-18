@@ -55,8 +55,12 @@ class MembershipInvite(BaseModel):
 
     @model_validator(mode="after")
     def validate_scope_hierarchy(self):
-        if any((self.organization_unit_id, self.branch_id, self.department_id)) and not self.organization_id:
-            raise ValueError("organization_id wajib diisi untuk scope unit, branch, atau department.")
+        if any((self.organization_unit_id, self.branch_id, self.department_id)) and not (
+            self.organization_id
+        ):
+            raise ValueError(
+                "organization_id wajib diisi untuk scope unit, branch, atau department."
+            )
         if self.department_id and not self.branch_id:
             raise ValueError("department_id memerlukan branch_id untuk assignment membership.")
         return self
@@ -357,7 +361,9 @@ async def invite_tenant_member(
         )
         existing_status = existing_membership.scalar_one_or_none()
         if existing_status in ("active", "suspended"):
-            raise HTTPException(status_code=409, detail="User sudah memiliki membership aktif atau suspended.")
+            raise HTTPException(
+                status_code=409, detail="User sudah memiliki membership aktif atau suspended."
+            )
 
     settings = get_settings()
     service_key = settings.supabase_service_role_key
@@ -436,7 +442,9 @@ async def invite_tenant_member(
         )
         membership_row = membership_result.mappings().first()
         if membership_row is None:
-            raise HTTPException(status_code=409, detail="Membership existing tidak dapat diundang ulang.")
+            raise HTTPException(
+                status_code=409, detail="Membership existing tidak dapat diundang ulang."
+            )
         membership = dict(membership_row)
         scope_type = (
             "department" if payload.department_id else
@@ -523,7 +531,10 @@ async def replace_role_permissions(
         raise HTTPException(status_code=422, detail="Permission key tidak boleh duplikat.")
     async with engine.begin() as connection:
         role_result = await connection.execute(
-            text("select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"),
+            text(
+                "select id,key,tenant_id,scope_type from public.roles "
+                "where id=:role_id for update"
+            ),
             {"role_id": role_id},
         )
         role = role_result.mappings().first()
@@ -544,7 +555,10 @@ async def replace_role_permissions(
         found = {row["key"] for row in available.mappings().all()}
         missing = sorted(set(permission_keys) - found)
         if missing:
-            raise HTTPException(status_code=422, detail=f"Permission tidak terdaftar: {', '.join(missing)}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Permission tidak terdaftar: {', '.join(missing)}",
+            )
         await connection.execute(
             text("delete from public.role_permissions where role_id=:role_id"),
             {"role_id": role_id},

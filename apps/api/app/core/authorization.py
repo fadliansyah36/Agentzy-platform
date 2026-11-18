@@ -19,12 +19,16 @@ class TenantAccessContext:
     role_keys: frozenset[str]
 
 
-async def resolve_tenant_context(session: AsyncSession, user_id: UUID, tenant_id: UUID) -> TenantAccessContext:
+async def resolve_tenant_context(
+    session: AsyncSession, user_id: UUID, tenant_id: UUID
+) -> TenantAccessContext:
     result = await session.execute(
         text("""
-            select m.id as membership_id,m.organization_id,m.organization_unit_id,m.branch_id,m.department_id
+            select m.id as membership_id,m.organization_id,m.organization_unit_id,
+                   m.branch_id,m.department_id
             from public.memberships m join public.tenants t on t.id=m.tenant_id
-            where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active' and t.status='active'
+            where m.user_id=:user_id and m.tenant_id=:tenant_id
+              and m.status='active' and t.status='active'
         """),
         {"user_id": user_id, "tenant_id": tenant_id},
     )
@@ -67,7 +71,9 @@ async def resolve_tenant_context(session: AsyncSession, user_id: UUID, tenant_id
     )
 
 
-async def has_platform_permission(session: AsyncSession, user_id: UUID, permission_key: str) -> bool:
+async def has_platform_permission(
+    session: AsyncSession, user_id: UUID, permission_key: str
+) -> bool:
     result = await session.execute(
         text("""
             select exists (

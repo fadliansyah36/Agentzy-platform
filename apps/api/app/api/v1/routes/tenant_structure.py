@@ -17,7 +17,10 @@ session_dependency = Depends(user_session)
 
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
-    slug: str | None = Field(default=None, min_length=2, max_length=80, pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    slug: str | None = Field(
+        default=None, min_length=2, max_length=80,
+        pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$",
+    )
     status: str | None = Field(default=None, pattern="^(active|inactive|archived)$")
     organization_type: str | None = Field(
         default=None, pattern="^(company|division|department|branch|team)$"
@@ -110,7 +113,8 @@ async def read_tenant(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
     query = text("""
-        select id,name,slug,tenant_type,status,default_timezone,default_currency,created_at,updated_at
+        select id,name,slug,tenant_type,status,default_timezone,default_currency,
+               created_at,updated_at
         from public.tenants where id=:tenant_id
     """)
     if platform is None:
@@ -239,7 +243,8 @@ async def list_branches(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
     query = text("""
-        select id,tenant_id,organization_id,organization_unit_id,name,code,status,created_at,updated_at
+        select id,tenant_id,organization_id,organization_unit_id,name,code,status,
+               created_at,updated_at
         from public.branches where tenant_id=:tenant_id and status='active' order by name
     """)
     if platform is None:
@@ -331,7 +336,8 @@ async def create_department(
                 ) values (
                   :tenant_id,:organization_id,:branch_id,:parent_department_id,:name,:code,:actor,:actor
                 )
-                returning id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,
+                returning id,tenant_id,organization_id,branch_id,parent_department_id,
+                          name,code,status,
                           created_at,updated_at
             """),
             {"tenant_id": tenant_id, **payload.model_dump(), "actor": actor},
@@ -475,7 +481,8 @@ async def revoke_membership(
             text("""
                 update public.memberships
                 set status='revoked',ended_at=now(),updated_at=now()
-                where id=:membership_id and tenant_id=:tenant_id and status in ('active','invited','suspended')
+                where id=:membership_id and tenant_id=:tenant_id
+                  and status in ('active','invited','suspended')
                 returning id,user_id
             """),
             {"membership_id": membership_id, "tenant_id": tenant_id},
@@ -502,7 +509,9 @@ async def assign_membership_role(
     )
     role_key = payload.role_key.strip().lower()
     if role_key.startswith("platform_"):
-        raise HTTPException(status_code=422, detail="Platform role tidak dapat diberikan pada tenant.")
+        raise HTTPException(
+            status_code=422, detail="Platform role tidak dapat diberikan pada tenant."
+        )
     if role_key in (
         "corporate_owner", "corporate_admin", "corporate_ai_manager", "ai_workforce_admin"
     ):
@@ -536,7 +545,13 @@ async def assign_membership_role(
         if not bool(owner.scalar_one()) and not (
             claims.get("aal") == "aal2" and bool(platform_manager.scalar_one())
         ):
-            raise HTTPException(status_code=403, detail="Role elevated hanya dapat diberikan oleh tenant owner atau platform membership admin dengan MFA.")
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Role elevated hanya dapat diberikan oleh tenant owner atau "
+                    "platform membership admin dengan MFA."
+                ),
+            )
     async with engine.begin() as connection:
         membership = await connection.execute(
             text("""
@@ -575,7 +590,9 @@ async def assign_membership_role(
         if payload.scope_type != "tenant":
             column = scope_columns[payload.scope_type]
             if payload.scope_id is None or target[column] != payload.scope_id:
-                raise HTTPException(status_code=404, detail="Scope tidak tersedia untuk membership.")
+                raise HTTPException(
+                    status_code=404, detail="Scope tidak tersedia untuk membership."
+                )
         await connection.execute(
             text("""
                 insert into public.membership_roles(

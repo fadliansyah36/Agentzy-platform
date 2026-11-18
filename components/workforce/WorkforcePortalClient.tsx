@@ -206,19 +206,12 @@ export function WorkforcePortalClient() {
     return roles;
   }, [auth.identity]);
 
-  useEffect(() => {
-    if (allowedWorkforceRoles.length > 0 && !allowedWorkforceRoles.includes(roleMode)) {
-      setRoleMode(allowedWorkforceRoles[0]);
-    }
-  }, [allowedWorkforceRoles, roleMode]);
+  const accessToken = auth.session?.access_token;
 
   useEffect(() => {
-    if (!auth.session || !auth.identity || allowedWorkforceRoles.length > 0) {
-      setPendingInvitations([]);
-      return;
-    }
+    if (!accessToken || !auth.identity || allowedWorkforceRoles.length > 0) return;
     let active = true;
-    void getMyInvitations(auth.session.access_token)
+    void getMyInvitations(accessToken)
       .then((result) => {
         if (!active) return;
         setPendingInvitations(result.invitations.filter((invitation) =>
@@ -232,7 +225,7 @@ export function WorkforcePortalClient() {
         if (active) setLoginError(cause instanceof Error ? cause.message : 'Undangan tidak dapat dimuat.');
       });
     return () => { active = false; };
-  }, [auth.session?.access_token, auth.identity, allowedWorkforceRoles.length]);
+  }, [accessToken, auth.identity, allowedWorkforceRoles.length]);
 
   const handleAcceptWorkforceInvitation = async (invitation: AgentzyInvitation) => {
     if (!auth.session) throw new Error('Sesi autentikasi tidak tersedia.');

@@ -46,7 +46,10 @@ async def list_organizations(
           and (:organization_id is null or id=:organization_id)
         order by name
     """)
-    params = {"tenant_id": tenant_id, "organization_id": context.organization_id if context else None}
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+    }
     if context is None:
         async with engine.connect() as connection:
             result = await connection.execute(query, params)

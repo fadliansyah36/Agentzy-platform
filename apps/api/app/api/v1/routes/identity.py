@@ -1,7 +1,7 @@
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +36,9 @@ async def read_identity(
     result = await session.execute(
         text("""
             select m.id, m.tenant_id, t.name as tenant_name, m.organization_id, m.status,
-                   coalesce(array_agg(distinct r.key) filter (where r.key is not null), '{}') as role_keys,
+                   coalesce(
+                     array_agg(distinct r.key) filter (where r.key is not null), '{}'
+                   ) as role_keys,
                    coalesce(array_agg(distinct rp.permission_key)
                      filter (where rp.permission_key is not null), '{}') as permissions
             from public.memberships m
@@ -134,7 +136,9 @@ async def read_my_permissions(
         text("""
             select m.id as membership_id,m.tenant_id,t.name as tenant_name,
                    m.organization_id,m.status,
-                   coalesce(array_agg(distinct r.key) filter (where r.key is not null),'{}') as roles,
+                   coalesce(
+                     array_agg(distinct r.key) filter (where r.key is not null), '{}'
+                   ) as roles,
                    coalesce(array_agg(distinct rp.permission_key)
                      filter (where rp.permission_key is not null),'{}') as permissions
             from public.memberships m
@@ -169,7 +173,9 @@ async def list_my_invitations(claims: dict = claims_dependency):
         result = await connection.execute(
             text("""
             select m.id,m.tenant_id,t.name as tenant_name,m.invitation_expires_at,
-                   coalesce(array_agg(distinct r.key) filter (where r.key is not null),'{}') as role_keys
+                   coalesce(
+                     array_agg(distinct r.key) filter (where r.key is not null), '{}'
+                   ) as role_keys
             from public.memberships m
             join public.tenants t on t.id=m.tenant_id
             left join public.membership_roles mr on mr.membership_id=m.id
@@ -193,7 +199,9 @@ async def revoke_sessions(
     async with engine.begin() as connection:
         await connection.execute(
             text("""
-                insert into public.revoked_sessions(session_id,user_id,revoked_at,expires_at,reason,request_id)
+                insert into public.revoked_sessions(
+                   session_id,user_id,revoked_at,expires_at,reason,request_id
+                 )
                 select s.id,s.user_id,now(),coalesce(s.not_after,now()+interval '24 hours'),
                        'user_requested_logout',:request_id
                 from auth.sessions s
