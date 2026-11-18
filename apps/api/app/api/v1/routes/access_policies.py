@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.abac import PolicyValidationError, validate_condition
-from app.core.authorization import has_platform_permission
+from app.core.authorization import authorize_platform_action
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -113,10 +113,16 @@ def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
 
 async def _require_security_admin(claims: dict, session: AsyncSession) -> UUID:
     actor = UUID(claims["sub"])
-    if claims.get("aal") != "aal2" or not await has_platform_permission(
-        session, actor, "platform.security.manage"
-    ):
-        raise HTTPException(status_code=403, detail="Platform security administration requires AAL2 and platform.security.manage.")
+    if claims.get("aal") != "aal2":
+        raise HTTPException(status_code=403, detail="Platform security administration requires AAL2.")
+    await authorize_platform_action(
+        session,
+        user_id=actor,
+        permission_key="platform.security.manage",
+        resource_type="platform.security",
+        action="manage",
+        resource={"id": "access_policy_administration"},
+    )
     return actor
 
 
