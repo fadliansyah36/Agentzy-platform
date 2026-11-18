@@ -63,6 +63,11 @@ class AccessPolicyPatch(BaseModel):
     def validate_policy(self):
         if not self.model_fields_set:
             raise ValueError("At least one policy field must be supplied")
+        if "conditions" in self.model_fields_set and self.conditions is None:
+            raise ValueError("conditions cannot be null")
+        for field in ("policy_name", "resource", "action", "effect", "priority", "status"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
         if self.conditions is not None:
             try:
                 validate_condition(self.conditions)
