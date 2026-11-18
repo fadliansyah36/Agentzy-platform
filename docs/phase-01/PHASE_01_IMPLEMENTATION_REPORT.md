@@ -85,6 +85,8 @@ Current live catalog checks:
 
 ### Current task disposition
 
+- Route-by-route inventory: `docs/phase-01/PHASE_01_ENDPOINT_AUTHORIZATION_INVENTORY.md`. It identifies the legacy management endpoints that still use direct platform permission gates and therefore remain PARTIAL for central ABAC/object authorization.
+
 | Workstream | Status | Evidence / remaining gap |
 |---|---|---|
 | M010 database | DONE (migration + catalog verification) | Remote version `20261118062335`; verification report exists. M010 does not complete Phase 01 by itself. |
