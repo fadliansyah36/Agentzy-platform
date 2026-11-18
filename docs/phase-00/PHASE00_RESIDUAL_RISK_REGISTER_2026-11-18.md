@@ -69,3 +69,26 @@ No production database DDL, grants, policies, functions, event triggers, Auth co
 - P00-AC-10: NOT APPROVED.
 
 **Phase 00 is not CLOSED. Phase 01 must not start.**
+
+
+## Phase 00 Definition of Done — governing-source alignment
+
+This is a Phase 00-specific application of the existing Definition of Done in `docs/AGENTZY_MASTER_PRD_v2.0.md` §20 and the Phase 00 acceptance criterion in `docs/AGENTZY_TECHNICAL_IMPLEMENTATION_BLUEPRINT_v1.0.md` §15. It does not replace or expand the product requirements.
+
+| Governing DoD element | Phase 00 evidence expected | Current disposition |
+|---|---|---|
+| PRD baseline / requirement and acceptance traceability | Approved Phase 00 scope, risk/gate mapping, acceptance criteria and evidence references | PARTIAL — source documents and risk register exist; closure gates remain open |
+| ADR, ownership, coding rules and source of truth | Approved ADR/domain ownership, AGENTS rules, repository conventions and single-source-of-truth decision | PARTIAL / PENDING APPROVAL — AGENTS and README exist; several ownership decisions remain unapproved |
+| Migration policy and live baseline | Canonical project confirmation, schema/history/RLS/grants/function/trigger/Storage evidence, migration reconciliation and recovery notes | PARTIAL / BLOCKED — live catalog evidence exists; security remediation and recovery evidence are outstanding; remote Phase 01 migration entries are pre-existing and untouched |
+| API/schema and domain ownership | Complete route/action inventory, canonical FastAPI ownership, duplicate/missing/local path disposition | PARTIAL — route-level mapping exists; callback-level inventory and owner approval remain incomplete |
+| Authorization/RLS | RLS enabled and correct policies, least-privilege grants/default ACLs, secure function/trigger posture, current Advisor verification | BLOCKED — RLS helper remains fail-open; both Security Advisor WARNs remain; broad grants/default ACLs remain |
+| Frontend integration and UI states | Existing UI preserved; action-level mapping to real API; loading/error/empty/denied states and no business writes/fallbacks outside canonical API | PARTIAL — route/module inventory only; complete callback-level evidence is absent |
+| Audit and observability | Evidence of audit event coverage, traceability and operational ownership for Phase 00 changes | PARTIAL — audit table/catalog exists; action-level coverage is not evidenced by the current inventory |
+| Dependency/license and asset provenance | Exact package/license evidence, notices, 31 asset source/rights/permission/attribution records and approved disposition | BLOCKED — legal/owner evidence and approvals remain outstanding |
+| Engineering evidence | Frozen dependency install, lint/type-check, Python compile/import, Ruff, migration consistency, OpenAPI/schema and static checks with actual results | BLOCKED — compileall and migration source consistency passed in run 44224158408; Bun frozen install and Ruff failed; ESLint, TypeScript and OpenAPI were skipped |
+| Documentation and evidence | Current register, evidence references, before/after verification, unresolved findings and commit SHA | PARTIAL — register updated in commit below; external evidence/approvals still missing |
+| Independent review and closure | Named independent Security, Database, Legal/IP, Frontend/Backend and Product reviewers; decisions, dates, unresolved findings and authorized closure approval | BLOCKED / PENDING APPROVAL — no independent reviewer decision or closure approval supplied |
+
+**Phase 00 closure decision:** NOT RECOMMENDED for closure. The Phase 00 exit criterion in PRD §19 requires the boundaries, repository conventions and source of truth to be agreed; Blueprint §15 requires ownership, coding rules, migration policy and source of truth to be approved. Those approval gates are not met. PRD §20 DoD is also not met across security, API ownership, frontend integration, evidence and approval. No testing outside the allowed minimum engineering checks was run.
+
+**Independent review record:** No reviewer is named or represented as having reviewed this work. The project owner must obtain independent decisions from the owners already named in RR-001–RR-018; the implementer does not self-approve. Closure remains pending explicit authorized approval.
