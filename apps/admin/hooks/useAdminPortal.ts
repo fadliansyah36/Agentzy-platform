@@ -58,7 +58,6 @@ import type {
   PlatformUserRecord,
   RbacRoleRecord,
   SkillRegistryRecord,
-  SuperAdminRoleKey,
   ToolRegistryRecord,
   VendorSubprocessorRecord,
   WebhookLogRecord,
@@ -718,8 +717,6 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       const definitions = permissionRegistry.filter((item) =>
         (item.resource ?? item.domain) === resourceKey
       );
-      const selected = definitions.filter((item) => (role.permissionKeys ?? []).includes(item.key));
-      const selectedKeys = new Set(selected.map((item) => item.key));
       const targetKeys = definitions.filter((item) => {
         if (next === 'F') return true;
         if (next === 'C/U') return ['create', 'update', 'manage', 'write'].includes(item.action);
