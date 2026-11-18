@@ -760,3 +760,15 @@ This section records implementation work committed after the latest Phase 01 liv
 7. Record final successful minimum engineering checks on the final implementation commit.
 
 **Phase 01 remains IN PROGRESS / PARTIAL — NOT DONE.** Phase 02 remains NOT STARTED. Do not begin Phase 02 from this continuation.
+
+## 21. Super Admin membership directory continuation — 2026-11-18
+
+- Super Admin tenant membership directory now reads records through the FastAPI membership endpoint, gated by AAL2 and `platform.memberships.read`.
+- New member invitations call the existing FastAPI invite endpoint; membership revocation calls the existing revoke endpoint. The portal no longer inserts or deletes local demo membership rows.
+- MFA status is rendered as unverified when the API has no MFA evidence; the UI does not infer disabled MFA.
+- Admin profile editing for other users and replacement of an existing membership role remain unsupported by the current identity API/portal contract; these actions are not simulated locally.
+- Commits: `58be4e9dd9d8512459814afe9f9b86fc7ee5368c`, `92bc296dc45839a155ff1124e0c64277ce232364`, `14699812969e0117a7fec98b90f1456b6021d3c4`.
+- Engineering run [44300592550](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300592550) passed at `92bc296d`: frontend lint/TypeScript, Python compile, Ruff, deterministic authorization tests, FastAPI import/OpenAPI and migration source consistency.
+- The later `14699812` commit only adds a comment; no functional code changed after the passing check.
+
+**Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.** Identity and tenant membership portal integration is improved but membership role replacement, complete privileged CRUD parity, hosted Auth configuration/lifecycle evidence and remaining endpoint authorization coverage are still outstanding. Phase 02 remains NOT STARTED.
