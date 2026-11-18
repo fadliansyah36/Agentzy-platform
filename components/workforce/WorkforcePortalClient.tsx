@@ -215,10 +215,17 @@ export function WorkforcePortalClient() {
   }, [auth.identity]);
 
   const accessToken = auth.session?.access_token;
-  const [workforceTenantContexts, setWorkforceTenantContexts] = useState<
-    AgentzyWorkforceTenantContext[]
-  >([]);
-  const [workforceContextError, setWorkforceContextError] = useState<string | null>(null);
+  const [workforceContextResult, setWorkforceContextResult] = useState<{
+    userId: string;
+    contexts?: AgentzyWorkforceTenantContext[];
+    error?: string;
+  } | null>(null);
+  const currentWorkforceContextResult =
+    workforceContextResult?.userId === auth.identity?.user_id
+      ? workforceContextResult
+      : null;
+  const workforceTenantContexts = currentWorkforceContextResult?.contexts ?? [];
+  const workforceContextError = currentWorkforceContextResult?.error ?? null;
 
   useEffect(() => {
     const memberships = (auth.identity?.memberships ?? []).filter((membership) =>
@@ -232,23 +239,22 @@ export function WorkforcePortalClient() {
         ].includes(permission)
       )
     );
-    if (!accessToken || memberships.length === 0) {
-      setWorkforceTenantContexts([]);
-      setWorkforceContextError(null);
-      return;
-    }
+    if (!accessToken || memberships.length === 0 || !auth.identity?.user_id) return;
     let active = true;
-    setWorkforceTenantContexts([]);
-    setWorkforceContextError(null);
     void Promise.all(
       memberships.map((membership) => getWorkforceTenantContext(accessToken, membership.tenant_id))
     ).then((contexts) => {
-      if (active) setWorkforceTenantContexts(contexts);
+      if (active) {
+        setWorkforceContextResult({ userId: auth.identity!.user_id, contexts });
+      }
     }).catch((error) => {
       if (!active) return;
-      setWorkforceContextError(
-        error instanceof Error ? error.message : 'Scope organisasi Workforce gagal diverifikasi.'
-      );
+      setWorkforceContextResult({
+        userId: auth.identity!.user_id,
+        error: error instanceof Error
+          ? error.message
+          : 'Scope organisasi Workforce gagal diverifikasi.',
+      });
     });
     return () => { active = false; };
   }, [accessToken, auth.identity]);
