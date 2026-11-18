@@ -13,6 +13,10 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter()
+
+
+def _request_id(request: Request) -> str | None:
+    return _request_id(request)
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
@@ -195,7 +199,7 @@ async def _audit(
             "action": action,
             "resource_type": resource_type,
             "resource_id": str(resource_id),
-            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            "request_id": _request_id(request),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "metadata": json.dumps({
@@ -1087,7 +1091,7 @@ async def read_workforce_tenant_context(
                 resource_type=resource_type,
                 action=action,
                 resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-                request_id=getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                request_id=_request_id(request),
             )
             break
         except HTTPException as exc:
