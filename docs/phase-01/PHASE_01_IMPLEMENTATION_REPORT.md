@@ -113,3 +113,29 @@ Current live catalog checks:
 ### Final disposition
 
 **Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.** The remaining blockers are complete legacy endpoint authorization coverage, password recovery, cross-portal registry/hierarchy integration, universal API contract/idempotency coverage, runtime/provider configuration, and Workforce/Corporate operational-data wiring. Phase 02 is not started or authorized.
+
+## 2026-11-18 execution continuation — Phase 01 hardening
+
+### Changes committed to `main`
+
+- `c617ab44df0a01bf6b8fe7bd962526af01a3016e` — added object-aware platform ABAC checks to tenant update/archive and role permission replacement/update/delete operations; corrected Supabase MFA TOTP code validation in the shared auth hook; protected auth-context hydration from stale async responses; removed initial demo-role fallback from Super Admin RBAC state and initial demo-member fallback from Corporate membership state.
+- `a76d21e82817e060cdf75efbe9092a4ee798a4d7` — tenant-owner role checks now honor role assignment validity windows and tenant ownership scope.
+- `d6094d2f99d3a4d7a69c89b9c89c9cf5191ef5ec` — added deterministic authorization tests for organization-unit and department object scope.
+- `d1dee64d05fed5d69ff894093b7cba54a0ae670c` — Ruff formatting corrections for the resource-aware authorization changes.
+
+### Live database disposition
+
+- Reconfirmed the canonical Agentzy-db project and six applied migrations, including M010, M011 and M012.
+- No Phase 01 schema delta was required by this implementation increment; no new migration or direct SQL DDL was applied.
+- All 18 public application tables remain RLS-enabled. Supabase Security Advisor returned six INFO findings for intentionally server-only tables with no client policies (`access_policies`, `access_policy_versions`, `auth_provider_events`, `break_glass_requests`, `idempotency_records`, `revoked_sessions`). These findings are recorded, not represented as a clean/no-finding result.
+- No grants, policies, Auth settings, Storage settings, functions or triggers were changed in this increment.
+
+### Engineering checks
+
+- GitHub Actions run [44299601346](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44299601346) failed at Ruff because five newly added lines exceeded the configured 100-character limit; Python compile, frontend lint/TypeScript and migration consistency passed in that run.
+- The formatting correction is committed as `d1dee64d05fed5d69ff894093b7cba54a0ae670c`. Run [44299830418](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44299830418) was still running when this report delta was authored. Do not treat it as passed until its final conclusion is recorded.
+- No UAT, staging, real-world identity testing, load testing, penetration testing or production release testing was run.
+
+### Current disposition
+
+**Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.** The implementation increment closes specific code-level gaps but does not establish complete legacy endpoint/object authorization coverage, hosted Supabase Auth configuration and email delivery, live user lifecycle evidence, full portal RBAC/hierarchy action parity, audit redaction/export acceptance, or all sensitive API contract/idempotency requirements. Phase 02 remains NOT STARTED.
