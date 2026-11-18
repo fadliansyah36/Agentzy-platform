@@ -418,15 +418,7 @@ export function AdminPortalClient({
         {portal.activeSection === 'security' && (
           <SecurityCenterView
             mfaEnforced={portal.mfaEnforced}
-            onToggleMfa={() => {
-              portal.setMfaEnforced((prev) => !prev);
-              portal.showToast('Kebijakan MFA (2FA) platform diperbarui.');
-            }}
             activeSessionsCount={portal.activeSessionsCount}
-            onRevokeAllSessions={() => {
-              portal.setActiveSessionsCount(1);
-              portal.showToast('17 sesi non-esensial dicabut paksa.');
-            }}
             ipAllowlistEnabled={portal.ipAllowlistEnabled}
             sessionTtlMinutes={portal.sessionTtlMinutes}
             breakGlassRequests={portal.breakGlassRequests}
