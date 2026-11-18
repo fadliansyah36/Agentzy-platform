@@ -1348,7 +1348,9 @@ async def replace_membership_role(
         if payload.scope_type != "tenant":
             column = scope_columns[payload.scope_type]
             if target[column] != payload.scope_id:
-                raise HTTPException(\n                    status_code=404, detail="Scope tidak tersedia untuk membership."\n                )
+                raise HTTPException(
+                    status_code=404, detail="Scope tidak tersedia untuk membership."
+                )
         current_owner = await connection.execute(
             text("""
                 select exists(
