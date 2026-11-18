@@ -239,8 +239,8 @@ export function OrganizationUsersView({
                     {u.roleName} · {u.tenantName}
                   </span>
                   <AdminStatusText
-                    tone={u.mfaEnabled ? 'success' : 'warning'}
-                    label={u.mfaEnabled ? 'MFA Aktif' : 'Belum MFA'}
+                    tone={u.mfaEnabled === true ? 'success' : 'warning'}
+                    label={u.mfaEnabled === true ? 'MFA Aktif' : u.mfaEnabled === false ? 'Belum MFA' : 'Status MFA belum diverifikasi'}
                   />
                 </div>
                 <div className="flex justify-end gap-1.5 border-t border-[#EAF2F6] pt-2.5">

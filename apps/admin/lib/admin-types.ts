@@ -141,9 +141,9 @@ export interface PlatformUserRecord {
   roleId: string;
   roleName: string;
   department: string;
-  mfaEnabled: boolean;
+  mfaEnabled: boolean | null;
   status: 'Aktif' | 'Suspended' | 'Pending';
-  lastLogin: string;
+  lastLogin: string | null;
 }
 
 export interface RbacRoleRecord {

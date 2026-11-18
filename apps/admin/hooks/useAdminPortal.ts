@@ -15,6 +15,9 @@ import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
   createTenant as createTenantApi,
   listPlatformTenants,
+  listTenantMemberships,
+  inviteTenantMember,
+  revokeTenantMembership,
   listOrganizationUnits,
   listBranches,
   listDepartments,
@@ -306,6 +309,52 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     });
     return () => { active = false; };
   }, [auth.session?.access_token, auth.identity, auth.aal, showToast]);
+
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    if (
+      !accessToken ||
+      auth.aal !== 'aal2' ||
+      !platformPermissions.includes('platform.memberships.read') ||
+      tenants.length === 0
+    ) {
+      setUsers([]);
+      return;
+    }
+    let active = true;
+    void Promise.all(tenants.map(async (tenant) => {
+      const memberships = await listTenantMemberships(accessToken, tenant.id);
+      return memberships.map((membership) => {
+        const roleKeys = membership.role_keys ?? [];
+        const role = roles.find((item) => roleKeys.includes(item.key));
+        return {
+          id: membership.id,
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          name: membership.display_name ?? membership.email ?? membership.user_id,
+          email: membership.email ?? '',
+          roleId: role?.id ?? roleKeys[0] ?? '',
+          roleName: roleKeys.map((key) => roles.find((item) => item.key === key)?.name ?? key).join(', '),
+          department: '',
+          mfaEnabled: null,
+          status: membership.status === 'active'
+            ? 'Aktif' as const
+            : membership.status === 'suspended' || membership.status === 'revoked'
+              ? 'Suspended' as const
+              : 'Pending' as const,
+          lastLogin: null,
+        };
+      });
+    })).then((rows) => {
+      if (active) setUsers(rows.flat());
+    }).catch((error) => {
+      if (active) {
+        setUsers([]);
+        showToast(error instanceof Error ? error.message : 'Gagal memuat membership directory.');
+      }
+    });
+    return () => { active = false; };
+  }, [auth.session?.access_token, auth.aal, platformPermissions, tenants, roles, showToast]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
@@ -751,34 +800,102 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
 
   const upsertPlatformUser = useCallback(
-    (payload: Omit<PlatformUserRecord, 'id' | 'lastLogin'> & { id?: string }) => {
-      if (payload.id) {
-        setUsers((prev) =>
-          prev.map((u) => (u.id === payload.id ? { ...u, ...payload } : u))
-        );
-        showToast(`Pengguna ${payload.name} diperbarui.`);
-      } else {
-        setUsers((prev) => [
-          { ...payload, id: nextId('usr'), lastLogin: 'Undangan dikirim' },
-          ...prev,
-        ]);
-        showToast(`Pengguna ${payload.name} ditambahkan & undangan MFA dikirim.`);
+    async (payload: Omit<PlatformUserRecord, 'id' | 'lastLogin'> & { id?: string }) => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk mengelola membership.');
+        return;
       }
-      setModal({ type: 'none' });
+      if (payload.id) {
+        showToast('Perubahan profil pengguna lain belum didukung oleh kontrak identity. Tidak ada perubahan lokal yang disimpan.');
+        return;
+      }
+      const tenant = tenants.find((item) => item.id === payload.tenantId);
+      const role = roles.find((item) => item.id === payload.roleId || item.key === payload.roleId);
+      if (!tenant || !role || role.scopeType !== 'Tenant') {
+        showToast('Pilih tenant dan role tenant yang valid dari registry.');
+        return;
+      }
+      try {
+        await inviteTenantMember(accessToken, tenant.id, {
+          email: payload.email,
+          full_name: payload.name,
+          role_key: role.key,
+        });
+        const rows = await listTenantMemberships(accessToken, tenant.id);
+        const refreshed = rows.map((membership) => {
+          const roleKeys = membership.role_keys ?? [];
+          return {
+            id: membership.id,
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            name: membership.display_name ?? membership.email ?? membership.user_id,
+            email: membership.email ?? '',
+            roleId: roles.find((item) => roleKeys.includes(item.key))?.id ?? roleKeys[0] ?? '',
+            roleName: roleKeys.map((key) => roles.find((item) => item.key === key)?.name ?? key).join(', '),
+            department: '',
+            mfaEnabled: null,
+            status: membership.status === 'active'
+              ? 'Aktif' as const
+              : membership.status === 'suspended' || membership.status === 'revoked'
+                ? 'Suspended' as const
+                : 'Pending' as const,
+            lastLogin: null,
+          };
+        });
+        setUsers((current) => [
+          ...current.filter((item) => item.tenantId !== tenant.id),
+          ...refreshed,
+        ]);
+        setModal({ type: 'none' });
+        showToast(`Undangan membership dikirim ke ${payload.email} melalui backend.`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Gagal mengirim undangan membership.');
+      }
     },
-    [showToast]
+    [auth.session?.access_token, auth.aal, roles, tenants, showToast]
   );
 
   const deletePlatformUser = useCallback(
-    (id: string) => {
-      const target = users.find((u) => u.id === id);
-      setUsers((prev) => prev.filter((u) => u.id !== id));
-      if (target) {
-        appendAudit('Hapus Pengguna Platform', target.name, target.tenantName, `email: ${target.email}`);
-        showToast(`Pengguna ${target.name} dihapus.`);
+    async (id: string) => {
+      const accessToken = auth.session?.access_token;
+      const target = users.find((user) => user.id === id);
+      if (!accessToken || auth.aal !== 'aal2' || !target) {
+        showToast('Session AAL2 atau membership target tidak tersedia.');
+        return;
+      }
+      try {
+        await revokeTenantMembership(accessToken, target.tenantId, target.id);
+        const rows = await listTenantMemberships(accessToken, target.tenantId);
+        setUsers((current) => [
+          ...current.filter((item) => item.tenantId !== target.tenantId),
+          ...rows.map((membership) => {
+            const roleKeys = membership.role_keys ?? [];
+            return {
+              id: membership.id,
+              tenantId: target.tenantId,
+              tenantName: target.tenantName,
+              name: membership.display_name ?? membership.email ?? membership.user_id,
+              email: membership.email ?? '',
+              roleId: roles.find((item) => roleKeys.includes(item.key))?.id ?? roleKeys[0] ?? '',
+              roleName: roleKeys.map((key) => roles.find((item) => item.key === key)?.name ?? key).join(', '),
+              department: '',
+              mfaEnabled: null,
+              status: membership.status === 'active'
+                ? 'Aktif' as const
+                : membership.status === 'suspended' || membership.status === 'revoked'
+                  ? 'Suspended' as const
+                  : 'Pending' as const,
+              lastLogin: null,
+            };
+          }),
+        ]);
+        showToast(`Akses membership ${target.name} telah dicabut melalui backend.`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Gagal mencabut membership.');
       }
     },
-    [appendAudit, showToast, users]
+    [auth.session?.access_token, auth.aal, roles, showToast, users]
   );
 
   // RBAC CRUD & Matrix
