@@ -272,13 +272,17 @@ async def authorize_action(
                       tenant_id,actor_user_id,action,resource_type,resource_id,
                       request_id,metadata
                     ) values (
-                      :tenant_id,:actor,'authorization.abac.evaluated',:resource_type,
+                      :tenant_id,:actor,:audit_action,:resource_type,
                       :resource_id,:request_id,cast(:metadata as jsonb)
                     )
                 """),
                 {
                     "tenant_id": tenant_id,
                     "actor": user_id,
+                    "audit_action": (
+                        "authorization.break_glass.used"
+                        if break_glass_id else "authorization.abac.evaluated"
+                    ),
                     "resource_type": resource_type,
                     "resource_id": str(resource.get("id", "")) or None,
                     "request_id": request_id,
@@ -374,12 +378,16 @@ async def authorize_platform_action(
                     insert into public.audit_logs(
                       actor_user_id,action,resource_type,resource_id,request_id,metadata
                     ) values (
-                      :actor,'authorization.platform_abac.evaluated',:resource_type,
+                      :actor,:audit_action,:resource_type,
                       :resource_id,:request_id,cast(:metadata as jsonb)
                     )
                 """),
                 {
                     "actor": user_id,
+                    "audit_action": (
+                        "authorization.break_glass.used"
+                        if break_glass_id else "authorization.platform_abac.evaluated"
+                    ),
                     "resource_type": resource_type,
                     "resource_id": str(resource.get("id", "")) or None,
                     "request_id": request_id,
