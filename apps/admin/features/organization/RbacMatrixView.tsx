@@ -91,14 +91,16 @@ export function RbacMatrixView({
                   {r.userCount} pengguna · {r.isSystemRole ? 'System Role' : 'Kustom'}
                 </span>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenRoleModal(r)}
-                    className="inline-flex items-center gap-1 font-semibold text-[#0284C7] hover:underline"
-                  >
-                    <Pencil className="h-3 w-3" />
-                    <span>Edit</span>
-                  </button>
+                  {!r.isSystemRole && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenRoleModal(r)}
+                      className="inline-flex items-center gap-1 font-semibold text-[#0284C7] hover:underline"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      <span>Edit</span>
+                    </button>
+                  )}
                   {!r.isSystemRole && onDeleteRole && (
                     <button
                       type="button"
