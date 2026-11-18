@@ -213,3 +213,51 @@ Latest Supabase evidence from the canonical project `cwhjdnkotuhueeudpgeu`:
 
 
 **Independent review evidence package:** `docs/phase-00/PHASE00_INDEPENDENT_REVIEW_EVIDENCE_PACKAGE.md`. Reviewer identities and sign-offs remain PENDING; the package is a template/index, not evidence that any review has occurred.
+
+
+## Final acceptance revalidation — 18 November 2026, 04:31 UTC
+
+**Final acceptance report:** `docs/phase-00/PHASE_00_FINAL_ACCEPTANCE_REPORT.md`  
+**Report commit:** `a5f374627ff4e33e7655bce7c43b8745b8201ede`  
+**Pre-report repository HEAD:** `5e072f95304a12cf86fa11c5056f40f0afaa0211`  
+**Canonical Supabase project:** `cwhjdnkotuhueeudpgeu` / Agentzy-db / ACTIVE_HEALTHY / PostgreSQL 17.12.0.000 / ap-northeast-1.
+
+This is a fresh, read-only acceptance revalidation. Existing risk IDs and owners remain unchanged. No severity or priority was assigned because the source register does not provide severity/priority values. No independent reviewer or legal approval was provided.
+
+### Current Supabase evidence
+
+| Risk | Current read-only evidence | Status |
+|---|---|---|
+| RR-001 | `public.rls_auto_enable()` remains SECURITY DEFINER, owner postgres, `search_path=pg_catalog`; function catches `WHEN OTHERS`, logs and does not re-raise. Event trigger `ensure_rls` remains enabled for `ddl_command_end`. | BLOCKED |
+| RR-002 | Function ACL remains `PUBLIC, postgres, anon, authenticated, service_role`. Security Advisor observed 2026-11-18T04:31:11.074Z reports 0028 anon WARN and 0029 authenticated WARN. | BLOCKED |
+| RR-003 | Nine public tables each grant anon, authenticated and service_role DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE and UPDATE. | BLOCKED |
+| RR-004 | `pg_default_acl` includes broad postgres defaults for public and storage and supabase_admin defaults across public and Supabase-managed schemas. Managed schemas/ACLs were not changed. | BLOCKED |
+| RR-005 | Project identity/status is verified, but provider, SMTP, password, MFA, session and redirect hosted Auth settings are not returned by the connector. | BLOCKED — PENDING EXTERNAL EVIDENCE |
+| RR-006 | No authoritative Dashboard/API exposed-schema setting was returned. A database catalog query is not proof of hosted Data API configuration. | BLOCKED — PENDING EXTERNAL EVIDENCE |
+| RR-007 | Current catalog query confirms 0 Storage buckets, 0 objects and 0 Storage policies. Product Owner decision on whether Storage is intentionally unused remains pending. | DONE (catalog only); decision PENDING |
+| RR-008–RR-010 | Technical package reconciliation remains 1,037 exact coordinates, 988 license texts and 2 NOTICE/COPYING files; 26 LGPL/MPL, 5 manual-expression and 40 missing-LICENSE findings still require legal/technical disposition. | BLOCKED |
+| RR-011 | All 31 assets remain without verified creator/rightsholder/source/license/commercial permission/attribution approval. Metadata inventory records 29,037,921 bytes and six duplicate groups. | BLOCKED |
+| RR-012 | Route/view inventory remains 11 page/layout routes and 3 Next.js API handlers; exhaustive callback/form/navigation/action-to-permission trace is not evidenced. | PARTIAL |
+| RR-013 | Current inventory still shows transitional Next.js AI generation and Maps handlers and missing complete FastAPI contracts for several portal domains. Domain-owner approvals absent. | PARTIAL |
+| RR-014 | Bun frozen install PASS in GitHub Actions 44229181139. | DONE — unchanged |
+| RR-015 | Ruff PASS in GitHub Actions 44229181139, without rule suppression. | DONE — unchanged |
+| RR-016 | ESLint, TypeScript, Ruff, Python compileall, FastAPI import/OpenAPI, migration source filename/order and diff whitespace checks PASS in run 44229181139. Focused deterministic unit tests were not evidenced in that run. | DONE — unchanged |
+| RR-017 | GitHub branches/main API currently reports `protected=false`; no branch-protection change was applied. | PARTIAL |
+| RR-018 | Independent review package is present but reviewer identity, competence, independence statement, review report and sign-off fields remain unfilled. | PENDING INDEPENDENT REVIEW |
+
+### Migration/source-of-truth discrepancy — existing state, not a new risk ID
+
+Remote Supabase migration history and repository source both contain:
+- `20261117175948_phase_01_platform_core_identity_tenant`
+- `20261117181011_phase_01_system_roles_permissions_auth_profile`
+- `20261117182410_phase_01_profile_email_projection`
+
+The live database has nine Agentzy public tables with RLS enabled 9/9 and FORCE RLS 0/9. These are pre-existing state. This acceptance revalidation did not create, apply, edit or roll back any migration. It does not authorize additional Phase 01 work.
+
+### Final acceptance disposition
+
+- RR-014, RR-015 and RR-016 remain DONE; do not reopen absent new contradictory evidence.
+- All other statuses remain as recorded in the canonical table above; RR-007 is DONE for catalog observation only, with Product Owner decision still pending.
+- No risk is converted to ACCEPTED RISK.
+- Phase 00 remains **NOT CLOSED / PARTIAL / BLOCKED**.
+- Phase 01 remains prohibited until every required evidence and independent approval is obtained and a separate explicit Product Owner instruction is received.
