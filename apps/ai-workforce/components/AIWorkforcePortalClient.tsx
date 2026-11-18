@@ -197,7 +197,6 @@ export function AIWorkforcePortalClient({
             aiWorkers={portal.aiWorkers}
             managerRole={portal.managerRole}
             canManageBindings={portal.canManageBindings}
-            onChangeManagerRole={portal.setManagerRole}
             onOpenCreateBinding={() =>
               portal.setModal({ type: 'create-binding' })
             }
