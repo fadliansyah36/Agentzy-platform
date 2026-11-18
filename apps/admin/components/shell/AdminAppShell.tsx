@@ -46,7 +46,7 @@ import {
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
 import { SUPER_ADMIN_ROLES } from '../../lib/admin-data';
-import type { AdminSectionId, SuperAdminRoleKey } from '../../lib/admin-types';
+import type { AdminSectionId } from '../../lib/admin-types';
 
 interface NavGroup {
   title: string;
@@ -73,7 +73,7 @@ export function AdminAppShell({
   children,
 }: {
   activeSection: AdminSectionId;
-  adminRole: SuperAdminRoleKey;
+  adminRole: string;
   adminEmail: string;
   pendingApprovalsCount: number;
   openIncidentsCount: number;
