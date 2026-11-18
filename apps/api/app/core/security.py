@@ -8,6 +8,7 @@ from jwt import PyJWKClient
 from app.core.config import get_settings
 
 bearer = HTTPBearer(auto_error=False)
+bearer_dependency = Depends(bearer)
 
 
 @lru_cache
@@ -34,7 +35,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail="Invalid or expired access token") from exc
 
 
-async def current_claims(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> dict[str, Any]:
+async def current_claims(credentials: HTTPAuthorizationCredentials | None = bearer_dependency) -> dict[str, Any]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Bearer access token required")
     return decode_access_token(credentials.credentials)
