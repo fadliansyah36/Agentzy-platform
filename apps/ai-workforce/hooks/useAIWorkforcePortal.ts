@@ -951,6 +951,8 @@ export function useAIWorkforcePortal(
     activeTenantId,
     activeTenant,
     activeMembership,
+    workforceTenantContext,
+    workforceContextError,
     tenantOptions,
     aiWorkers,
     selectedWorker,
