@@ -119,3 +119,37 @@ Fresh read-only evidence:
 ## 8. Dependency/license review implementation delta — 2026-11-18
 
 Committed automated workflow and normalizer. The workflow is designed to fail if the installed dependency tree does not exactly reconcile with all 1,037 unique SBOM package coordinates. It uploads collected upstream license-file evidence and commits generated JSON/Markdown review reports to `main` when changed. No dependency versions or application code were changed. The workflow has not been run in this session; this task remains PARTIAL pending the actual report and review decisions.
+
+
+## 9. Post-foundation live-state reconciliation — 18 November 2026
+
+This section records a later live-state observation after the identity/tenant foundation migrations were applied. It supersedes the earlier statements in §§4–7 only where the later implementation state differs; the original audit snapshot remains preserved as historical evidence.
+
+### Canonical Supabase state
+
+- Project metadata rechecked: `Agentzy-db`, ref `cwhjdnkotuhueeudpgeu`, `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
+- Applied migration history now contains:
+  - `20261117175948` — `phase_01_platform_core_identity_tenant`
+  - `20261117181011` — `phase_01_system_roles_permissions_auth_profile`
+  - `20261117182410` — `phase_01_profile_email_projection`
+- Read-only catalog query confirms 9 public application tables and RLS enabled on all 9.
+- Read-only data/catalog counts: 15 system role templates, 45 permission keys, 134 role-permission grants, 0 Auth users, and 0 Storage buckets.
+- No sample tenant, user, wallet, transaction, or other business records were seeded.
+
+### Current advisor findings
+
+- Security Advisor still reports two WARN findings for `public.rls_auto_enable()`: execution by `anon` and `authenticated` on a SECURITY DEFINER function. No ACL, function, or event-trigger change was applied.
+- Performance Advisor currently reports five INFO findings for foreign keys without covering indexes and seven INFO findings for indexes not yet used. These are observations, not evidence that indexes should be removed; review the FK access paths and workload before changing indexes.
+- The fail-open exception handling and event-trigger privilege semantics remain unresolved. Do not revoke grants or alter the event trigger without an evidence-backed, reviewed remediation.
+
+### Implementation and release boundary
+
+- The repository contains the FastAPI modular-monolith foundation, typed frontend API client, identity/tenant/RBAC endpoints, and existing portal wiring documented in the implementation backlog.
+- FastAPI has not been deployed to a reachable runtime; backend private secrets and frontend production environment values are not configured through this evidence.
+- Supabase Auth production URL/redirect/SMTP and provider/security settings remain unverified because the current connector surface does not expose authoritative configuration evidence.
+- No first administrator has been invited; `auth.users` remains empty. Bootstrap and TOTP enrollment have not been executed.
+- Static build/type/lint and Python compile/import checks have not been run in this continuation. No staging, UAT, real-world, load, security-acceptance, or production-release test was run.
+
+### Phase status
+
+Phase 00 remains **IN PROGRESS / NOT SIGNED OFF**. The later identity/tenant migrations are recorded as already-applied implementation state; they do not waive the Phase 00 exit gate or authorize additional Phase 01 scope ahead of sign-off. Phase 01 remains **IN PROGRESS / NOT COMPLETE** in the implementation tracker. Remaining Phase 00 acceptance items and the unresolved production security warning must be closed through the documented governance process.
