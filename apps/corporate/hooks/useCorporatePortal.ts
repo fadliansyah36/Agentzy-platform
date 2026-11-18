@@ -65,9 +65,8 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     []
   );
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTenantId, setActiveTenantId] = useState<string>('');
-  const [activeSection, setActiveSection] = useState<CorporateSectionId>(initialSection);
+  const [selectedTenantId, setActiveTenantId] = useState<string>('');
+  const [requestedActiveSection, setActiveSection] = useState<CorporateSectionId>(initialSection);
   const [modal, setModal] = useState<CorporateModalState>({ type: 'none' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const idCounter = useRef(500);
@@ -89,6 +88,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   );
   const [users, setUsers] = useState<CorporateUserMember[]>(initialCollections.users);
   const [organizations, setOrganizations] = useState<AgentzyOrganization[]>([]);
+  const [organizationsTenantId, setOrganizationsTenantId] = useState('');
   const [alerts, setAlerts] = useState<CorporateAlertItem[]>(initialCollections.alerts);
   const [reportHistory, setReportHistory] = useState<ReportExportHistory[]>(
     initialCollections.reportHistory
@@ -115,25 +115,31 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       status: tenant.status === 'active' ? 'Aktif' as const : 'Onboarding' as const,
     }));
   }, [auth.identity, auth.tenants]);
+  const activeTenantId = tenantOptions.some((tenant) => tenant.id === selectedTenantId)
+    ? selectedTenantId
+    : tenantOptions[0]?.id ?? '';
+  const isAuthenticated = Boolean(
+    !auth.loading && auth.session && auth.identity && tenantOptions.length > 0
+  );
+  const activeSection = !auth.loading && !isAuthenticated
+    ? 'login'
+    : isAuthenticated && requestedActiveSection === 'login'
+      ? 'overview'
+      : requestedActiveSection;
   const activeTenant = useMemo(
     () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
     [tenantOptions, activeTenantId]
   );
-
-  useEffect(() => {
-    if (auth.loading) return;
-    if (auth.session && auth.identity && tenantOptions.length > 0) {
-      const tenant = tenantOptions.find((item) => item.id === activeTenantId) ?? tenantOptions[0];
-      setActiveTenantId(tenant.id);
-      setIsAuthenticated(true);
-      setActiveSection((current) => current === 'login' ? 'overview' : current);
-    } else {
-      setIsAuthenticated(false);
-      if (auth.session && auth.identity && tenantOptions.length === 0) {
-        setActiveSection('login');
-      }
-    }
-  }, [auth.loading, auth.session, auth.identity, tenantOptions, activeTenantId]);
+  const activeMembership = auth.identity?.memberships.find(
+    (membership) => membership.tenant_id === activeTenantId
+  );
+  const canReadOrganizations = Boolean(
+    auth.session?.access_token && activeTenantId &&
+    activeMembership?.permissions.includes('corporate.organization.read')
+  );
+  const visibleOrganizations = canReadOrganizations && organizationsTenantId === activeTenantId
+    ? organizations
+    : [];
 
   const canManageOrganizations = auth.identity?.memberships.some((membership) =>
     membership.tenant_id === activeTenantId && membership.permissions.includes('corporate.organization.manage')
@@ -190,12 +196,14 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     const accessToken = auth.session?.access_token;
     const membership = auth.identity?.memberships.find((item) => item.tenant_id === activeTenantId);
     if (!accessToken || !activeTenantId || !membership?.permissions.includes('corporate.organization.read')) {
-      setOrganizations([]);
       return;
     }
     let active = true;
     void listTenantOrganizations(accessToken, activeTenantId).then((rows) => {
-      if (active) setOrganizations(rows);
+      if (active) {
+        setOrganizations(rows);
+        setOrganizationsTenantId(activeTenantId);
+      }
     }).catch((error) => {
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat struktur organisasi.');
     });
@@ -223,7 +231,6 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
         throw new Error('Akun belum memiliki permission corporate.overview.read pada tenant aktif.');
       }
       setActiveTenantId(tenant.id);
-      setIsAuthenticated(true);
       setActiveSection('overview');
       showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
     },
@@ -232,7 +239,6 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   const handleLogout = useCallback(async () => {
     await auth.signOut();
-    setIsAuthenticated(false);
     setActiveTenantId('');
     setActiveSection('login');
     setModal({ type: 'none' });
@@ -359,6 +365,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       await createOrganization(accessToken, activeTenantId, payload);
       const rows = await listTenantOrganizations(accessToken, activeTenantId);
       setOrganizations(rows);
+      setOrganizationsTenantId(activeTenantId);
       showToast(`Unit organisasi ${payload.name} berhasil disimpan.`);
     },
     [auth.session?.access_token, activeTenantId, showToast]
@@ -450,7 +457,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     invoices,
     payments,
     users,
-    organizations,
+    organizations: visibleOrganizations,
     canManageOrganizations,
     alerts,
     reportHistory,
