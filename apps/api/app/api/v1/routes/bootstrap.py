@@ -62,7 +62,9 @@ async def bootstrap_platform_admin(
             from public.membership_roles mr
             join public.roles r on r.id = mr.role_id
             join public.memberships m on m.id = mr.membership_id
-            where r.key = 'platform_super_admin' and m.status = 'active'
+            where r.key = 'platform_super_admin' and m.status in ('active','invited','suspended')
+              and (m.status <> 'invited' or m.invitation_expires_at is null
+                   or m.invitation_expires_at > now())
         """)
         )
         if int(existing.scalar_one()) > 0:
@@ -113,12 +115,15 @@ async def bootstrap_platform_admin(
             tenant_id = tenant_result.scalar_one()
             membership_result = await connection.execute(
                 text("""
-                insert into public.memberships(tenant_id,user_id,status,joined_at)
-                values (:tenant_id,:user_id,'active',now())
+                insert into public.memberships(
+                  tenant_id,user_id,status,invited_by,invitation_expires_at
+                )
+                values (:tenant_id,:user_id,'invited',null,now()+interval '7 days')
                 on conflict (tenant_id,user_id) do update
-                  set status='active',
-                      joined_at=coalesce(public.memberships.joined_at,now()),
-                      updated_at=now()
+                  set status='invited',invited_by=null,
+                      invitation_expires_at=excluded.invitation_expires_at,
+                      joined_at=null,accepted_at=null,ended_at=null,updated_at=now()
+                where public.memberships.status in ('invited','revoked')
                 returning id
             """),
                 {"tenant_id": tenant_id, "user_id": user_id},
@@ -126,8 +131,10 @@ async def bootstrap_platform_admin(
             membership_id = membership_result.scalar_one()
             await connection.execute(
                 text("""
-                insert into public.membership_roles(membership_id,role_id,assigned_by)
-                select :membership_id, id, null
+                insert into public.membership_roles(
+                  membership_id,role_id,assigned_by,scope_type,scope_id,valid_from
+                )
+                select :membership_id, id, null, 'platform', null, now()
                 from public.roles
                 where key='platform_super_admin'
                   and tenant_id is null

@@ -4,7 +4,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,10 +40,26 @@ class OrganizationCreate(BaseModel):
     parent_id: UUID | None = None
 
 
+class RolePermissionUpdate(BaseModel):
+    permission_keys: list[str] = Field(max_length=200)
+
+
 class MembershipInvite(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     full_name: str = Field(min_length=1, max_length=120)
     role_key: str = Field(min_length=2, max_length=80)
+    organization_id: UUID | None = None
+    organization_unit_id: UUID | None = None
+    branch_id: UUID | None = None
+    department_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_scope_hierarchy(self):
+        if any((self.organization_unit_id, self.branch_id, self.department_id)) and not self.organization_id:
+            raise ValueError("organization_id wajib diisi untuk scope unit, branch, atau department.")
+        if self.department_id and not self.branch_id:
+            raise ValueError("department_id memerlukan branch_id untuk assignment membership.")
+        return self
 
     @field_validator("email")
     @classmethod
@@ -59,9 +75,11 @@ async def _has_platform_permission(session: AsyncSession, user_id: UUID, permiss
         text("""
         select exists (
           select 1 from public.memberships m
+          join public.tenants t on t.id=m.tenant_id and t.status='active'
           join public.membership_roles mr on mr.membership_id=m.id
           join public.role_permissions rp on rp.role_id=mr.role_id
-          where m.user_id=:user_id and m.status='active' and rp.permission_key=:permission
+          where m.user_id=:user_id and m.status='active'
+            and mr.scope_type='platform' and rp.permission_key=:permission
         )
     """),
         {"user_id": user_id, "permission": permission},
@@ -76,11 +94,13 @@ async def _has_tenant_role(
         text("""
         select exists (
           select 1 from public.memberships m
+          join public.tenants t on t.id=m.tenant_id and t.status='active'
           join public.membership_roles mr on mr.membership_id=m.id
           join public.roles r on r.id=mr.role_id
           where m.user_id=:user_id
             and m.tenant_id=:tenant_id
             and m.status='active'
+            and mr.scope_type='tenant'
             and r.key=:role_key
         )
     """),
@@ -96,9 +116,11 @@ async def _has_tenant_permission(
         text("""
         select exists (
           select 1 from public.memberships m
+          join public.tenants t on t.id=m.tenant_id and t.status='active'
           join public.membership_roles mr on mr.membership_id=m.id
           join public.role_permissions rp on rp.role_id=mr.role_id
           where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active'
+            and mr.scope_type='tenant'
             and rp.permission_key = any(:permissions)
         )
     """),
@@ -137,6 +159,32 @@ async def create_tenant(
             },
         )
         row = dict(result.mappings().one())
+        owner_membership = await connection.execute(
+            text("""
+                insert into public.memberships(
+                  tenant_id,user_id,status,joined_at,accepted_at
+                ) values (:tenant_id,:actor,'active',now(),now())
+                on conflict(tenant_id,user_id) do update
+                  set status='active',joined_at=coalesce(public.memberships.joined_at,now()),
+                      accepted_at=coalesce(public.memberships.accepted_at,now()),
+                      updated_at=now()
+                returning id
+            """),
+            {"tenant_id": row["id"], "actor": user_id},
+        )
+        owner_membership_id = owner_membership.scalar_one()
+        await connection.execute(
+            text("""
+                insert into public.membership_roles(
+                  membership_id,role_id,assigned_by,scope_type,scope_id,valid_from
+                )
+                select :membership_id,r.id,:actor,'tenant',null,now()
+                from public.roles r
+                where r.key='corporate_owner' and r.tenant_id is null
+                on conflict(membership_id,role_id) do nothing
+            """),
+            {"membership_id": owner_membership_id, "actor": user_id},
+        )
         await connection.execute(
             text("""
             insert into public.audit_logs(
@@ -296,6 +344,21 @@ async def invite_tenant_member(
     if role_id is None:
         raise HTTPException(status_code=422, detail="Role template tidak ditemukan.")
 
+    async with engine.connect() as connection:
+        existing_membership = await connection.execute(
+            text("""
+                select m.status
+                from public.memberships m
+                join auth.users u on u.id=m.user_id
+                where m.tenant_id=:tenant_id and lower(u.email)=:email
+                limit 1
+            """),
+            {"tenant_id": tenant_id, "email": payload.email},
+        )
+        existing_status = existing_membership.scalar_one_or_none()
+        if existing_status in ("active", "suspended"):
+            raise HTTPException(status_code=409, detail="User sudah memiliki membership aktif atau suspended.")
+
     settings = get_settings()
     service_key = settings.supabase_service_role_key
     if not service_key:
@@ -306,11 +369,15 @@ async def invite_tenant_member(
         "Authorization": f"Bearer {service_key}",
         "Content-Type": "application/json",
     }
-    redirect_surface = (
-        "ai-workforce"
-        if role_key.startswith("ai_") or role_key == "corporate_ai_manager"
-        else "corporate"
-    )
+    if role_key.startswith("ai_") or role_key == "corporate_ai_manager":
+        redirect_surface = "ai-workforce"
+    elif role_key in (
+        "sales_manager", "sales_supervisor", "sales_official", "affiliate_worker",
+        "technician", "field_quality_inspector", "support_agent",
+    ):
+        redirect_surface = "workforce"
+    else:
+        redirect_surface = "corporate"
     redirect_to = f"{settings.app_base_url.rstrip('/')}/{redirect_surface}"
     try:
         async with httpx.AsyncClient(timeout=25) as client:
@@ -341,21 +408,61 @@ async def invite_tenant_member(
     async with engine.begin() as connection:
         membership_result = await connection.execute(
             text("""
-            insert into public.memberships(tenant_id,user_id,status)
-            values(:tenant_id,:user_id,'active')
-            on conflict(tenant_id,user_id) do update set status='active',updated_at=now()
+            insert into public.memberships(
+                tenant_id,user_id,status,invited_by,invitation_expires_at,
+                organization_id,organization_unit_id,branch_id,department_id
+            )
+            values(
+                :tenant_id,:user_id,'invited',:actor,now()+interval '7 days',
+                :organization_id,:organization_unit_id,:branch_id,:department_id
+            )
+            on conflict(tenant_id,user_id) do update set
+                status='invited',invited_by=excluded.invited_by,
+                invitation_expires_at=excluded.invitation_expires_at,
+                organization_id=excluded.organization_id,
+                organization_unit_id=excluded.organization_unit_id,
+                branch_id=excluded.branch_id,department_id=excluded.department_id,
+                accepted_at=null,joined_at=null,ended_at=null,updated_at=now()
+            where public.memberships.status in ('invited','revoked')
             returning id,tenant_id,user_id,status,created_at
         """),
-            {"tenant_id": tenant_id, "user_id": invited_user_id},
+            {
+                "tenant_id": tenant_id, "user_id": invited_user_id, "actor": user_id,
+                "organization_id": payload.organization_id,
+                "organization_unit_id": payload.organization_unit_id,
+                "branch_id": payload.branch_id,
+                "department_id": payload.department_id,
+            },
         )
-        membership = dict(membership_result.mappings().one())
+        membership_row = membership_result.mappings().first()
+        if membership_row is None:
+            raise HTTPException(status_code=409, detail="Membership existing tidak dapat diundang ulang.")
+        membership = dict(membership_row)
+        scope_type = (
+            "department" if payload.department_id else
+            "branch" if payload.branch_id else
+            "organization_unit" if payload.organization_unit_id else
+            "organization" if payload.organization_id else "tenant"
+        )
+        scope_id = (
+            payload.department_id or payload.branch_id or payload.organization_unit_id
+            or payload.organization_id
+        )
         await connection.execute(
             text("""
-            insert into public.membership_roles(membership_id,role_id,assigned_by)
-            values(:membership_id,:role_id,:actor)
-            on conflict(membership_id,role_id) do nothing
+            insert into public.membership_roles(
+                membership_id,role_id,assigned_by,scope_type,scope_id,valid_from
+            )
+            values(:membership_id,:role_id,:actor,:scope_type,:scope_id,now())
+            on conflict(membership_id,role_id) do update set
+                assigned_by=excluded.assigned_by,scope_type=excluded.scope_type,
+                scope_id=excluded.scope_id,valid_from=excluded.valid_from,
+                valid_until=null,assigned_at=now()
         """),
-            {"membership_id": membership["id"], "role_id": role_id, "actor": user_id},
+            {
+                "membership_id": membership["id"], "role_id": role_id, "actor": user_id,
+                "scope_type": scope_type, "scope_id": scope_id,
+            },
         )
         await connection.execute(
             text("""
@@ -384,32 +491,117 @@ async def invite_tenant_member(
     }
 
 
+@router.get("/permissions", tags=["Access Control"])
+async def list_permission_registry(
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    result = await session.execute(
+        text("""
+            select key,domain,action,description,resource,risk_level
+            from public.permissions
+            order by domain,action,key
+        """)
+    )
+    return [dict(row) for row in result.mappings().all()]
+
+
+@router.put("/roles/{role_id}/permissions", tags=["Access Control"])
+async def replace_role_permissions(
+    role_id: UUID,
+    payload: RolePermissionUpdate,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = UUID(claims["sub"])
+    _require_aal2(claims)
+    if not await _has_platform_permission(session, actor, "platform.roles.manage"):
+        raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
+    permission_keys = sorted(set(key.strip() for key in payload.permission_keys))
+    if len(permission_keys) != len(payload.permission_keys):
+        raise HTTPException(status_code=422, detail="Permission key tidak boleh duplikat.")
+    async with engine.begin() as connection:
+        role_result = await connection.execute(
+            text("select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"),
+            {"role_id": role_id},
+        )
+        role = role_result.mappings().first()
+        if role is None:
+            raise HTTPException(status_code=404, detail="Role tidak ditemukan.")
+        if role["scope_type"] == "platform":
+            invalid = [key for key in permission_keys if not key.startswith("platform.")]
+        else:
+            invalid = [key for key in permission_keys if key.startswith("platform.")]
+        if invalid:
+            raise HTTPException(
+                status_code=422, detail="Permission namespace tidak sesuai dengan scope role."
+            )
+        available = await connection.execute(
+            text("select key from public.permissions where key=any(:keys)"),
+            {"keys": permission_keys},
+        )
+        found = {row["key"] for row in available.mappings().all()}
+        missing = sorted(set(permission_keys) - found)
+        if missing:
+            raise HTTPException(status_code=422, detail=f"Permission tidak terdaftar: {', '.join(missing)}")
+        await connection.execute(
+            text("delete from public.role_permissions where role_id=:role_id"),
+            {"role_id": role_id},
+        )
+        if permission_keys:
+            await connection.execute(
+                text("""
+                    insert into public.role_permissions(role_id,permission_key)
+                    select :role_id,unnest(cast(:keys as text[]))
+                """),
+                {"role_id": role_id, "keys": permission_keys},
+            )
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values (
+                  :tenant_id,:actor,'authorization.role_permissions.replaced','role',
+                  :resource_id,:request_id,cast(:metadata as jsonb)
+                )
+            """),
+            {
+                "tenant_id": role["tenant_id"], "actor": actor, "resource_id": str(role_id),
+                "request_id": request.headers.get("x-request-id"),
+                "metadata": json.dumps({"permission_keys": permission_keys}),
+            },
+        )
+    return {"role_id": str(role_id), "permission_keys": permission_keys}
+
+
 @router.get("/roles", tags=["Access Control"])
 async def list_role_templates(
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_platform_permission(session, user_id, "platform.roles.read")
-    if allowed:
+    is_platform_reader = await _has_platform_permission(session, user_id, "platform.roles.read")
+    if is_platform_reader:
         _require_aal2(claims)
-    if not allowed:
-        result = await session.execute(
+    else:
+        tenant_reader = await session.execute(
             text("""
-            select exists (
-              select 1 from public.memberships m
-              join public.membership_roles mr on mr.membership_id=m.id
-              join public.role_permissions rp on rp.role_id=mr.role_id
-              where m.user_id=:user_id and m.status='active'
-                and rp.permission_key='corporate.organization.read'
-            )
-        """),
+                select exists (
+                  select 1 from public.memberships m
+                  join public.tenants t on t.id=m.tenant_id and t.status='active'
+                  join public.membership_roles mr on mr.membership_id=m.id
+                  join public.role_permissions rp on rp.role_id=mr.role_id
+                  where m.user_id=:user_id and m.status='active'
+                    and mr.scope_type='tenant'
+                    and rp.permission_key='corporate.organization.read'
+                )
+            """),
             {"user_id": user_id},
         )
-        allowed = bool(result.scalar_one())
-    if not allowed:
-        raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
-    role_filter = "" if allowed else "and r.key not like 'platform_%'"
+        if not bool(tenant_reader.scalar_one()):
+            raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
+    role_filter = "" if is_platform_reader else "and r.key not like 'platform_%'"
     result = await session.execute(
         text(f"""
         select r.id,r.key,r.name,r.description,r.is_system,

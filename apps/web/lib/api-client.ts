@@ -15,9 +15,9 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
   const headers = new Headers(inputHeaders);
   headers.set("Authorization", `Bearer ${accessToken}`);
   headers.set("Accept", "application/json");
-  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (requestOptions.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_BASE_URL}/api/v1${path.startsWith("/") ? path : `/${path}`}`,
-    { ...options, headers, cache: "no-store" });
+    { ...requestOptions, headers, cache: "no-store" });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     throw new ApiError(payload?.error?.message ?? payload?.detail ?? "Permintaan ke Agentzy API gagal.",
@@ -67,7 +67,11 @@ export type CreateOrganizationInput = {
   organization_type?: 'company' | 'division' | 'department' | 'branch' | 'team';
   parent_id?: string | null;
 };
-export type InviteTenantMemberInput = { email: string; full_name: string; role_key: string };
+export type InviteTenantMemberInput = {
+  email: string; full_name: string; role_key: string;
+  organization_id?: string | null; organization_unit_id?: string | null;
+  branch_id?: string | null; department_id?: string | null;
+};
 
 export const createTenant = (accessToken: string, payload: CreateTenantInput) =>
   apiRequest<AgentzyPlatformTenant>("/tenants", { method: "POST", accessToken, body: JSON.stringify(payload) });
@@ -132,3 +136,136 @@ export const listTenantOrganizations = (accessToken: string, tenantId: string) =
   apiRequest<AgentzyOrganization[]>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
     method: "GET", accessToken,
   });
+
+export type AgentzyPermissionContext = {
+  user_id: string;
+  memberships: Array<{
+    membership_id: string;
+    tenant_id: string;
+    tenant_name: string;
+    organization_id: string | null;
+    status: string;
+    roles: string[];
+    permissions: string[];
+  }>;
+};
+
+export const getMyPermissions = (accessToken: string) =>
+  apiRequest<AgentzyPermissionContext>("/me/permissions", { method: "GET", accessToken });
+
+export const updateMyIdentity = (
+  accessToken: string,
+  payload: { display_name?: string | null; locale?: string; timezone?: string }
+) => apiRequest<AgentzyIdentity>("/me", {
+  method: "PATCH", accessToken, body: JSON.stringify(payload),
+});
+
+export const revokeMySessions = (accessToken: string) =>
+  apiRequest<{ status: string; scope: string }>("/auth/session/revoke", {
+    method: "POST", accessToken, body: JSON.stringify({}),
+  });
+
+export type AgentzyOrganizationUnit = {
+  id: string; tenant_id: string; organization_id: string; parent_unit_id: string | null;
+  name: string; code: string; unit_type: string; status: string;
+};
+export type AgentzyBranch = {
+  id: string; tenant_id: string; organization_id: string; organization_unit_id: string | null;
+  name: string; code: string; status: string;
+};
+export type AgentzyDepartment = {
+  id: string; tenant_id: string; organization_id: string; branch_id: string | null;
+  parent_department_id: string | null; name: string; code: string; status: string;
+};
+
+export const listOrganizationUnits = (accessToken: string, tenantId: string) =>
+  apiRequest<AgentzyOrganizationUnit[]>(`/tenants/${encodeURIComponent(tenantId)}/organization-units`, {
+    method: "GET", accessToken,
+  });
+export const listBranches = (accessToken: string, tenantId: string) =>
+  apiRequest<AgentzyBranch[]>(`/tenants/${encodeURIComponent(tenantId)}/branches`, {
+    method: "GET", accessToken,
+  });
+export const listDepartments = (accessToken: string, tenantId: string) =>
+  apiRequest<AgentzyDepartment[]>(`/tenants/${encodeURIComponent(tenantId)}/departments`, {
+    method: "GET", accessToken,
+  });
+
+export const acceptTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
+  apiRequest<{ id: string; tenant_id: string; user_id: string; status: string }>(
+    `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/accept`,
+    { method: "POST", accessToken, body: JSON.stringify({}) },
+  );
+
+export const suspendTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
+  apiRequest<{ id: string; status: string }>(
+    `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/suspend`,
+    { method: "POST", accessToken, body: JSON.stringify({}) },
+  );
+
+export const revokeTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
+  apiRequest<{ id: string; status: string }>(
+    `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/revoke`,
+    { method: "POST", accessToken, body: JSON.stringify({}) },
+  );
+
+export const assignMembershipRole = (
+  accessToken: string,
+  tenantId: string,
+  membershipId: string,
+  payload: { role_key: string; scope_type?: string; scope_id?: string | null; valid_until?: string | null },
+) => apiRequest<Record<string, unknown>>(
+  `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/roles`,
+  { method: "POST", accessToken, body: JSON.stringify(payload) },
+);
+
+export const createOrganizationUnit = (
+  accessToken: string,
+  tenantId: string,
+  payload: { organization_id: string; parent_unit_id?: string | null; name: string; code: string; unit_type: string },
+) => apiRequest<AgentzyOrganizationUnit>(
+  `/tenants/${encodeURIComponent(tenantId)}/organization-units`,
+  { method: "POST", accessToken, body: JSON.stringify(payload) },
+);
+
+export const createBranch = (
+  accessToken: string,
+  tenantId: string,
+  payload: { organization_id: string; organization_unit_id?: string | null; name: string; code: string },
+) => apiRequest<AgentzyBranch>(
+  `/tenants/${encodeURIComponent(tenantId)}/branches`,
+  { method: "POST", accessToken, body: JSON.stringify(payload) },
+);
+
+export const createDepartment = (
+  accessToken: string,
+  tenantId: string,
+  payload: { organization_id: string; branch_id?: string | null; parent_department_id?: string | null; name: string; code: string },
+) => apiRequest<AgentzyDepartment>(
+  `/tenants/${encodeURIComponent(tenantId)}/departments`,
+  { method: "POST", accessToken, body: JSON.stringify(payload) },
+);
+
+export type AgentzyInvitation = {
+  id: string; tenant_id: string; tenant_name: string;
+  invitation_expires_at: string | null; role_keys: string[];
+};
+export const getMyInvitations = (accessToken: string) =>
+  apiRequest<{ invitations: AgentzyInvitation[] }>("/me/invitations", {
+    method: "GET", accessToken,
+  });
+
+export type AgentzyPermissionDefinition = {
+  key: string; domain: string; action: string; description: string | null;
+  resource: string | null; risk_level: 'standard' | 'sensitive' | 'privileged' | 'critical';
+};
+export const listPermissionRegistry = (accessToken: string) =>
+  apiRequest<AgentzyPermissionDefinition[]>("/permissions", { method: "GET", accessToken });
+export const replaceRolePermissions = (
+  accessToken: string,
+  roleId: string,
+  permissionKeys: string[],
+) => apiRequest<{ role_id: string; permission_keys: string[] }>(
+  `/roles/${encodeURIComponent(roleId)}/permissions`,
+  { method: "PUT", accessToken, body: JSON.stringify({ permission_keys: permissionKeys }) },
+);

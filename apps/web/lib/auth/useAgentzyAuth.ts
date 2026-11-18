@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { getMyIdentity, getMyTenants, type AgentzyIdentity, type AgentzyTenant } from '@/apps/web/lib/api-client';
+import { getMyIdentity, getMyTenants, revokeMySessions, type AgentzyIdentity, type AgentzyTenant } from '@/apps/web/lib/api-client';
 import { getSupabaseBrowserClient } from '@/apps/web/lib/supabase/client';
 
 type AuthSnapshot = {
@@ -60,7 +60,11 @@ export function useAgentzyAuth() {
     let alive = true;
     void client.auth.getSession().then(({ data, error: sessionError }) => {
       if (!alive) return;
-      if (sessionError) setError(sessionError.message);
+      if (sessionError) {
+        setError(sessionError.message);
+        setLoading(false);
+        return;
+      }
       void hydrate(client, data.session);
     });
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
@@ -117,6 +121,13 @@ export function useAgentzyAuth() {
     return context;
   }, []);
 
+  const refresh = useCallback(async () => {
+    if (!client) throw new Error('Konfigurasi Supabase belum tersedia.');
+    const { data, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    await hydrate(client, data.session);
+  }, [client, hydrate]);
+
   const signInWithOAuth = useCallback(async () => {
     const client = getSupabaseBrowserClient();
     if (!client) throw new Error('Konfigurasi Supabase belum tersedia.');
@@ -129,7 +140,20 @@ export function useAgentzyAuth() {
   const signOut = useCallback(async () => {
     const client = getSupabaseBrowserClient();
     if (client) {
-      const { error: signOutError } = await client.auth.signOut();
+      const { data, error: sessionError } = await client.auth.getSession();
+      if (sessionError) throw sessionError;
+      let serverRevoked = false;
+      if (data.session) {
+        try {
+          await revokeMySessions(data.session.access_token);
+          serverRevoked = true;
+        } catch {
+          // Fall back to Supabase Auth global sign-out if the API cannot revoke sessions.
+        }
+      }
+      const { error: signOutError } = await client.auth.signOut({
+        scope: serverRevoked ? 'local' : 'global',
+      });
       if (signOutError) throw signOutError;
     }
     setSnapshot({ session: null, identity: null, tenants: [], aal: null });
@@ -137,5 +161,5 @@ export function useAgentzyAuth() {
     setLoading(false);
   }, []);
 
-  return { ...snapshot, loading, error, signIn, signInWithOAuth, signOut };
+  return { ...snapshot, loading, error, signIn, signInWithOAuth, signOut, refresh };
 }

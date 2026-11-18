@@ -32,16 +32,14 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
-  LogIn,
   Award,
   Bot,
 } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
-import {
-  AuthOnboardingFlow,
-  type AuthStep,
-} from '@/components/workforce/AuthOnboardingFlow';
+import { WorkforceIdentityGate } from '@/components/workforce/WorkforceIdentityGate';
+import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
+import { acceptTenantMembership, getMyInvitations, type AgentzyInvitation } from '@/apps/web/lib/api-client';
 import {
   SalesDashboardView,
   TasksView,
@@ -121,11 +119,13 @@ type PortalTab =
 
 export function WorkforcePortalClient() {
   const { openSendEmailModal, openScheduleMeetingModal } = useWorkspace();
+  const auth = useAgentzyAuth();
 
   const [roleMode, setRoleMode] = useState<WorkforceRoleMode>('sales');
   const [activeTab, setActiveTab] = useState<PortalTab>('home');
-  const [showAuthFlow, setShowAuthFlow] = useState(false);
-  const [authInitialStep, setAuthInitialStep] = useState<AuthStep>('splash');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [pendingInvitations, setPendingInvitations] = useState<AgentzyInvitation[]>([]);
   const [customUserName, setCustomUserName] = useState<string | null>(null);
   const [boundSponsor, setBoundSponsor] = useState<{ name: string; code: string }>({
     name: 'Raka Pratama',
@@ -193,10 +193,99 @@ export function WorkforcePortalClient() {
     return `${prefix}-${idCounterRef.current}`;
   };
 
+  const allowedWorkforceRoles = useMemo<WorkforceRoleMode[]>(() => {
+    const keys = new Set(auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? []);
+    const roles: WorkforceRoleMode[] = [];
+    if (['sales_manager', 'sales_supervisor', 'sales_official'].some((key) => keys.has(key))) {
+      roles.push('sales');
+    }
+    if (keys.has('affiliate_worker')) roles.push('affiliate');
+    if (['technician', 'field_quality_inspector'].some((key) => keys.has(key))) {
+      roles.push('technician');
+    }
+    return roles;
+  }, [auth.identity]);
+
+  useEffect(() => {
+    if (allowedWorkforceRoles.length > 0 && !allowedWorkforceRoles.includes(roleMode)) {
+      setRoleMode(allowedWorkforceRoles[0]);
+    }
+  }, [allowedWorkforceRoles, roleMode]);
+
+  useEffect(() => {
+    if (!auth.session || !auth.identity || allowedWorkforceRoles.length > 0) {
+      setPendingInvitations([]);
+      return;
+    }
+    let active = true;
+    void getMyInvitations(auth.session.access_token)
+      .then((result) => {
+        if (!active) return;
+        setPendingInvitations(result.invitations.filter((invitation) =>
+          invitation.role_keys.some((key) =>
+            ['sales_manager', 'sales_supervisor', 'sales_official', 'affiliate_worker',
+              'technician', 'field_quality_inspector'].includes(key)
+          )
+        ));
+      })
+      .catch((cause) => {
+        if (active) setLoginError(cause instanceof Error ? cause.message : 'Undangan tidak dapat dimuat.');
+      });
+    return () => { active = false; };
+  }, [auth.session?.access_token, auth.identity, allowedWorkforceRoles.length]);
+
+  const handleAcceptWorkforceInvitation = async (invitation: AgentzyInvitation) => {
+    if (!auth.session) throw new Error('Sesi autentikasi tidak tersedia.');
+    await acceptTenantMembership(
+      auth.session.access_token, invitation.tenant_id, invitation.id
+    );
+    setPendingInvitations((current) => current.filter((item) => item.id !== invitation.id));
+    await auth.refresh();
+  };
+
+  const handleWorkforceLogin = async (email: string, password: string) => {
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      const context = await auth.signIn(email, password);
+      const keys = new Set(context.identity.memberships.flatMap((membership) => membership.role_keys));
+      const nextRole: WorkforceRoleMode | null =
+        ['sales_manager', 'sales_supervisor', 'sales_official'].some((key) => keys.has(key))
+          ? 'sales'
+          : keys.has('affiliate_worker')
+            ? 'affiliate'
+            : ['technician', 'field_quality_inspector'].some((key) => keys.has(key))
+              ? 'technician'
+              : null;
+      if (!nextRole) {
+        const invitationResult = await getMyInvitations(context.session.access_token);
+        const workforceInvitations = invitationResult.invitations.filter((invitation) =>
+          invitation.role_keys.some((key) =>
+            ['sales_manager', 'sales_supervisor', 'sales_official', 'affiliate_worker',
+              'technician', 'field_quality_inspector'].includes(key)
+          )
+        );
+        setPendingInvitations(workforceInvitations);
+        if (workforceInvitations.length > 0) return;
+        await auth.signOut();
+        throw new Error('Akun belum memiliki membership Workforce aktif atau undangan yang dapat diterima.');
+      }
+      setPendingInvitations([]);
+      setRoleMode(nextRole);
+      setCustomUserName(context.identity.display_name);
+      setActiveTab('home');
+    } catch (cause) {
+      setLoginError(cause instanceof Error ? cause.message : 'Autentikasi Workforce gagal.');
+      throw cause;
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   const currentUser = useMemo(() => {
     if (roleMode === 'technician') {
       return {
-        name: customUserName || 'Budi Santoso',
+        name: customUserName || auth.identity?.display_name || 'Pengguna Agentzy',
         roleLabel: 'Teknisi FTTH · ID: TK-000128',
         shortRole: 'Teknisi',
         initials: 'BS',
@@ -204,19 +293,19 @@ export function WorkforcePortalClient() {
     }
     if (roleMode === 'affiliate') {
       return {
-        name: customUserName || 'Siti Nabila',
+        name: customUserName || auth.identity?.display_name || 'Pengguna Agentzy',
         roleLabel: 'Affiliate Freelance · AF-88412',
         shortRole: 'Affiliate',
         initials: 'SN',
       };
     }
     return {
-      name: customUserName || 'Raka Pratama',
+      name: customUserName || auth.identity?.display_name || 'Pengguna Agentzy',
       roleLabel: 'Sales Agentzy (Sales Resmi)',
       shortRole: 'Sales Agentzy',
       initials: 'RP',
     };
-  }, [roleMode, customUserName]);
+  }, [roleMode, customUserName, auth.identity?.display_name]);
 
   const showToast = (msg: string) => {
     setPortalToast(msg);
@@ -226,6 +315,10 @@ export function WorkforcePortalClient() {
   };
 
   const handleRoleSwitch = (nextRole: WorkforceRoleMode) => {
+    if (!allowedWorkforceRoles.includes(nextRole)) {
+      showToast('Role tersebut tidak diberikan pada membership akun ini.');
+      return;
+    }
     setRoleMode(nextRole);
     setActiveTab('home');
     setSelectedWoId(null);
@@ -584,57 +677,64 @@ export function WorkforcePortalClient() {
     return results.slice(0, 6);
   }, [roleMode, searchQuery, leads, tasks, workOrders, affiliates]);
 
-  // If user launches Auth/Splash/Onboarding screen
-  if (showAuthFlow) {
+  if (auth.loading || loginBusy) {
     return (
-      <AuthOnboardingFlow
-        initialStep={authInitialStep}
-        selectedRole={roleMode}
-        onSelectRole={(r) => setRoleMode(r)}
-        onEnterPortal={(r, name, meta) => {
-          setRoleMode(r);
-          if (name) setCustomUserName(name);
-          if (r === 'affiliate' && meta?.referralCode) {
-            const nextSponsor = {
-              code: meta.referralCode,
-              name: meta.sponsorName || `Staff Sales (${meta.referralCode})`,
-            };
-            setBoundSponsor(nextSponsor);
-            if (name) {
-              setAffiliates((prev) => {
-                const exists = prev.some(
-                  (a) => a.name.toLowerCase() === name.trim().toLowerCase()
-                );
-                if (exists) return prev;
-                return [
-                  {
-                    id: nextId('AF'),
-                    name: name.trim(),
-                    code: `AF-${idCounterRef.current}`,
-                    phone: meta.phone || '0813 0000 0000',
-                    email: meta.email || 'affiliate@agentzy.id',
-                    orders: 0,
-                    commissionTotal: 0,
-                    status: 'Aktif',
-                    joinedDate: 'Baru mendaftar',
-                  },
-                  ...prev,
-                ];
-              });
-            }
-            setActiveTab('home');
-            setShowAuthFlow(false);
-            showToast(
-              `Akun Affiliate terhubung ke Staff Sales ${nextSponsor.name} (${nextSponsor.code}).`
-            );
-            return;
-          }
-          setActiveTab('home');
-          setShowAuthFlow(false);
-          showToast('Berhasil masuk ke Agentzy Human Workforce Portal.');
-        }}
-        onCloseAuth={() => setShowAuthFlow(false)}
+      <div className="flex min-h-screen items-center justify-center bg-[var(--az-surface-canvas)] text-sm font-medium text-[var(--az-text-secondary)]">
+        Memverifikasi identitas dan membership Agentzy…
+      </div>
+    );
+  }
+
+  if (!auth.session || !auth.identity || allowedWorkforceRoles.length === 0) {
+    return (
+      <WorkforceIdentityGate
+        onLogin={handleWorkforceLogin}
+        onGoogleLogin={auth.signInWithOAuth}
+        onSignOut={auth.session ? auth.signOut : undefined}
+        onAcceptInvitation={handleAcceptWorkforceInvitation}
+        invitations={pendingInvitations}
+        loading={loginBusy}
+        error={loginError || auth.error || (auth.session ? 'Sesi valid, tetapi akun belum memiliki role Workforce yang aktif.' : null)}
       />
+    );
+  }
+
+  if (auth.session && auth.identity && allowedWorkforceRoles.length > 0) {
+    const membershipRows = auth.identity.memberships.filter((membership) =>
+      membership.role_keys.some((key) =>
+        ['sales_manager', 'sales_supervisor', 'sales_official', 'affiliate_worker',
+          'technician', 'field_quality_inspector'].includes(key)
+      )
+    );
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--az-surface-canvas)] px-4 py-8">
+        <section className="w-full max-w-2xl rounded-2xl border border-[var(--az-border-default)] bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--az-brand-azure)]">Agentzy Workforce Identity</p>
+              <h1 className="mt-2 text-xl font-bold text-[var(--az-brand-navy)]">Identitas terverifikasi</h1>
+            </div>
+            <button type="button" onClick={() => void auth.signOut()} className="rounded-lg border border-[var(--az-border-default)] px-3 py-2 text-xs font-semibold text-[var(--az-text-secondary)]">Keluar</button>
+          </div>
+          <p className="mt-5 text-sm text-[var(--az-text-primary)]">{auth.identity.display_name || auth.identity.email || 'Pengguna Agentzy'}</p>
+          <p className="mt-1 text-xs text-[var(--az-text-muted)]">{auth.identity.email || auth.identity.user_id}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {membershipRows.map((membership) => (
+              <div key={membership.id} className="rounded-xl border border-[var(--az-border-default)] p-4">
+                <p className="text-sm font-semibold text-[var(--az-text-primary)]">{membership.tenant_name}</p>
+                <p className="mt-1 text-[11px] text-[var(--az-text-muted)]">Membership aktif · {membership.status}</p>
+                <p className="mt-3 break-words text-xs text-[var(--az-text-secondary)]">{membership.role_keys.join(', ')}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 rounded-xl border border-[var(--az-border-default)] bg-[var(--az-surface-canvas)] p-4">
+            <p className="text-sm font-semibold text-[var(--az-text-primary)]">Operasional Workforce belum terhubung penuh</p>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--az-text-secondary)]">
+              Identity, membership dan role sudah diperiksa melalui FastAPI. Data tugas, komisi, leads dan work order belum memiliki integrasi backend end-to-end pada Phase 01; karena itu data demo/local disembunyikan dan tidak ditampilkan sebagai data produksi.
+            </p>
+          </div>
+        </section>
+      </main>
     );
   }
 
@@ -754,14 +854,13 @@ export function WorkforcePortalClient() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setAuthInitialStep('splash');
-                  setShowAuthFlow(true);
-                }}
+                onClick={() => void auth.signOut().catch((cause) =>
+                  showToast(cause instanceof Error ? cause.message : 'Logout gagal.')
+                )}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-[8px] border border-white/15 bg-white/5 px-2.5 py-2 text-[11px] font-semibold text-[#CFE3EE] hover:bg-white/10"
               >
-                <LogIn className="h-3.5 w-3.5" />
-                <span>Splash / Auth</span>
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Keluar</span>
               </button>
               <Link
                 href="/"
@@ -1177,8 +1276,9 @@ export function WorkforcePortalClient() {
                       showToast('Seluruh antrean offline berhasil disinkronkan ke server.');
                     }}
                     onLogout={() => {
-                      setAuthInitialStep('login');
-                      setShowAuthFlow(true);
+                      void auth.signOut().catch((cause) =>
+                        showToast(cause instanceof Error ? cause.message : 'Logout gagal.')
+                      );
                     }}
                   />
                 )}
@@ -1381,25 +1481,14 @@ export function WorkforcePortalClient() {
                   </button>
                 )}
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setShowMobileDrawer(false);
-                      setAuthInitialStep('splash');
-                      setShowAuthFlow(true);
-                    }}
-                    className="flex items-center justify-center gap-1.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] py-2 text-xs font-semibold text-[#17324D]"
-                  >
-                    <LogIn className="h-3.5 w-3.5" />
-                    <span>Auth Flow</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMobileDrawer(false);
-                      setAuthInitialStep('login');
-                      setShowAuthFlow(true);
+                      void auth.signOut().catch((cause) =>
+                        showToast(cause instanceof Error ? cause.message : 'Logout gagal.')
+                      );
                     }}
                     className="flex items-center justify-center gap-1.5 rounded-[10px] border border-[#B23A48]/30 bg-[#FEF2F2] py-2 text-xs font-semibold text-[#B23A48]"
                   >
