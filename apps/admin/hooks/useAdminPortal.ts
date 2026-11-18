@@ -39,6 +39,9 @@ import {
   reviewBreakGlass,
   listAuditLogs,
   exportAuditLogs,
+  listSecurityAlerts,
+  acknowledgeSecurityAlert as acknowledgeSecurityAlertApi,
+  type AgentzySecurityAlert,
 } from '@/apps/web/lib/api-client';
 import type {
   AdminAIWorkerRecord,
@@ -247,6 +250,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>([]);
   const [featureFlags, setFeatureFlags] = useState<FeatureFlagRecord[]>(initial.featureFlags);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [securityAlerts, setSecurityAlerts] = useState<AgentzySecurityAlert[]>([]);
   const [incidents, setIncidents] = useState<IncidentRecord[]>(initial.incidents);
   const [dsrRequests, setDsrRequests] = useState<DsrRequestRecord[]>(initial.dsrRequests);
   const [vendors, setVendors] = useState<VendorSubprocessorRecord[]>(initial.vendors);
@@ -511,8 +515,24 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
         if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat audit logs.');
       });
     }
+    if (platformPermissions.includes('platform.security.events.read')) {
+      void listSecurityAlerts(accessToken, { limit: 100 }).then(({ data }) => {
+        if (active) setSecurityAlerts(data);
+      }).catch((error) => {
+        if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat security alerts.');
+      });
+    }
     return () => { active = false; };
   }, [auth.session?.access_token, auth.aal, platformPermissions, showToast]);
+
+  const acknowledgeSecurityAlert = useCallback(async (alertId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || auth.aal !== 'aal2') throw new Error('Session AAL2 diperlukan.');
+    await acknowledgeSecurityAlertApi(accessToken, alertId);
+    const { data } = await listSecurityAlerts(accessToken, { limit: 100 });
+    setSecurityAlerts(data);
+    showToast('Security alert berhasil di-acknowledge.');
+  }, [auth.session?.access_token, auth.aal, showToast]);
 
   const handleLogin = useCallback(
     async (email: string, password: string, mfaCode: string) => {
@@ -2008,6 +2028,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     featureFlags,
     toggleFeatureFlag,
     auditLogs,
+    securityAlerts,
+    acknowledgeSecurityAlert,
     exportAuditLogs: async () => {
       const accessToken = auth.session?.access_token;
       if (!accessToken) throw new Error('Session tidak tersedia.');
