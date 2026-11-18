@@ -34,10 +34,10 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
     const payload = await response.json().catch(() => null);
     const error = payload?.error ?? payload;
     throw new ApiError(
-      error?.message ?? "Permintaan ke Agentzy API gagal.",
+      error?.message ?? payload?.detail ?? "Permintaan ke Agentzy API gagal.",
       response.status,
       error?.code,
-      error?.details,
+      error?.details ?? payload?.detail,
       error?.request_id ?? response.headers.get("X-Request-ID"),
       error?.correlation_id ?? response.headers.get("X-Correlation-ID"),
       error?.trace_id ?? response.headers.get("X-Trace-ID"),
