@@ -47,10 +47,11 @@ class BreakGlassRequestIn(BaseModel):
     reason: str = Field(min_length=20, max_length=2000)
     permission_keys: list[str] = Field(min_length=1, max_length=5)
     tenant_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    duration_minutes: int = Field(default=30, ge=5, le=60)
 
 
 class BreakGlassActivationIn(BaseModel):
-    duration_minutes: int = Field(default=30, ge=5, le=60)
+    duration_minutes: int | None = Field(default=None, ge=5, le=60)
 
 
 class BreakGlassReviewIn(BaseModel):
@@ -216,6 +217,7 @@ async def request_break_glass(
                 "scope": json.dumps({
                     "permission_keys": payload.permission_keys,
                     "tenant_ids": [str(item) for item in payload.tenant_ids],
+                    "duration_minutes": payload.duration_minutes,
                 }),
                 "request_id": request.headers.get("x-request-id"),
             },
@@ -317,6 +319,7 @@ async def activate_break_glass(
             raise HTTPException(status_code=403, detail="Only the original requester can activate approved access.")
         if row["status"] != "approved" or row["approver_user_id"] is None:
             raise HTTPException(status_code=409, detail="Break-glass request must be approved first.")
+        duration = payload.duration_minutes or row["requested_scope"].get("duration_minutes", 30)
         updated = await connection.execute(
             text("""
                 update public.break_glass_requests
@@ -325,7 +328,7 @@ async def activate_break_glass(
                 where id=:id
                 returning id,status,activated_at,expires_at,requested_scope
             """),
-            {"actor": actor, "duration": payload.duration_minutes, "id": request_id},
+            {"actor": actor, "duration": duration, "id": request_id},
         )
         result = dict(updated.mappings().one())
         await _audit(connection, request, actor, "break_glass.activated",
