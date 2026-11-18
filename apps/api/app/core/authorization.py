@@ -165,14 +165,41 @@ async def authorize_action(
     request_context: dict | None = None,
 ) -> tuple[TenantAccessContext | None, PolicyDecision]:
     """Enforce membership/RBAC then dynamic ABAC and persist a minimal decision audit."""
-    tenant_context = await authorize_tenant(
-        session,
-        user_id=user_id,
-        tenant_id=tenant_id,
-        permission_key=permission_key,
-        platform_permission=platform_permission,
-        aal=aal,
-    )
+    break_glass_id = None
+    try:
+        tenant_context = await authorize_tenant(
+            session,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            permission_key=permission_key,
+            platform_permission=platform_permission,
+            aal=aal,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 403 or aal != "aal2":
+            raise
+        from app.db.session import engine
+
+        async with engine.connect() as connection:
+            emergency = await connection.execute(
+                text("""
+                    select id from public.break_glass_requests
+                    where requester_user_id=:user_id and status='active'
+                      and expires_at > now()
+                      and requested_scope->'permission_keys' @> jsonb_build_array(:permission_key)
+                      and requested_scope->'tenant_ids' @> jsonb_build_array(:tenant_id)
+                    order by activated_at desc limit 1
+                """),
+                {
+                    "user_id": user_id,
+                    "permission_key": permission_key,
+                    "tenant_id": str(tenant_id),
+                },
+            )
+            break_glass_id = emergency.scalar_one_or_none()
+        if break_glass_id is None:
+            raise
+        tenant_context = None
     if tenant_context is None:
         subject = {
             "id": str(user_id),
@@ -292,8 +319,24 @@ async def authorize_platform_action(
     request_context: dict | None = None,
 ) -> PolicyDecision:
     """Enforce a platform role permission through global ABAC policies."""
+    break_glass_id = None
     if not await has_platform_permission(session, user_id, permission_key):
-        raise HTTPException(status_code=403, detail="Akses platform tidak diizinkan.")
+        from app.db.session import engine
+
+        async with engine.connect() as connection:
+            emergency = await connection.execute(
+                text("""
+                    select id from public.break_glass_requests
+                    where requester_user_id=:user_id and status='active'
+                      and expires_at > now()
+                      and requested_scope->'permission_keys' @> jsonb_build_array(:permission_key)
+                    order by activated_at desc limit 1
+                """),
+                {"user_id": user_id, "permission_key": permission_key},
+            )
+            break_glass_id = emergency.scalar_one_or_none()
+        if break_glass_id is None:
+            raise HTTPException(status_code=403, detail="Akses platform tidak diizinkan.")
     subject = {
         "id": str(user_id),
         "roles": ["platform"],
