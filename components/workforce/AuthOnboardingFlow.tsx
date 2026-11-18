@@ -105,9 +105,6 @@ export function AuthOnboardingFlow({
   const [password, setPassword] = useState('••••••••••');
   const [showPass, setShowPass] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [forgotModal, setForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSent, setForgotSent] = useState(false);
 
   // Register state
   const [regType, setRegType] = useState<'sales_staff' | 'affiliate'>(
@@ -374,13 +371,12 @@ export function AuthOnboardingFlow({
                   />
                   <span>Ingat saya</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setForgotModal(true)}
+                <Link
+                  href="/auth/recovery?returnTo=/workforce"
                   className="font-semibold text-[#0284C7] hover:underline"
                 >
                   Lupa kata sandi?
-                </button>
+                </Link>
               </div>
 
               <button
@@ -787,72 +783,7 @@ export function AuthOnboardingFlow({
         )}
       </div>
 
-      {/* Lupa Kata Sandi Modal */}
-      {forgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172B3A]/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-[14px] border border-[#D8E3E9] bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#17324D]">
-                Atur Ulang Kata Sandi
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setForgotModal(false);
-                  setForgotSent(false);
-                }}
-                className="rounded-lg p-1 text-[#526675] hover:bg-[#EAF2F6]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {forgotSent ? (
-              <div className="mt-4 space-y-4">
-                <p className="text-sm text-[#247A55]">
-                  Tautan pemulihan kata sandi telah dikirim ke{' '}
-                  <strong>{forgotEmail}</strong>.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotModal(false);
-                    setForgotSent(false);
-                  }}
-                  className="w-full rounded-[10px] bg-[#17324D] py-2.5 text-sm font-semibold text-white"
-                >
-                  Tutup
-                </button>
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setForgotSent(true);
-                }}
-                className="mt-4 space-y-3"
-              >
-                <p className="text-xs text-[#526675]">
-                  Masukkan email terdaftar untuk menerima tautan pemulihan akun Workforce Anda.
-                </p>
-                <input
-                  type="email"
-                  required
-                  placeholder="raka@agentzy.id"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="h-10 w-full rounded-[10px] border border-[#B8C9D3] px-3 text-sm text-[#172B3A]"
-                />
-                <button
-                  type="submit"
-                  className="w-full rounded-[10px] bg-[#0284C7] py-2.5 text-sm font-semibold text-white hover:bg-[#0369A1]"
-                >
-                  Kirim Tautan Pemulihan
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
