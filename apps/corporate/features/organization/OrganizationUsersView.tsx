@@ -12,13 +12,13 @@ import {
   CorporatePageHeader,
   CorporateSegmentedTabs,
 } from '../../components/data-display/CorporateDataDisplay';
-import { CORPORATE_ROLE_OPTIONS } from '../../lib/corporate-data';
 import type { CorporateRoleKey, CorporateTenant, CorporateUserMember } from '../../lib/corporate-types';
 import type { AgentzyOrganization, AgentzyOrganizationUnit, AgentzyBranch, AgentzyDepartment } from '@/apps/web/lib/api-client';
 
 export function OrganizationUsersView({
   tenant,
   users,
+  tenantRoleOptions,
   organizations,
   organizationUnits,
   branches,
@@ -35,6 +35,7 @@ export function OrganizationUsersView({
 }: {
   tenant: CorporateTenant;
   users: CorporateUserMember[];
+  tenantRoleOptions: Array<{ key: CorporateRoleKey; label: string; permissionsSummary: string }>;
   organizations: AgentzyOrganization[];
   organizationUnits: AgentzyOrganizationUnit[];
   branches: AgentzyBranch[];
@@ -251,7 +252,7 @@ export function OrganizationUsersView({
                             className="h-8 max-w-[170px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D] disabled:opacity-50"
                           >
                             <option value="" disabled>Belum ada role</option>
-                            {CORPORATE_ROLE_OPTIONS.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
+                            {tenantRoleOptions.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
                           </select>
                           {u.status === 'Ditangguhkan' && (
                             <button type="button" disabled={savingMembershipId === u.id}
@@ -362,7 +363,7 @@ export function OrganizationUsersView({
             </h2>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {CORPORATE_ROLE_OPTIONS.map((r) => (
+            {tenantRoleOptions.map((r) => (
               <div
                 key={r.key}
                 className="rounded-[12px] border border-[#D8E3E9] bg-[#F5F8FA] p-4"
@@ -372,7 +373,7 @@ export function OrganizationUsersView({
                   {r.key}
                 </p>
                 <p className="mt-1.5 text-xs text-[#526675]">
-                  {r.permissionsSummary}
+                  {r.permissionsSummary || 'Tidak ada permission terdaftar'}
                 </p>
               </div>
             ))}
