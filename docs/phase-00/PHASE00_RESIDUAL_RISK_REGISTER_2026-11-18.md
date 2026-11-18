@@ -111,3 +111,63 @@ This is a Phase 00-specific application of the existing Definition of Done in `d
 The Product Owner's blanket risk acceptance is now recorded. However, the project’s own stop/closure criteria require independent review and approval; a Product Owner cannot be represented as an independent reviewer of the same implementation. The current evidence still shows live Security Advisor WARNs, fail-open RLS helper, broad grants/default privileges, unresolved legal/asset provenance, failed Bun/Ruff checks and skipped frontend/OpenAPI checks. Therefore this commit records the decision without falsely changing those technical facts or asserting that the closure gate has passed.
 
 **Phase 01 remains prohibited.** No Phase 01 migration, Identity/Tenant implementation, or production database change is authorized by this record.
+
+
+## Remediation execution pass — live evidence snapshot 18 November 2026
+
+**Repository branch:** `main`  
+**Supabase project verified by connector:** `Agentzy-db` / `cwhjdnkotuhueeudpgeu`  
+**Project state:** `ACTIVE_HEALTHY`, PostgreSQL `17.12.0.000`, region `ap-northeast-1`  
+**Latest Security Advisor observation:** `2026-11-18T02:54:22.623Z`  
+**Execution boundary:** Read-only live database inspection plus one engineering-remediation workflow addition. No database DDL, grants, policies, functions, triggers, Auth, Storage, application UI, or deployment changes were applied.
+
+### Fresh technical evidence
+
+1. Security Advisor still returns both WARN findings:
+   - `anon_security_definer_function_executable` / code 0028 for `public.rls_auto_enable()`.
+   - `authenticated_security_definer_function_executable` / code 0029 for `public.rls_auto_enable()`.
+2. Live function catalog confirms `public.rls_auto_enable()` is owned by `postgres`, `SECURITY DEFINER`, `search_path=pg_catalog`, with EXECUTE ACL still granted to `PUBLIC`, `anon`, `authenticated`, and `service_role`. Its inner `WHEN OTHERS` handler still logs and swallows errors.
+3. Event trigger `ensure_rls` remains enabled (`ddl_command_end`) and references `rls_auto_enable()`.
+4. Nine current public application tables are `profiles`, `tenants`, `organizations`, `memberships`, `roles`, `permissions`, `role_permissions`, `membership_roles`, and `audit_logs`. RLS is enabled on all nine. The current policies are SELECT-only; no write policies were observed.
+5. Fresh `information_schema.role_table_grants` evidence confirms `anon`, `authenticated`, and `service_role` each retain broad table privileges (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER) on all nine public application tables.
+6. Fresh `pg_default_acl` evidence confirms broad default privileges for `postgres` and `supabase_admin` in `public`. Managed schemas also have default ACL records; these must not be changed without distinguishing project-owned from Supabase-managed ownership.
+7. Storage catalog shows zero application buckets and zero objects. This is catalog evidence only; hosted Dashboard configuration and Product Owner's intended Storage usage still need confirmation.
+8. The remote migration history still contains the three previously recorded `phase_01_*` entries. They predate this remediation pass and were not created, changed, or applied by it. Phase 01 remains prohibited.
+
+### RR execution status after this pass
+
+| Risk ID | Owner (unchanged) | Current status | Corrective action performed in this pass | Resource / commit | Verification and remaining requirement |
+|---|---|---|---|---|---|
+| RR-001 | Supabase Admin + Security Lead | BLOCKED | Read-only revalidation only; fail-closed function migration not applied | Live catalog evidence; no DB commit | Swallowed exception and event trigger unchanged. Requires verified backup/PITR evidence, reviewed additive migration and post-change test |
+| RR-002 | Supabase Admin | BLOCKED | Re-ran Security Advisor | Advisor snapshot 2026-11-18T02:54:22.623Z | Both 0028/0029 WARN remain. Requires reviewed ACL migration and Advisor/privilege verification |
+| RR-003 | Database/Security Lead | BLOCKED | Re-read per-table grants | Live catalog evidence; no DB commit | Broad privileges remain on all nine tables. Requires complete data-path matrix and approved least-privilege matrix before grants are changed |
+| RR-004 | Supabase Admin | BLOCKED | Re-read default ACLs | Live catalog evidence; no DB commit | Broad public defaults remain; managed-role boundary is unresolved. Requires DBA review and project-owned scope proof |
+| RR-005 | Supabase Project Owner | BLOCKED | Confirmed canonical project identity and health only | Supabase project metadata | Hosted Auth provider, SMTP, password, MFA, session, redirect and related settings remain unavailable from connector. Requires Dashboard export/screenshots from this exact project |
+| RR-006 | Supabase Project Owner | BLOCKED | Confirmed project identity only | Supabase project metadata | Hosted Data API exposed schemas remain unverified. Requires Dashboard API settings evidence from this exact project |
+| RR-007 | Product Owner | PARTIAL / PENDING DECISION | Reconfirmed zero buckets/objects in catalog | Supabase Storage catalog | Catalog count is verified; intended Storage use and Dashboard settings are not approved/evidenced |
+| RR-008 | Legal/IP + Build Owner | BLOCKED | No legal disposition fabricated | Existing dependency-license report | 26 LGPL/MPL package variants still require shipped-artifact/linking analysis and Legal/IP sign-off |
+| RR-009 | Legal/IP Owner | BLOCKED | No legal disposition fabricated | Existing dependency-license report | Five manual license expressions still require exact publisher text and authorized legal disposition |
+| RR-010 | Dependency Maintainer | BLOCKED | No upstream license text fabricated | Existing dependency-license report | Forty missing package LICENSE records still require exact upstream evidence |
+| RR-011 | Brand/Asset Owner + Legal/IP | BLOCKED | No asset deleted, replaced, or approved | Existing 31-asset metadata inventory | All 31 assets remain pending creator/rightsholder/source/license/commercial permission/attribution/usage evidence and approval |
+| RR-012 | Frontend Lead | PARTIAL | Re-read existing route/module inventory | Existing inventory document | Callback-level scan is still incomplete; no exhaustive control-to-handler-to-API-to-permission map is claimed |
+| RR-013 | Backend Lead + Domain Owners | PARTIAL | Re-read current domain mapping | Existing inventory document | Canonical action-level API/domain ownership and owner approvals remain pending |
+| RR-014 | Frontend/Dependency Owner | BLOCKED / REMEDIATION WORKFLOW ADDED | Added a gated GitHub Actions workflow that regenerates Bun lock using Bun 1.4.4, then requires frozen install, ESLint and TypeScript to pass before it commits `bun.lock` | Commit `53307f2305425c543d3be47b82273514877eaff4`; `.github/workflows/phase-00-engineering-remediation.yml` | Workflow commit is verified in GitHub; generated lockfile and successful workflow result are not yet verified. Remains BLOCKED until workflow run and new lockfile are confirmed |
+| RR-015 | Backend Lead | BLOCKED / REMEDIATION WORKFLOW ADDED | Added gated Ruff safe-fix and formatter execution; workflow retains all configured Ruff rules and commits only after all engineering checks pass | Commit `53307f2305425c543d3be47b82273514877eaff4`; workflow file above | No claim that 101 findings are fixed. Requires workflow completion, clean Ruff output, and verified resulting source commit |
+| RR-016 | Frontend + Backend Leads | BLOCKED | Added a workflow intended to run frozen Bun install, ESLint, TypeScript, compileall, Ruff, FastAPI import/OpenAPI, migration-source checks and diff whitespace check | Commit `53307f2305425c543d3be47b82273514877eaff4` | No new successful check result is evidenced yet. Remains BLOCKED pending actual run result |
+| RR-017 | Repository Owner | PARTIAL | No branch protection change made | No repository setting changed | Existing branch protection decision remains pending; no branch protection policy has been inferred |
+| RR-018 | Product Owner | PENDING INDEPENDENT REVIEW | Recorded this execution request as the active remediation mandate | Current project instruction; no reviewer report | No named independent reviewer or signed report was supplied. Product Owner approval is not treated as independent review |
+
+### Supersession of earlier blanket risk-acceptance note
+
+The earlier Product Owner blanket risk-acceptance statement remains in this document as historical evidence of that conversation. For this final closure task, it is **not** treated as a formal disposition, remediation, legal approval, security sign-off, or substitute for independent review. The current Product Owner instruction explicitly requires corrective actions, verified evidence and independent review. Therefore RR-001–RR-018 retain the statuses above; no unresolved risk is marked RESOLVED or CLOSED by the earlier blanket approval.
+
+### Engineering-remediation workflow boundary
+
+The new workflow is deliberately gated:
+- It uses Bun 1.4.4 to regenerate the lockfile from the committed `package.json`.
+- It applies Ruff's safe fixes and formatter only; it does not disable or weaken lint/security rules.
+- It runs Ruff, Python compileall, FastAPI import/OpenAPI generation, frozen Bun install, ESLint, TypeScript, migration filename/order checks and `git diff --check`.
+- It pushes only `bun.lock` and `apps/api/app/**` changes, and only after all checks pass.
+- It does not run migrations, database queries, staging, UAT, production deployment, or application runtime tests.
+
+**Current gate:** Phase 00 remains **PARTIAL / BLOCKED**. No Phase 01 work is authorized or started. No Phase 01 migration was added or modified in this pass.
