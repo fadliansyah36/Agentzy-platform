@@ -712,105 +712,39 @@ export function useAIWorkforcePortal(
   );
 
   const handleCreateBinding = useCallback(
-    (
-      payload: Omit<
-        HumanAIBindingRecord,
-        'id' | 'managedByRole' | 'managedByPerson' | 'status' | 'updatedAt'
-      >
-    ) => {
+    (_payload: Omit<
+      HumanAIBindingRecord,
+      'id' | 'managedByRole' | 'managedByPerson' | 'status' | 'updatedAt'
+    >) => {
       if (!canManageBindings) {
-        showToast(
-          'Hanya Divisi HRD, Admin, dan Direksi Agentzy yang dapat mengatur ikatan Staff Human + AI.'
-        );
+        showToast('Membership permission workforce.assignments.manage diperlukan.');
         return;
       }
-      const actorPerson =
-        managerRole === 'HRD Agentzy'
-          ? 'Dina Kusuma (HRD & People Ops Agentzy)'
-          : managerRole === 'Admin Agentzy'
-            ? 'Hendra Wijaya (Admin Workforce Agentzy)'
-            : 'Arif Rahman (Direktur Operasional Agentzy)';
-      const newBinding: HumanAIBindingRecord = {
-        ...payload,
-        id: `BND-${Date.now().toString().slice(-3)}`,
-        managedByRole: managerRole,
-        managedByPerson: actorPerson,
-        status: 'Aktif',
-        updatedAt: 'Baru saja',
-      };
-      setHumanAiBindings((prev) => {
-        const next = [newBinding, ...prev];
-        saveHumanAIBindings(next);
-        return next;
-      });
-      appendAudit(
-        'Audit Log',
-        `Ikatan Kolaborasi Baru: ${payload.humanName} ↔ ${payload.aiWorkerName}`,
-        actorPerson,
-        `Ditetapkan oleh ${managerRole} untuk kolaborasi ${payload.collaborationMode}.`
-      );
-      showToast(
-        `Ikatan kolaborasi ${payload.humanName} ↔ ${payload.aiWorkerName} berhasil disimpan`
-      );
+      showToast('Binding Human + AI belum memiliki FastAPI domain endpoint. Tidak ada data lokal yang disimpan.');
     },
-    [appendAudit, canManageBindings, managerRole, showToast]
+    [canManageBindings, showToast]
   );
 
   const handleToggleBindingStatus = useCallback(
-    (bindingId: string) => {
+    (_bindingId: string) => {
       if (!canManageBindings) {
-        showToast(
-          'Akses dibatasi: Corporate / ISP hanya dapat melihat data operasional di Portal Corporate.'
-        );
+        showToast('Membership permission workforce.assignments.manage diperlukan.');
         return;
       }
-      setHumanAiBindings((prev) => {
-        const next = prev.map((b) => {
-          if (b.id !== bindingId) return b;
-          const nextStatus: 'Aktif' | 'Jeda' =
-            b.status === 'Aktif' ? 'Jeda' : 'Aktif';
-          return { ...b, status: nextStatus, updatedAt: 'Baru saja' };
-        });
-        saveHumanAIBindings(next);
-        return next;
-      });
-      appendAudit(
-        'Audit Log',
-        `Perubahan status ikatan Human + AI (${bindingId})`,
-        managerRole,
-        `Status kolaborasi diperbarui oleh ${managerRole}.`
-      );
-      showToast('Status ikatan kolaborasi Human + AI diperbarui');
+      showToast('Lifecycle binding belum tersedia melalui FastAPI. Tidak ada perubahan lokal yang dilakukan.');
     },
-    [appendAudit, canManageBindings, managerRole, showToast]
+    [canManageBindings, showToast]
   );
 
   const handleUpdateBindingAiWorker = useCallback(
-    (bindingId: string, aiWorkerId: string, aiWorkerName: string) => {
+    (_bindingId: string, _aiWorkerId: string, _aiWorkerName: string) => {
       if (!canManageBindings) {
-        showToast(
-          'Hanya HRD, Admin, atau Direksi Agentzy yang berwenang mengubah ikatan AI Partner.'
-        );
+        showToast('Membership permission workforce.assignments.manage diperlukan.');
         return;
       }
-      setHumanAiBindings((prev) => {
-        const next = prev.map((b) =>
-          b.id === bindingId
-            ? {
-                ...b,
-                aiWorkerId,
-                aiWorkerName,
-                managedByRole: managerRole,
-                updatedAt: 'Baru saja',
-              }
-            : b
-        );
-        saveHumanAIBindings(next);
-        return next;
-      });
-      showToast(`Partner AI pada ${bindingId} diperbarui menjadi ${aiWorkerName}`);
+      showToast('Update binding belum tersedia melalui FastAPI. Tidak ada perubahan lokal yang dilakukan.');
     },
-    [canManageBindings, managerRole, showToast]
+    [canManageBindings, showToast]
   );
 
   const handleCreateWorkflowVersion = useCallback(
