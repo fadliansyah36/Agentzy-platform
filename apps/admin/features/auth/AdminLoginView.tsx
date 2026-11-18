@@ -148,6 +148,11 @@ export function AdminLoginView({
                 </div>
               </div>
 
+              <div className="flex justify-end">
+                <Link href="/auth/recovery" className="text-xs font-semibold text-[#0284C7] hover:underline">
+                  Lupa kata sandi?
+                </Link>
+              </div>
               <div>
                 <label
                   htmlFor="admin-mfa"
