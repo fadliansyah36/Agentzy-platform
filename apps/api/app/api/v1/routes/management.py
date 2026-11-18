@@ -923,7 +923,10 @@ async def update_role(
             raise HTTPException(status_code=404, detail="Custom platform role not found.")
         row = dict(row)
         permissions = await connection.execute(
-            text("select permission_key from public.role_permissions where role_id=:id order by permission_key"),
+            text("""
+                select permission_key from public.role_permissions
+                where role_id=:id order by permission_key
+            """),
             {"id": role_id},
         )
         row["permissions"] = [item["permission_key"] for item in permissions.mappings().all()]
