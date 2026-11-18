@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import type { AgentzyInvitation } from '@/apps/web/lib/api-client';
@@ -85,6 +86,11 @@ export function WorkforceIdentityGate({
               <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="h-11 w-full rounded-[10px] border border-[var(--az-border-default)] bg-white pl-10 pr-3 text-sm outline-none focus:border-[var(--az-brand-azure)]" />
             </span>
           </label>
+          <div className="flex justify-end">
+            <Link href="/auth/recovery" className="text-xs font-semibold text-[var(--az-brand-azure)] hover:underline">
+              Lupa kata sandi?
+            </Link>
+          </div>
           <button type="submit" disabled={submitting || loading} className="h-11 w-full rounded-[10px] bg-[var(--az-brand-azure)] text-sm font-semibold text-white transition hover:bg-[var(--az-brand-azure-hover)] disabled:cursor-not-allowed disabled:opacity-60">{submitting ? 'Memverifikasi…' : 'Masuk'}</button>
         </form>
         <div className="my-4 flex items-center gap-3 text-[11px] text-[var(--az-text-muted)]"><span className="h-px flex-1 bg-[var(--az-border-default)]" />atau<span className="h-px flex-1 bg-[var(--az-border-default)]" /></div>
