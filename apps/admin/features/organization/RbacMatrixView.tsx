@@ -6,23 +6,33 @@ import {
   AdminPageHeader,
   AdminSegmentedTabs,
 } from '../../components/data-display/AdminDataDisplay';
-import { RBAC_RESOURCE_KEYS } from '../../lib/admin-data';
 import type { RbacRoleRecord } from '../../lib/admin-types';
+import type { AgentzyPermissionDefinition } from '@/apps/web/lib/api-client';
 
 export function RbacMatrixView({
   roles,
+  permissionRegistry,
   onOpenRoleModal,
   onDeleteRole,
   onCyclePermission,
   onBack,
 }: {
   roles: RbacRoleRecord[];
+  permissionRegistry: AgentzyPermissionDefinition[];
   onOpenRoleModal: (role?: RbacRoleRecord) => void;
   onDeleteRole?: (id: string) => void;
   onCyclePermission: (roleId: string, resourceKey: string) => void;
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<'role' | 'matrix'>('role');
+  const resourceRows = Array.from(new Set(
+    permissionRegistry.map((permission) => permission.resource ?? permission.domain)
+  )).map((key) => ({
+    key,
+    label: permissionRegistry.find((permission) =>
+      (permission.resource ?? permission.domain) === key
+    )?.domain ?? key,
+  }));
 
   return (
     <div className="space-y-5">
@@ -114,9 +124,15 @@ export function RbacMatrixView({
             </span>
           </div>
 
+          {resourceRows.length === 0 ? (
+            <div className="rounded-xl border border-[#D8E3E9] bg-[#F5F8FA] p-4 text-sm text-[#526675]">
+              Permission registry belum tersedia. Matrix tidak menggunakan definisi statis.
+            </div>
+          ) : null}
+
           {/* Mobile-first Role Cards */}
           <div className="space-y-3 md:hidden">
-            {RBAC_RESOURCE_KEYS.map((res) => (
+            {resourceRows.map((res) => (
               <div
                 key={res.key}
                 className="rounded-[12px] border border-[#EAF2F6] bg-[#F5F8FA] p-3.5 space-y-2.5"
