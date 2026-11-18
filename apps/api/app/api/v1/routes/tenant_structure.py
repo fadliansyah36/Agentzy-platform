@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.authorization import authorize_object, authorize_tenant
+from app.core.authorization import authorize_action, authorize_object
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -69,14 +69,19 @@ async def _authorize(
     permission: str,
     platform_permission: str,
 ):
-    return await authorize_tenant(
+    resource_type, action = permission.rsplit(".", 1)
+    context, _ = await authorize_action(
         session,
         user_id=UUID(claims["sub"]),
         tenant_id=tenant_id,
         permission_key=permission,
         platform_permission=platform_permission,
         aal=claims.get("aal"),
+        resource_type=resource_type,
+        action=action,
+        resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
     )
+    return context
 
 
 async def _audit(
