@@ -206,6 +206,7 @@ export function CorporatePortalClient({
           <OrganizationUsersView
             tenant={portal.activeTenant}
             users={portal.users}
+            tenantRoleOptions={portal.tenantRoleOptions}
             organizations={portal.organizations}
             organizationUnits={portal.organizationUnits}
             branches={portal.branches}
