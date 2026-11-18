@@ -21,9 +21,7 @@ import type { AgentzySecurityAlert } from '@/apps/web/lib/api-client';
 
 export function SecurityCenterView({
   mfaEnforced,
-  onToggleMfa,
   activeSessionsCount,
-  onRevokeAllSessions,
   ipAllowlistEnabled,
   sessionTtlMinutes,
   breakGlassRequests,
@@ -37,10 +35,8 @@ export function SecurityCenterView({
   onToggleFeatureFlag,
   onBack,
 }: {
-  mfaEnforced: boolean;
-  onToggleMfa: () => void;
-  activeSessionsCount: number;
-  onRevokeAllSessions: () => void;
+  mfaEnforced: boolean | null;
+  activeSessionsCount: number | null;
   ipAllowlistEnabled: boolean;
   sessionTtlMinutes: number;
   breakGlassRequests: BreakGlassRequestRecord[];
@@ -91,18 +87,14 @@ export function SecurityCenterView({
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[#526675]">MFA (2FA)</span>
             <AdminStatusText
-              tone={mfaEnforced ? 'success' : 'danger'}
-              label={mfaEnforced ? 'Aktif' : 'Nonaktif'}
+              tone={mfaEnforced === null ? 'warning' : mfaEnforced ? 'success' : 'danger'}
+              label={mfaEnforced === null ? 'Belum diverifikasi' : mfaEnforced ? 'Aktif' : 'Nonaktif'}
             />
           </div>
-          <p className="text-sm font-bold text-[#17324D]">Wajib untuk seluruh Admin</p>
-          <button
-            type="button"
-            onClick={onToggleMfa}
-            className="h-8 w-full rounded-lg border border-[#D8E3E9] text-xs font-semibold text-[#17324D] hover:bg-[#EAF2F6]"
-          >
-            {mfaEnforced ? 'Evaluasi Kebijakan MFA' : 'Aktifkan MFA Wajib'}
-          </button>
+          <p className="text-sm font-bold text-[#17324D]">Enforcement MFA hosted Auth</p>
+          <p className="text-xs text-[#526675]">
+            {mfaEnforced === null ? 'Status provider belum dapat dibaca melalui connector Supabase. Jangan menganggap MFA enforcement aktif.' : mfaEnforced ? 'MFA enforcement terverifikasi.' : 'MFA enforcement tidak aktif.'}
+          </p>
         </div>
 
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
@@ -111,15 +103,11 @@ export function SecurityCenterView({
             <KeyRound className="h-4 w-4 text-[#0284C7]" />
           </div>
           <p className="font-mono-tabular text-2xl font-bold text-[#17324D]">
-            {activeSessionsCount}
+            {activeSessionsCount === null ? '—' : activeSessionsCount}
           </p>
-          <button
-            type="button"
-            onClick={onRevokeAllSessions}
-            className="h-8 w-full rounded-lg border border-[#D8E3E9] text-xs font-semibold text-[#B23A48] hover:bg-[#B23A48]/10"
-          >
-            Cabut Sesi Non-Esensial
-          </button>
+          <p className="text-xs text-[#526675]">
+            {activeSessionsCount === null ? 'Jumlah sesi Auth belum tersedia melalui endpoint yang terhubung.' : 'Jumlah sesi aktif dari sumber Auth.'}
+          </p>
         </div>
 
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-2">
@@ -130,12 +118,12 @@ export function SecurityCenterView({
             <ShieldCheck className="h-4 w-4 text-[#247A55]" />
           </div>
           <p className="text-sm font-bold text-[#17324D]">
-            IP Allowlist: {ipAllowlistEnabled ? 'Ketat Aktif' : 'Terbuka'}
+            IP Allowlist: {ipAllowlistEnabled === null ? 'Belum diverifikasi' : ipAllowlistEnabled ? 'Ketat Aktif' : 'Terbuka'}
           </p>
           <p className="text-xs text-[#526675]">
             Batas sesi:{' '}
             <span className="font-mono-tabular font-semibold text-[#17324D]">
-              {sessionTtlMinutes} menit
+              {sessionTtlMinutes === null ? 'Belum diverifikasi' : `${sessionTtlMinutes} menit`}
             </span>
           </p>
         </div>
