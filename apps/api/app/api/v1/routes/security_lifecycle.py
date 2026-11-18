@@ -1,6 +1,5 @@
 import base64
 import csv
-import hashlib
 import hmac
 import io
 import json
@@ -92,7 +91,7 @@ async def _require_platform_permission(
     return actor
 
 
-async def _audit(connection, request: Request, actor: UUID, action: str,
+async def _audit(connection, request: Request, actor: UUID | None, action: str,
                  resource_type: str, resource_id: UUID | str,
                  tenant_id: UUID | None = None, metadata: dict | None = None):
     await connection.execute(
@@ -160,7 +159,7 @@ async def ingest_auth_provider_event(
             row = existing.mappings().first()
             return {"status": "duplicate", "event_id": str(row["id"]) if row else None}
         await _audit(
-            connection, request, payload.user_id or UUID(int=0),
+            connection, request, None,
             "auth.provider_event.processed", "auth_provider_event", event_id,
             payload.tenant_id,
             {"provider": "supabase", "event_type": payload.event_type},
@@ -374,6 +373,14 @@ async def list_break_glass_requests(
     actor = await _require_platform_permission(
         claims, session, "platform.security.manage", "manage", "break_glass_requests"
     )
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("""
+                update public.break_glass_requests
+                set status='expired'
+                where status='active' and expires_at <= now()
+            """)
+        )
     async with engine.connect() as connection:
         result = await connection.execute(
             text("""
@@ -477,7 +484,7 @@ async def read_audit_logs(
         )
     async with engine.begin() as connection:
         await _audit(connection, request, actor, "audit.logs.read",
-                     "audit_log_collection", str(tenant_id or "platform"),
+                     "audit_log_collection", tenant_id,
                      tenant_id, {"limit": limit, "resource_type": resource_type})
     return {
         "data": rows,
