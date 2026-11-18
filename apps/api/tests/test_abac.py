@@ -132,3 +132,19 @@ class AbacEvaluatorTests(TestCase):
             {"subject": self.subject},
         )
         self.assertTrue(result.matched)
+
+    def test_not_does_not_turn_missing_attribute_into_allow(self):
+        result = evaluate_condition(
+            {"not": {"path": "subject.manager_id", "op": "equals", "value": "u-9"}},
+            {"subject": self.subject},
+        )
+        self.assertFalse(result.matched)
+        self.assertEqual(result.failed[0]["reason"], "attribute_missing")
+
+    def test_invalid_effect_denies_evaluation(self):
+        result = self.decide([self.policy(effect="permit")])
+        self.assertEqual(result.reason_code, "INVALID_POLICY")
+
+    def test_invalid_effective_timestamp_denies_evaluation(self):
+        result = self.decide([self.policy(effective_from="not-a-timestamp")])
+        self.assertEqual(result.reason_code, "INVALID_POLICY")
