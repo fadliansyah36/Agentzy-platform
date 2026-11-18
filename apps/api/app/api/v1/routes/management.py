@@ -977,7 +977,8 @@ async def list_tenant_memberships(
         result = await connection.execute(
             text("""
             select
-                m.id, m.tenant_id, m.user_id, p.display_name,
+                m.id, m.tenant_id, m.user_id, m.organization_id, m.organization_unit_id,
+                m.branch_id, m.department_id, p.display_name,
                 p.email, m.status, m.joined_at, m.created_at,
                 coalesce(
                     array_agg(distinct r.key) filter (where r.key is not null),
