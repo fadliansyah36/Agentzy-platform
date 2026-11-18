@@ -3,12 +3,12 @@
 The evaluator accepts JSON policy documents only. It deliberately does not
 execute Python expressions, SQL fragments, templates, or arbitrary callables.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-
 
 ALLOWED_OPERATORS = frozenset(
     {
@@ -51,7 +51,9 @@ class PolicyDecision:
 
 def _validate_path(path: Any) -> None:
     if not isinstance(path, str) or not path or len(path) > 256:
-        raise PolicyValidationError("Condition path must be a non-empty string of at most 256 chars")
+        raise PolicyValidationError(
+            "Condition path must be a non-empty string of at most 256 chars"
+        )
     parts = path.split(".")
     if len(parts) > MAX_PATH_SEGMENTS or any(
         not part or part.startswith("_") or "__" in part for part in parts
@@ -72,7 +74,9 @@ def validate_condition(node: Any, *, depth: int = 0, counter: list[int] | None =
         return
     if len(node) != 1:
         if set(node) - {"path", "op", "value"} or not {"path", "op"} <= set(node):
-            raise PolicyValidationError("Leaf condition must contain only path, op and optional value")
+            raise PolicyValidationError(
+                "Leaf condition must contain only path, op and optional value"
+            )
         _validate_path(node["path"])
         operator = node["op"]
         if operator not in ALLOWED_OPERATORS:
@@ -122,13 +126,30 @@ def _compare(node: dict[str, Any], context: dict[str, Any]) -> ConditionResult:
     expected = node.get("value")
     if operator == "exists":
         desired = node.get("value", True)
-        return ConditionResult(found is desired, () if found is desired else ({
-            "path": path, "operator": operator, "expected": desired, "actual_exists": found,
-        },))
+        return ConditionResult(
+            found is desired,
+            ()
+            if found is desired
+            else (
+                {
+                    "path": path,
+                    "operator": operator,
+                    "expected": desired,
+                    "actual_exists": found,
+                },
+            ),
+        )
     if not found:
-        return ConditionResult(False, ({
-            "path": path, "operator": operator, "reason": "attribute_missing",
-        },))
+        return ConditionResult(
+            False,
+            (
+                {
+                    "path": path,
+                    "operator": operator,
+                    "reason": "attribute_missing",
+                },
+            ),
+        )
 
     matched = False
     if operator == "equals":
@@ -160,9 +181,15 @@ def _compare(node: dict[str, Any], context: dict[str, Any]) -> ConditionResult:
 
     return ConditionResult(
         matched,
-        () if matched else ({
-            "path": path, "operator": operator, "reason": "comparison_failed",
-        },),
+        ()
+        if matched
+        else (
+            {
+                "path": path,
+                "operator": operator,
+                "reason": "comparison_failed",
+            },
+        ),
     )
 
 
@@ -182,9 +209,17 @@ def evaluate_condition(node: dict[str, Any], context: dict[str, Any]) -> Conditi
         return ConditionResult(False, tuple(item for result in results for item in result.failed))
     if "not" in node:
         result = evaluate_condition(node["not"], context)
-        return ConditionResult(not result.matched, () if not result.matched else ({
-            "operator": "not", "reason": "negated_condition_matched",
-        },))
+        return ConditionResult(
+            not result.matched,
+            ()
+            if not result.matched
+            else (
+                {
+                    "operator": "not",
+                    "reason": "negated_condition_matched",
+                },
+            ),
+        )
     return _compare(node, context)
 
 
@@ -259,29 +294,39 @@ def evaluate_policies(
             priority = policy.get("priority", 100)
             if not isinstance(priority, int) or isinstance(priority, bool):
                 raise PolicyValidationError("Policy priority must be an integer")
-            if not isinstance(policy.get("resource"), str) or not isinstance(policy.get("action"), str):
+            if not isinstance(policy.get("resource"), str) or not isinstance(
+                policy.get("action"), str
+            ):
                 raise PolicyValidationError("Policy resource and action must be strings")
             result = evaluate_condition(policy.get("conditions", {}), context)
         except (PolicyValidationError, KeyError, TypeError, ValueError) as exc:
             invalid = True
-            failed.append({
-                "policy_id": str(policy.get("id", "unknown")),
-                "reason": "invalid_policy",
-                "message": str(exc),
-            })
+            failed.append(
+                {
+                    "policy_id": str(policy.get("id", "unknown")),
+                    "reason": "invalid_policy",
+                    "message": str(exc),
+                }
+            )
             continue
         versions.append({"policy_id": str(policy.get("id", "unknown")), "version": version})
         if result.matched:
-            matched.append({
-                "policy_id": str(policy.get("id", "unknown")),
-                "effect": effect.upper(),
-                "priority": priority,
-                "version": version,
-            })
+            matched.append(
+                {
+                    "policy_id": str(policy.get("id", "unknown")),
+                    "effect": effect.upper(),
+                    "priority": priority,
+                    "version": version,
+                }
+            )
         else:
-            failed.extend({
-                "policy_id": str(policy.get("id", "unknown")), **detail,
-            } for detail in result.failed)
+            failed.extend(
+                {
+                    "policy_id": str(policy.get("id", "unknown")),
+                    **detail,
+                }
+                for detail in result.failed
+            )
 
     if invalid:
         decision, reason = "DENY", "INVALID_POLICY"

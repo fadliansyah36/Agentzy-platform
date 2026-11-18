@@ -151,7 +151,6 @@ def authorize_object(
         raise HTTPException(status_code=404, detail="Resource tidak tersedia.")
 
 
-
 async def authorize_action(
     session: AsyncSession,
     *,
@@ -188,10 +187,16 @@ async def authorize_action(
             "id": str(user_id),
             "tenant_id": str(tenant_context.tenant_id),
             "membership_id": str(tenant_context.membership_id),
-            "organization_id": str(tenant_context.organization_id) if tenant_context.organization_id else None,
-            "organization_unit_id": str(tenant_context.organization_unit_id) if tenant_context.organization_unit_id else None,
+            "organization_id": str(tenant_context.organization_id)
+            if tenant_context.organization_id
+            else None,
+            "organization_unit_id": str(tenant_context.organization_unit_id)
+            if tenant_context.organization_unit_id
+            else None,
             "branch_id": str(tenant_context.branch_id) if tenant_context.branch_id else None,
-            "department_id": str(tenant_context.department_id) if tenant_context.department_id else None,
+            "department_id": str(tenant_context.department_id)
+            if tenant_context.department_id
+            else None,
             "roles": sorted(tenant_context.role_keys),
             "permissions": sorted(tenant_context.permissions),
         }
@@ -249,13 +254,16 @@ async def authorize_action(
                     "resource_type": resource_type,
                     "resource_id": str(resource.get("id", "")) or None,
                     "request_id": request_id,
-                    "metadata": json.dumps({
-                        "decision": decision.decision,
-                        "reason_code": decision.reason_code,
-                        "matched_policies": decision.matched_policies,
-                        "policy_versions": decision.policy_versions,
-                        "evaluated_at": decision.evaluated_at,
-                    }, default=str),
+                    "metadata": json.dumps(
+                        {
+                            "decision": decision.decision,
+                            "reason_code": decision.reason_code,
+                            "matched_policies": decision.matched_policies,
+                            "policy_versions": decision.policy_versions,
+                            "evaluated_at": decision.evaluated_at,
+                        },
+                        default=str,
+                    ),
                 },
             )
     except HTTPException:
