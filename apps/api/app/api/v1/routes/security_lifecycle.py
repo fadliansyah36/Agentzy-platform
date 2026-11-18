@@ -132,6 +132,34 @@ async def _audit(
     )
 
 
+async def _expire_break_glass(connection, request: Request) -> int:
+    expired = await connection.execute(
+        text("""
+            update public.break_glass_requests
+            set status='expired'
+            where status='active' and expires_at <= now()
+            returning id,tenant_id,requester_user_id,expires_at
+        """)
+    )
+    rows = expired.mappings().all()
+    for row in rows:
+        await _audit(
+            connection,
+            request,
+            None,
+            "break_glass.expired",
+            "break_glass_request",
+            row["id"],
+            row["tenant_id"],
+            {
+                "requester_user_id": str(row["requester_user_id"]),
+                "expires_at": row["expires_at"],
+                "reason": "time_limit_reached",
+            },
+        )
+    return len(rows)
+
+
 @router.post("/auth-provider-events", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_auth_provider_event(
     payload: AuthProviderEventIn,
@@ -642,13 +670,16 @@ async def list_break_glass_requests(
         claims, session, "platform.security.manage", "manage", "break_glass_requests"
     )
     async with engine.begin() as connection:
-        await connection.execute(
-            text("""
-                update public.break_glass_requests
-                set status='expired'
-                where status='active' and expires_at <= now()
-            """)
-        )
+        await _expire_break_glass(connection, Request(scope={
+            "type": "http",
+            "headers": [],
+            "method": "GET",
+            "path": "/api/v1/security/break-glass/requests",
+            "query_string": b"",
+            "server": ("localhost", 0),
+            "client": None,
+            "scheme": "https",
+        }))
     async with engine.connect() as connection:
         result = await connection.execute(
             text("""
