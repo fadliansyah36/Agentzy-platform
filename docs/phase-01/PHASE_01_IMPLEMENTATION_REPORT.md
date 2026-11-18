@@ -29,11 +29,20 @@ It adds organization units, branches, departments, scoped membership/role metada
 
 **Migration status: SOURCE ONLY — NOT APPLIED.** It has not been executed against Agentzy-db. The live database still has the previously observed broad grants and fail-open event-trigger implementation until the migration is reviewed and applied.
 
+## Commits
+
+- `db5318fbca7816f3e57960394ccebca5cf46711b` — Phase 01 implementation source and documentation.
+- `4ba07728bc2f81eefb11e9219f52be837d86826d` — lint corrections and deterministic checks.
+- `d5ffb7954ef160c755c9acbffb559348a1bf9671` — automated Ruff formatting/engineering repair commit.
+- `ecbac30e8e21566a27043a9a07c5e62467732aad` — Workforce identity/session null guard.
+
 ## Verification and deployment
 
 - GitHub write permission and Supabase project identity were verified.
+- GitHub Actions run [44248766881](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44248766881) completed successfully: frozen dependency install, ESLint, TypeScript, Python compile, Ruff, five focused authorization tests, FastAPI import/OpenAPI generation and migration filename/version consistency.
+- GitHub Actions run [44248766891](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44248766891) completed successfully: lockfile verification, ESLint, TypeScript, Ruff safe-fix/format verification, Python compile, FastAPI import/OpenAPI, migration consistency and whitespace check.
+- The final Workforce null guard commit `ecbac30` was added after these runs and was not separately rerun by CI.
 - No staging, UAT, production deployment or real-world security acceptance is claimed.
-- CI results are pending the commit-triggered workflow.
 - No production database change was made.
 
 ## Acceptance decision
