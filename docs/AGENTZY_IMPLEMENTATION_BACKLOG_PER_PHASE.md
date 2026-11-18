@@ -598,3 +598,31 @@ The authoritative current evidence is `docs/phase-00/PHASE00_CLOSURE_READINESS_R
 ### Execution guard
 
 Do not mark Phase 00 CLOSED and do not start additional Phase 01 coding. Existing applied M010 migrations are recorded as live state only; they do not waive Phase 00 gates. Build/lint/type-check, Python compile/import, migration consistency and OpenAPI checks were not run in this re-audit and must not be represented as passed. No staging, UAT, real-world, load, security-acceptance or production-release testing was run.
+
+
+## 18. Phase 00 continuation — remediation, inventory and engineering checks
+
+Evidence pack:
+- `docs/phase-00/RLS_SECURITY_REMEDIATION_2026-11-18.md`
+- `docs/phase-00/LICENSE_ASSET_PROVENANCE_DISPOSITION_2026-11-18.md`
+- `docs/phase-00/SCREEN_ACTION_API_DOMAIN_INVENTORY_2026-11-18.md`
+- `docs/phase-00/ENGINEERING_CHECKS_REPORT_2026-11-18.md`
+- `docs/phase-00/PHASE00_RESIDUAL_RISK_REGISTER_2026-11-18.md`
+
+### Current outcomes
+
+| Area | Status | Evidence / next action |
+|---|---|---|
+| RLS helper and event trigger | BLOCKED | PostgreSQL 17 event-trigger privilege behavior reviewed; fail-closed SQL draft and revoke plan documented. No production change applied because Supabase CLI, verified recovery point and managed-build post-change verification are unavailable. |
+| Security Advisor 0028 / 0029 | BLOCKED | Both WARN findings were still present at 2026-11-18T02:34:49Z. |
+| Supabase Auth/Data API settings | BLOCKED | Hosted provider/SMTP/password/MFA/session/redirect and exposed-schema settings are not available through the current Supabase connector; owner Dashboard evidence required. |
+| Grants/default privileges | BLOCKED | Broad grants remain live; target matrix and residual risk recorded. No blanket REVOKE applied. |
+| License exceptions/assets | BLOCKED | 1,037 package coordinates reconcile. 26 LGPL/MPL, 5 manual and 40 missing-license-file findings need owner/legal review; all 31 assets still lack complete provenance/rights evidence. |
+| Screen/action inventory | PARTIAL | 11 page/layout routes, 3 Next.js API handlers, portal view modules and API ownership mapped. Callback-level button/form/hook tracing remains incomplete. |
+| Definition of Done | PENDING APPROVAL | DoD checklist in closure re-audit report; Product Owner/Engineering Lead approval required. |
+| Engineering checks | PARTIAL / FAILURES RECORDED | CI run 44224158408: migration source consistency PASS; Python compile PASS; Ruff FAIL (101 findings); Bun frozen install FAIL because package.json adds @supabase/supabase-js absent from bun.lock; OpenAPI, ESLint and TypeScript were skipped. |
+| Phase 01 readiness | NOT APPROVED | Phase 01 remains prohibited; no readiness approval requested or assumed. |
+
+### Execution boundary
+
+Only the Phase 00 engineering-check workflow and documentation were added. No Phase 01 feature implementation, frontend UI redesign, Supabase migration, DDL, grant, policy, function, event-trigger, Auth/Storage setting, deployment or business data change was performed. Do not mark Phase 00 CLOSED.
