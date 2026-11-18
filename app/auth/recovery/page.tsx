@@ -26,6 +26,9 @@ export default function PasswordRecoveryPage() {
     if (requestedReturn && allowedReturnPaths.has(requestedReturn)) {
       setReturnPath(requestedReturn);
     }
+    const recoveryHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
+    const recoveryQuery = params.get('type');
+    const isRecoveryCallback = recoveryHash === 'recovery' || recoveryQuery === 'recovery';
     const errorCode = params.get('error_code');
     if (errorCode) {
       setError(
@@ -37,7 +40,7 @@ export default function PasswordRecoveryPage() {
     }
     void client.auth.getSession().then(({ data }) => {
       if (!alive) return;
-      const recovery = Boolean(data.session);
+      const recovery = Boolean(data.session) && isRecoveryCallback;
       setHasRecoverySession(recovery);
       if (recovery) setPhase('reset');
     });
