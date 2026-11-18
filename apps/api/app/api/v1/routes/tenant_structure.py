@@ -262,6 +262,35 @@ async def update_organization(
             raise HTTPException(status_code=404, detail="Organization tidak ditemukan.")
         if context is not None:
             authorize_object(context, resource_tenant_id=tenant_id, organization_id=organization_id)
+        if "parent_id" in values and values["parent_id"] is not None:
+            parent_check = await connection.execute(
+                text("""
+                    with recursive ancestors(id,parent_id) as (
+                      select id,parent_id from public.organizations
+                      where id=:parent_id and tenant_id=:tenant_id and status='active'
+                      union all
+                      select o.id,o.parent_id from public.organizations o
+                      join ancestors a on o.id=a.parent_id
+                      where o.tenant_id=:tenant_id
+                    )
+                    select
+                      exists(select 1 from ancestors where id=:organization_id) as cycle,
+                      exists(select 1 from ancestors where id=:parent_id) as parent_exists
+                """),
+                {
+                    "parent_id": values["parent_id"],
+                    "tenant_id": tenant_id,
+                    "organization_id": organization_id,
+                },
+            )
+            parent_state = parent_check.mappings().one()
+            if not parent_state["parent_exists"]:
+                raise HTTPException(status_code=404, detail="Active parent organization not found.")
+            if parent_state["cycle"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Organization parent change would create a hierarchy cycle.",
+                )
         if values.get("status") == "archived":
             dependencies = await connection.execute(
                 text("""
@@ -453,6 +482,24 @@ async def create_branch(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        if payload.organization_unit_id is not None:
+            unit = await connection.execute(
+                text("""
+                    select 1 from public.organization_units
+                    where id=:unit_id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {
+                    "unit_id": payload.organization_unit_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": payload.organization_id,
+                },
+            )
+            if unit.scalar_one_or_none() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Active organization unit not found in this branch scope.",
+                )
         reservation = await _reserve_command(
             connection, request, actor, tenant_id,
             f"branch.create:{tenant_id}", payload.model_dump(mode="json"),
@@ -539,6 +586,40 @@ async def create_department(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        if payload.branch_id is not None:
+            branch = await connection.execute(
+                text("""
+                    select 1 from public.branches
+                    where id=:branch_id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {
+                    "branch_id": payload.branch_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": payload.organization_id,
+                },
+            )
+            if branch.scalar_one_or_none() is None:
+                raise HTTPException(status_code=404, detail="Active branch not found in this organization.")
+        if payload.parent_department_id is not None:
+            parent = await connection.execute(
+                text("""
+                    select branch_id from public.departments
+                    where id=:parent_id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {
+                    "parent_id": payload.parent_department_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": payload.organization_id,
+                },
+            )
+            parent_row = parent.mappings().first()
+            if parent_row is None or parent_row["branch_id"] != payload.branch_id:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Parent department is outside the active branch hierarchy.",
+                )
         reservation = await _reserve_command(
             connection, request, actor, tenant_id,
             f"department.create:{tenant_id}", payload.model_dump(mode="json"),
@@ -1130,6 +1211,25 @@ async def update_branch(
                     status_code=404,
                     detail="Active organization unit not found in this branch scope.",
                 )
+        if (
+            "organization_unit_id" in values
+            and values["organization_unit_id"] != branch["organization_unit_id"]
+        ):
+            scoped_memberships = await connection.execute(
+                text("""
+                    select exists(
+                      select 1 from public.memberships
+                      where tenant_id=:tenant_id and branch_id=:branch_id
+                        and status in ('active','invited','suspended')
+                    )
+                """),
+                {"tenant_id": tenant_id, "branch_id": branch_id},
+            )
+            if scoped_memberships.scalar_one():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Reassign membership organization-unit scope before moving this branch.",
+                )
         if values.get("status") == "archived":
             dependencies = await connection.execute(
                 text("""
@@ -1275,6 +1375,22 @@ async def update_department(
                 raise HTTPException(
                     status_code=409,
                     detail="Department parent change would create a hierarchy cycle.",
+                )
+        if "branch_id" in values and target_branch != department["branch_id"]:
+            scoped_memberships = await connection.execute(
+                text("""
+                    select exists(
+                      select 1 from public.memberships
+                      where tenant_id=:tenant_id and department_id=:department_id
+                        and status in ('active','invited','suspended')
+                    )
+                """),
+                {"tenant_id": tenant_id, "department_id": department_id},
+            )
+            if scoped_memberships.scalar_one():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Reassign memberships before moving this department to another branch.",
                 )
         if values.get("status") == "archived":
             dependencies = await connection.execute(
