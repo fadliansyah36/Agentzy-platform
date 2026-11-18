@@ -447,7 +447,10 @@ async def invite_tenant_member(
             },
         )
         if unit.scalar_one_or_none() is None:
-            raise HTTPException(status_code=404, detail="Organization unit not found in this tenant.")
+            raise HTTPException(
+                status_code=404,
+                detail="Organization unit not found in this tenant.",
+            )
     if branch_id is not None:
         branch = await session.execute(
             text("""
@@ -466,7 +469,10 @@ async def invite_tenant_member(
             raise HTTPException(status_code=404, detail="Branch not found in this organization.")
         if branch_row["organization_unit_id"] is not None:
             if organization_unit_id not in (None, branch_row["organization_unit_id"]):
-                raise HTTPException(status_code=422, detail="Membership unit and branch scopes do not match.")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Membership unit and branch scopes do not match.",
+                )
             organization_unit_id = branch_row["organization_unit_id"]
     if department_id is not None:
         department = await session.execute(
@@ -483,7 +489,10 @@ async def invite_tenant_member(
         )
         department_row = department.mappings().first()
         if department_row is None or department_row["branch_id"] != branch_id:
-            raise HTTPException(status_code=404, detail="Department is outside the selected branch.")
+            raise HTTPException(
+                status_code=404,
+                detail="Department is outside the selected branch.",
+            )
     if context is not None:
         authorize_object(
             context,
