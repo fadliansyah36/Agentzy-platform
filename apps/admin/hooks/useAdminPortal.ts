@@ -310,6 +310,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     return () => { active = false; };
   }, [auth.session?.access_token, auth.identity, auth.aal, showToast]);
 
+  // Membership directory visibility is derived from the verified AAL2 platform grant.
   const canReadMembershipDirectory = Boolean(
     auth.session?.access_token &&
     auth.aal === 'aal2' &&
