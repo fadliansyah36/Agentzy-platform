@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
-from app.core.redaction import redact_audit_value
 from app.core.pagination import (
     PageMeta,
     PageResponse,
@@ -21,6 +20,7 @@ from app.core.pagination import (
     encode_key_cursor,
     encode_time_id_cursor,
 )
+from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
