@@ -512,9 +512,7 @@ async def read_access_policy_versions(
         policy = current.mappings().first()
         if policy is None:
             raise HTTPException(status_code=404, detail="Policy not found")
-        await _authorize_policy_object(
-            session, actor=actor, policy=dict(policy), request_id=None
-        )
+        await _authorize_policy_object(session, actor=actor, policy=dict(policy), request_id=None)
         result = await connection.execute(
             text("""
             select version,snapshot,changed_by,created_at

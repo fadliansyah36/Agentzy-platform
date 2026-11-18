@@ -991,7 +991,8 @@ async def list_role_templates(
             has_more=has_more,
             next_cursor=(
                 encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
-                if has_more and rows else None
+                if has_more and rows
+                else None
             ),
             request_id=_request_id(request),
         ),
@@ -1088,7 +1089,8 @@ async def list_tenant_memberships(
                 has_more=has_more,
                 next_cursor=(
                     encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
-                    if has_more and rows else None
+                    if has_more and rows
+                    else None
                 ),
                 request_id=_request_id(request),
             ),
@@ -1132,7 +1134,8 @@ async def list_platform_tenants(
                 has_more=has_more,
                 next_cursor=(
                     encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
-                    if has_more and rows else None
+                    if has_more and rows
+                    else None
                 ),
                 request_id=_request_id(request),
             ),

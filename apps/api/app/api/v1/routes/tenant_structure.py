@@ -436,7 +436,8 @@ async def list_organization_units(
         meta=PageMeta(
             has_more=has_more,
             next_cursor=encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
-            if has_more and rows else None,
+            if has_more and rows
+            else None,
             request_id=_request_id(request),
         ),
     )
@@ -553,7 +554,8 @@ async def list_branches(
         meta=PageMeta(
             has_more=has_more,
             next_cursor=encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
-            if has_more and rows else None,
+            if has_more and rows
+            else None,
             request_id=_request_id(request),
         ),
     )
@@ -687,7 +689,8 @@ async def list_departments(
         meta=PageMeta(
             has_more=has_more,
             next_cursor=encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
-            if has_more and rows else None,
+            if has_more and rows
+            else None,
             request_id=_request_id(request),
         ),
     )
@@ -1157,7 +1160,7 @@ async def reassign_membership_hierarchy(
                 if organization_unit_id != branch_row["organization_unit_id"]:
                     raise HTTPException(
                         status_code=422,
-                        detail="Branch harus berada pada organization unit yang dipilih."
+                        detail="Branch harus berada pada organization unit yang dipilih.",
                     )
         if department_id is not None:
             if organization_id is None:
@@ -1211,7 +1214,7 @@ async def reassign_membership_hierarchy(
             if scope_type not in new_scopes:
                 raise HTTPException(
                     status_code=409,
-                    detail="Membership memiliki role dengan scope yang tidak dikenal."
+                    detail="Membership memiliki role dengan scope yang tidak dikenal.",
                 )
             if scope_type != "tenant" and new_scopes[scope_type] is None:
                 raise HTTPException(
@@ -1289,7 +1292,8 @@ async def reassign_membership_hierarchy(
                     ),
                     "organization_unit_id": (
                         str(current["organization_unit_id"])
-                        if current["organization_unit_id"] else None
+                        if current["organization_unit_id"]
+                        else None
                     ),
                     "branch_id": str(current["branch_id"]) if current["branch_id"] else None,
                     "department_id": (

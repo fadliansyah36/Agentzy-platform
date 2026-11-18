@@ -906,7 +906,8 @@ async def list_break_glass_requests(
         meta=PageMeta(
             has_more=has_more,
             next_cursor=encode_time_id_cursor(rows[-1]["requested_at"], rows[-1]["id"])
-            if has_more and rows else None,
+            if has_more and rows
+            else None,
             request_id=_request_id(request),
         ),
     )

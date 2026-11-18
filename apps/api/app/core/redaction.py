@@ -70,9 +70,7 @@ _JWT = re.compile(
     r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\."
     r"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])"
 )
-_OPAQUE_KEY = re.compile(
-    r"(?<![A-Za-z0-9])(?:sk-proj-|sk-live-|sb_secret_)[A-Za-z0-9_-]{16,}"
-)
+_OPAQUE_KEY = re.compile(r"(?<![A-Za-z0-9])(?:sk-proj-|sk-live-|sb_secret_)[A-Za-z0-9_-]{16,}")
 
 
 def _normalized_key(value: Any) -> str:
