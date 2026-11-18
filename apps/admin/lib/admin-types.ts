@@ -126,9 +126,9 @@ export interface OrgUnitRecord {
   tenantId: string;
   name: string;
   unitType: 'Cabang / Regional' | 'Departemen';
-  parentName: string;
-  headName: string;
-  memberCount: number;
+  parentName: string | null;
+  headName: string | null;
+  memberCount: number | null;
   status: 'Aktif' | 'Nonaktif';
 }
 
