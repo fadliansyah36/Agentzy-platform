@@ -1,7 +1,7 @@
 """Recursive redaction for audit and security event payloads."""
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 _REDACTED = "[REDACTED]"
