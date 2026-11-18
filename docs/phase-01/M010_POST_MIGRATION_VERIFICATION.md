@@ -82,7 +82,7 @@ All hierarchy, membership-scope, access-policy and revoked-session indexes decla
 
 Security Advisor after M010 no longer reported the earlier anon/authenticated SECURITY DEFINER execution warnings. It returned one INFO finding:
 
-- `rls_enabled_no_policy`: `public.revoked_sessions` has RLS enabled but no policy. This is an intentional deny-all client posture; server-side private database access is used for revocation checks and writes.
+- `rls_enabled_no_policy`: `public.revoked_sessions` has RLS enabled but no policy. This is an intentional deny-all client posture. After M011, the same INFO finding also applies to `access_policies`, `access_policy_versions`, `auth_provider_events`, `break_glass_requests`, and `idempotency_records`. Server-side private database access is used for these records.
 
 Performance Advisor returned informational findings:
 
@@ -176,3 +176,6 @@ All queries returned catalog results; the duplicate role-key query returned no r
 - Catalog checks: tables, columns, constraints, indexes, RLS policies, function ACL and event trigger queried after apply
 - Security Advisor observation: 2026-11-18T06:23:59.190Z
 - Performance Advisor observation: 2026-11-18T06:23:59.219Z
+
+
+**Follow-up migration:** M011 (`20261118062647`) completed the ABAC policy metadata/version history and server-only access hardening. See `docs/phase-01/M011_SECURITY_LIFECYCLE_VERIFICATION.md`.
