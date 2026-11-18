@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.abac import PolicyValidationError, validate_condition
 from app.core.authorization import authorize_platform_action
 from app.core.idempotency import complete_idempotency, reserve_idempotency
-from app.core.pagination import PageResponse
+from app.core.pagination import PageMeta, PageResponse, decode_key_cursor, encode_key_cursor
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
@@ -502,10 +502,15 @@ async def disable_access_policy(
     return await _set_policy_status(policy_id, "inactive", request, claims, session)
 
 
-@router.get("/{policy_id}/versions")
+@router.get("/{policy_id}/versions", response_model=PageResponse)
 async def read_access_policy_versions(
-    policy_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
-):
+    policy_id: UUID,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+) -> PageResponse:
     actor = await _require_security_admin(claims, session)
     async with engine.connect() as connection:
         current = await connection.execute(
@@ -515,12 +520,36 @@ async def read_access_policy_versions(
         policy = current.mappings().first()
         if policy is None:
             raise HTTPException(status_code=404, detail="Policy not found")
-        await _authorize_policy_object(session, actor=actor, policy=dict(policy), request_id=None)
-        result = await connection.execute(
-            text("""
-            select version,snapshot,changed_by,created_at
-            from public.access_policy_versions where policy_id=:id order by version desc
-        """),
-            {"id": policy_id},
+        await _authorize_policy_object(
+            session, actor=actor, policy=dict(policy), request_id=_request_id(request)
         )
-    return {"data": [dict(row) for row in result.mappings().all()]}
+        params = {"policy_id": policy_id, "limit": limit + 1}
+        cursor_clause = ""
+        if cursor:
+            cursor_version = int(decode_key_cursor(cursor))
+            if cursor_version < 1:
+                raise HTTPException(status_code=422, detail="Invalid cursor")
+            cursor_clause = "and version < :cursor_version"
+            params["cursor_version"] = cursor_version
+        result = await connection.execute(
+            text(f"""
+            select id,version,snapshot,changed_by,created_at
+            from public.access_policy_versions
+            where policy_id=:policy_id {cursor_clause}
+            order by version desc
+            limit :limit
+        """),
+            params,
+        )
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=encode_key_cursor(str(rows[-1]["version"]))
+            if has_more and rows else None,
+            request_id=_request_id(request),
+        ),
+    )
