@@ -10,6 +10,7 @@ _SENSITIVE_KEYS = frozenset(
         "accesstoken",
         "refreshtoken",
         "idtoken",
+        "input",
         "token",
         "secret",
         "clientsecret",
