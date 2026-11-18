@@ -1,14 +1,19 @@
 # Phase 01 — Known Limitations
 
-1. M010 migration source is not applied to Agentzy-db. The live database retains broad client grants and the old fail-open RLS event-trigger function.
-2. A verified logical backup/recovery artifact is not available through the connected Supabase access. Do not apply M010 or deploy the dependent backend verifier until recovery evidence and SQL review are complete.
-3. Phase 00 remains IN PROGRESS; it is tracked in parallel and is not a Phase 01 entry gate.
-4. Dynamic ABAC `access_policies.conditions` evaluation and policy administration are not complete. Current enforcement is membership/role/permission plus hierarchy object-scope checks.
-5. Not every existing management route has been converted to the shared authorization helper; object-level enforcement coverage remains partial.
-6. Branch and department update/archive endpoints and full hierarchy UI wiring remain incomplete.
-7. The admin RBAC matrix and other portal permission controls are not yet fully wired to the new permission registry endpoints.
-8. Workforce operational demo/local data remains in source but is hidden from the production rendering path; the current authenticated Workforce view only shows verified identity, active membership and role state until domain APIs are integrated.
-9. Auth provider-native login success/failure event correlation, audit-reader authorization, break-glass lifecycle and operational alerting remain open.
-10. Full response schemas, cursor pagination and idempotency for all sensitive commands remain incomplete.
-11. No production deployment, UAT, staging, load test, penetration test or security acceptance is claimed.
-12. Phase 01 status remains PARTIAL; Phase 02 is not started.
+**Current status: PARTIAL / IN PROGRESS — NOT DONE.** This list reflects the latest Phase 01 execution continuation on 2026-11-18.
+
+1. **Hosted Supabase Auth configuration is not verified.** Provider enablement, Site URL/redirect allowlists, SMTP delivery, password policy, MFA enforcement, session settings, CAPTCHA/rate limits and webhook registration require authorized Supabase Dashboard or Management API evidence unavailable through the current connector surface.
+2. **No live Auth users were available for lifecycle evidence.** Invitation acceptance, password recovery delivery, MFA enrollment/challenge, session revocation, break-glass approval/activation/review and audit-reader flows have not been exercised with real user identities. This is not a request to run UAT or staging.
+3. **RLS posture is not equivalent to full security acceptance.** All 18 public application tables have RLS enabled. Supabase Security Advisor currently reports six INFO findings for server-only tables intentionally lacking client policies. The role/grant model and server-only access paths still need final least-privilege verification. FORCE RLS is not enabled on these tables.
+4. **ABAC policy data is still mostly baseline.** The JSON-only dynamic evaluator, versioning and policy administration endpoints exist, but the live policy set has 67 global ALLOW baselines and no tenant-specific DENY policy evidence. Tenant policy operating procedures and live policy lifecycle are not demonstrated.
+5. **Object-level authorization coverage remains incomplete.** This increment added resource-aware ABAC to tenant update/archive and platform role update/permission-replacement/delete. A complete endpoint-by-endpoint authorization proof for all legacy management operations and nested repository access is still outstanding.
+6. **Hierarchy portal parity is partial.** Backend organization-unit, branch and department lifecycle endpoints exist. Corporate can load real tenant memberships and hierarchy, but complete UI coverage for every create/update/archive/restore, assignment and scope transition is not established across all portals.
+7. **Super Admin RBAC wiring is partial.** The role and permission registry is loaded from FastAPI and demo-role initial state has been removed. Complete role scope management, membership assignment parity, permission preview/revoke and every privileged control still require verification.
+8. **Corporate membership data now starts empty and loads from FastAPI.** Other Corporate operational collections (AI workers, credits, work orders, invoices, payments, analytics) are outside Phase 01 domain scope and still require their later domain phases; they must not be represented as completed by this Phase 01 work.
+9. **Workforce operational APIs remain out of Phase 01 completion evidence.** The Workforce production render path hides demo operational records and uses verified identity/membership context, but operational workforce data/API integration belongs to subsequent domain phases.
+10. **Audit and privileged-access operating evidence remains partial.** Break-glass lifecycle APIs and UI actions exist, but no real request/approval/review records exist. Audit-reader redaction, tenant-scoped export boundaries, alerting and provider-native event correlation remain incomplete or unverified.
+11. **API contract coverage is not universal.** Typed Pydantic schemas, pagination and idempotency exist on selected endpoints; universal response/error envelope, cursor pagination, request correlation and idempotency across every sensitive command remain incomplete.
+12. **M010, M011 and M012 are already applied to the canonical Agentzy-db.** The current increment required no additional schema delta, so no new migration or direct DDL was applied. No applied migration was modified.
+13. **Phase 00 remains IN PROGRESS** and is tracked in parallel. This does not authorize Phase 02.
+14. **Engineering checks must be reported per exact commit.** The first run after the implementation increment found five Ruff line-length failures; formatting was corrected in commit `d1dee64d05fed5d69ff894093b7cba54a0ae670c`. The subsequent run was pending at the time of this update.
+15. No staging, UAT, real-world testing, load testing, penetration testing, security acceptance or production deployment is claimed.
