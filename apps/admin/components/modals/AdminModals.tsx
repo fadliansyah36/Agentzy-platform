@@ -3338,7 +3338,7 @@ function CorporateCompensationCrudModal({
                 setTenantId(e.target.value);
                 if (picked) {
                   setCorporateName(picked.name);
-                  setContractNumber(picked.contractNumber);
+                  setContractNumber(picked.contractNumber ?? '');
                 }
               }}
               className={inputCls}
