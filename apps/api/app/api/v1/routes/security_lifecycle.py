@@ -60,6 +60,35 @@ class AuthProviderEventIn(BaseModel):
     payload_digest: str | None = Field(default=None, min_length=32, max_length=128)
 
 
+
+class SecurityAlertRead(BaseModel):
+    id: UUID
+    tenant_id: UUID | None
+    source_type: str
+    source_id: UUID
+    alert_key: str
+    severity: Literal["critical", "high", "medium", "low"]
+    status: Literal["open", "acknowledged", "resolved"]
+    title: str
+    summary: str
+    actor_user_id: UUID | None
+    subject_user_id: UUID | None
+    request_id: str | None
+    correlation_id: str | None
+    trace_id: str | None
+    details: dict
+    occurred_at: datetime
+    acknowledged_by: UUID | None
+    acknowledged_at: datetime | None
+    resolved_at: datetime | None
+    created_at: datetime
+
+
+class SecurityAlertPage(BaseModel):
+    data: list[SecurityAlertRead]
+    meta: dict
+
+
 class BreakGlassRequestIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(min_length=20, max_length=2000)
@@ -176,6 +205,161 @@ async def _expire_break_glass(connection, request: Request) -> int:
             },
         )
     return len(rows)
+
+
+
+@router.get("/alerts", response_model=SecurityAlertPage)
+async def list_security_alerts(
+    request: Request,
+    tenant_id: UUID | None = None,
+    status_filter: Literal["open", "acknowledged", "resolved"] | None = Query(default=None, alias="status"),
+    severity: Literal["critical", "high", "medium", "low"] | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+) -> SecurityAlertPage:
+    await _require_platform_permission(
+        claims, session, "platform.security.events.read", "read_events", "security_alert_feed"
+    )
+    params = {"limit": limit + 1}
+    filters = []
+    if tenant_id is not None:
+        filters.append("tenant_id=:tenant_id")
+        params["tenant_id"] = tenant_id
+    if status_filter is not None:
+        filters.append("status=:status")
+        params["status"] = status_filter
+    if severity is not None:
+        filters.append("severity=:severity")
+        params["severity"] = severity
+    if cursor:
+        created_at, alert_id = _decode_cursor(cursor)
+        filters.append("(created_at,id) < (:created_at,:cursor_id)")
+        params.update({"created_at": created_at, "cursor_id": alert_id})
+    where = "where " + " and ".join(filters) if filters else ""
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text(f"""
+                select id,tenant_id,source_type,source_id,alert_key,severity,status,title,summary,
+                       actor_user_id,subject_user_id,request_id,correlation_id,trace_id,details,
+                       occurred_at,acknowledged_by,acknowledged_at,resolved_at,created_at
+                from public.security_alerts
+                {where}
+                order by created_at desc,id desc
+                limit :limit
+            """),
+            params,
+        )
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    next_cursor = (
+        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else None
+    )
+    return SecurityAlertPage(
+        data=[SecurityAlertRead(**row) for row in rows],
+        meta={
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "request_id": _request_id(request),
+        },
+    )
+
+
+@router.patch("/alerts/{alert_id}/acknowledge", response_model=SecurityAlertRead)
+async def acknowledge_security_alert(
+    alert_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+) -> SecurityAlertRead:
+    actor = await _require_platform_permission(
+        claims,
+        session,
+        "platform.security.events.manage",
+        "manage_events",
+        str(alert_id),
+    )
+    async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
+            command_key=f"security.alert.acknowledge:{alert_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={"alert_id": str(alert_id), "action": "acknowledge"},
+        )
+        if reservation.replay:
+            return SecurityAlertRead.model_validate(reservation.replay_body)
+        current = await connection.execute(
+            text("""
+                select id,tenant_id,source_type,alert_key,severity,status
+                from public.security_alerts where id=:id for update
+            """),
+            {"id": alert_id},
+        )
+        alert = current.mappings().first()
+        if alert is None:
+            raise HTTPException(status_code=404, detail="Security alert tidak ditemukan.")
+        await authorize_platform_action(
+            session,
+            user_id=actor,
+            permission_key="platform.security.events.manage",
+            resource_type="platform.security",
+            action="manage_events",
+            resource={
+                "id": str(alert_id),
+                "tenant_id": str(alert["tenant_id"]) if alert["tenant_id"] else None,
+                "source_type": alert["source_type"],
+                "alert_key": alert["alert_key"],
+                "severity": alert["severity"],
+                "status": alert["status"],
+            },
+            request_id=_request_id(request),
+        )
+        if alert["status"] == "open":
+            await connection.execute(
+                text("""
+                    update public.security_alerts
+                    set status='acknowledged',acknowledged_by=:actor,
+                        acknowledged_at=now(),updated_at=now()
+                    where id=:id
+                """),
+                {"actor": actor, "id": alert_id},
+            )
+        elif alert["status"] != "acknowledged":
+            raise HTTPException(
+                status_code=409, detail="Hanya alert open yang dapat di-acknowledge."
+            )
+        result = await connection.execute(
+            text("""
+                select id,tenant_id,source_type,source_id,alert_key,severity,status,title,summary,
+                       actor_user_id,subject_user_id,request_id,correlation_id,trace_id,details,
+                       occurred_at,acknowledged_by,acknowledged_at,resolved_at,created_at
+                from public.security_alerts where id=:id
+            """),
+            {"id": alert_id},
+        )
+        row = dict(result.mappings().one())
+        await _audit(
+            connection,
+            request,
+            actor,
+            "security.alert.acknowledged",
+            "security_alert",
+            alert_id,
+            alert["tenant_id"],
+            {"alert_key": alert["alert_key"], "severity": alert["severity"]},
+        )
+        response = SecurityAlertRead(**row)
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response.model_dump(mode="json"),
+        )
+    return response
 
 
 @router.post("/auth-provider-events", status_code=status.HTTP_202_ACCEPTED)
