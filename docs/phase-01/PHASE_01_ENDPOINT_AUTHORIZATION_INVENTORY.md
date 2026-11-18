@@ -92,3 +92,11 @@ This is a source inspection inventory, not a penetration test or proof that ever
 - Super Admin role registry and Corporate membership state no longer begin with demo collections; they start empty and populate from the FastAPI API path.
 - The change does not establish complete portal action parity, live Auth-user workflow evidence, audit export/redaction acceptance or universal API contract coverage.
 - Current live database has 18/18 public application tables with RLS enabled and six applied migrations including M010–M012. No additional migration was needed for this code-only increment.
+
+## 6. Portal membership integration delta — 2026-11-18
+
+- Super Admin now loads membership directory rows per tenant through the existing `GET /tenants/{tenant_id}/memberships` endpoint, requiring AAL2 and `platform.memberships.read`.
+- New membership invitation and revoke actions use FastAPI endpoints; no local demo membership insert/delete is used for this portal path.
+- Membership MFA state remains “not verified” where the API does not return authoritative MFA state.
+- Admin editing of another user's profile and replacing an existing membership role are not implemented by the current API/portal contract.
+- Engineering verification: [run 44300592550](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300592550) SUCCESS at `92bc296d`.
