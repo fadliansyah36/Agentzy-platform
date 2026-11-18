@@ -153,6 +153,7 @@ export interface AdminModalsProps {
   onSetModal: (next: AdminModalState) => void;
 
   tenants: AdminTenantRecord[];
+  permissionRegistry: AgentzyPermissionDefinition[];
   corporateSchemas: CorporateCompensationSchema[];
   invoices: PlatformInvoiceRecord[];
   auditLogs: AuditLogRecord[];
@@ -199,7 +200,8 @@ export interface AdminModalsProps {
     p: Omit<IntegrationConnectorRecord, 'id' | 'lastSyncAt'> & { id?: string }
   ) => void;
   onCreateBreakGlass: (p: {
-    targetTenant: string;
+    tenantIds: string[];
+    permissionKeys: string[];
     reason: string;
     durationMinutes: number;
   }) => void;
@@ -721,6 +723,7 @@ function AdminModalSwitch(props: AdminModalsProps) {
     return (
       <BreakGlassModal
         tenants={props.tenants}
+        permissionRegistry={props.permissionRegistry}
         onClose={onClose}
         onSubmit={props.onCreateBreakGlass}
       />
@@ -4253,36 +4256,56 @@ function IntegrationCrudModal({
 
 function BreakGlassModal({
   tenants,
+  permissionRegistry,
   onClose,
   onSubmit,
 }: {
   tenants: AdminTenantRecord[];
+  permissionRegistry: AgentzyPermissionDefinition[];
   onClose: () => void;
-  onSubmit: (p: {
-    targetTenant: string;
+  onSubmit: (payload: {
+    tenantIds: string[];
+    permissionKeys: string[];
     reason: string;
     durationMinutes: number;
   }) => void;
 }) {
-  const [targetTenant, setTargetTenant] = useState(
-    tenants[0] ? `${tenants[0].name} (${tenants[0].code})` : 'ISP Nusantara (TEN-ISP-001)'
-  );
+  const [targetTenantId, setTargetTenantId] = useState(tenants[0]?.id ?? '');
   const [reason, setReason] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(30);
+  const [permissionKeys, setPermissionKeys] = useState<string[]>([]);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const emergencyPermissions = permissionRegistry.filter((permission) =>
+    permission.key.startsWith('platform.') &&
+    ['privileged', 'critical'].includes(permission.risk_level)
+  );
 
   return (
     <ModalFrame
       title="Break-Glass Access (Akses Darurat Lintas Tenant)"
-      subtitle="Time-bound · Approval 2 tahap · Seluruh tindakan dicatat ke immutable audit log."
+      subtitle="Time-bound · Approval terpisah · Scope permission eksplisit · Wajib ditinjau pasca-akses."
       onClose={onClose}
     >
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!targetTenantId) {
+            setValidationError('Pilih tenant sasaran.');
+            return;
+          }
+          if (permissionKeys.length === 0) {
+            setValidationError('Pilih minimal satu permission platform dengan risiko tinggi.');
+            return;
+          }
+          if (reason.trim().length < 20) {
+            setValidationError('Alasan harus minimal 20 karakter.');
+            return;
+          }
           onSubmit({
-            targetTenant,
-            reason,
-            durationMinutes: Number(durationMinutes) || 30,
+            tenantIds: [targetTenantId],
+            permissionKeys,
+            reason: reason.trim(),
+            durationMinutes,
           });
         }}
         className="space-y-3"
@@ -4290,32 +4313,64 @@ function BreakGlassModal({
         <div className="flex items-start gap-2 rounded-[10px] border border-[#B23A48]/30 bg-[#B23A48]/5 p-3 text-xs text-[#172B3A]">
           <AlertTriangle className="h-4 w-4 shrink-0 text-[#B23A48]" />
           <span>
-            Akses darurat ini tidak boleh digunakan untuk operasional rutin dan wajib ditinjau
-            pasca-akses.
+            Emergency access hanya untuk investigasi insiden, dibatasi pada permission yang dipilih,
+            membutuhkan approver berbeda, dan otomatis kedaluwarsa.
           </span>
         </div>
+        {validationError && (
+          <p role="alert" className="rounded-lg border border-[#B23A48]/30 bg-[#B23A48]/5 p-2 text-xs text-[#B23A48]">
+            {validationError}
+          </p>
+        )}
         <div>
           <label className={labelCls}>Tenant Sasaran</label>
           <select
-            value={targetTenant}
-            onChange={(e) => setTargetTenant(e.target.value)}
+            required
+            value={targetTenantId}
+            onChange={(event) => setTargetTenantId(event.target.value)}
             className={inputCls}
           >
-            {tenants.map((t) => (
-              <option key={t.id} value={`${t.name} (${t.code})`}>
-                {t.name} ({t.code})
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name} ({tenant.code})
               </option>
             ))}
           </select>
         </div>
         <div>
+          <label className={labelCls}>Permission Darurat</label>
+          <div className="max-h-48 space-y-2 overflow-y-auto rounded-[10px] border border-[#D8E3E9] bg-white p-3">
+            {emergencyPermissions.length === 0 ? (
+              <p className="text-xs text-[#B23A48]">Permission registry belum tersedia atau tidak ada permission privileged/critical.</p>
+            ) : emergencyPermissions.map((permission) => (
+              <label key={permission.key} className="flex items-start gap-2 text-xs text-[#17324D]">
+                <input
+                  type="checkbox"
+                  checked={permissionKeys.includes(permission.key)}
+                  onChange={(event) => setPermissionKeys((current) =>
+                    event.target.checked
+                      ? [...current, permission.key]
+                      : current.filter((key) => key !== permission.key)
+                  )}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">{permission.key}</span>
+                  <span className="block text-[11px] text-[#718391]">{permission.description ?? permission.risk_level}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
           <label className={labelCls}>Alasan Insiden / Investigasi</label>
           <textarea
             required
+            minLength={20}
             rows={3}
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Jelaskan ID insiden & ruang lingkup investigasi..."
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Jelaskan ID insiden, kebutuhan darurat, dan ruang lingkup..."
             className="w-full rounded-[10px] border border-[#D8E3E9] bg-white p-3 text-xs text-[#172B3A] outline-none focus:border-[#0284C7]"
           />
         </div>
@@ -4323,7 +4378,7 @@ function BreakGlassModal({
           <label className={labelCls}>Batas Durasi Akses</label>
           <select
             value={durationMinutes}
-            onChange={(e) => setDurationMinutes(Number(e.target.value))}
+            onChange={(event) => setDurationMinutes(Number(event.target.value))}
             className={inputCls}
           >
             <option value={15}>15 menit</option>
