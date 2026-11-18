@@ -152,6 +152,7 @@ export function CorporateModals({
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<string>('');
+  const effectiveInviteRole = inviteRole || tenantRoleOptions[0]?.key || '';
   const [inviteDept, setInviteDept] = useState('Operasional Teknis');
   const [inviteBranch, setInviteBranch] = useState('Regional Jabodetabek');
   const [selectedMapWoId, setSelectedMapWoId] = useState<string>(
@@ -945,11 +946,11 @@ export function CorporateModals({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!inviteName.trim() || !inviteEmail.trim() || !tenantRoleOptions.some((role) => role.key === inviteRole)) return;
+            if (!inviteName.trim() || !inviteEmail.trim() || !tenantRoleOptions.some((role) => role.key === effectiveInviteRole)) return;
             onInviteUser({
               name: inviteName.trim(),
               email: inviteEmail.trim(),
-              roleKey: inviteRole as CorporateRoleKey,
+              roleKey: effectiveInviteRole as CorporateRoleKey,
               department: inviteDept,
               branchScope: inviteBranch,
             });
@@ -990,7 +991,7 @@ export function CorporateModals({
             </label>
             <select
               required
-              value={inviteRole || tenantRoleOptions[0]?.key || ''}
+              value={effectiveInviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
               className="h-10 w-full rounded-[10px] border border-[#D8E3E9] px-3 font-medium"
             >
