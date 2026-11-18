@@ -121,6 +121,27 @@ async def authorize_tenant(
         return context
     if aal == "aal2" and await has_platform_permission(session, user_id, platform_permission):
         return None
+    if aal == "aal2" and platform_permission:
+        from app.db.session import engine
+
+        async with engine.connect() as connection:
+            emergency = await connection.execute(
+                text("""
+                    select id from public.break_glass_requests
+                    where requester_user_id=:user_id and status='active'
+                      and expires_at > now()
+                      and requested_scope->'permission_keys' @> jsonb_build_array(:permission)
+                      and requested_scope->'tenant_ids' @> jsonb_build_array(:tenant_id)
+                    order by activated_at desc limit 1
+                """),
+                {
+                    "user_id": user_id,
+                    "permission": platform_permission,
+                    "tenant_id": str(tenant_id),
+                },
+            )
+            if emergency.scalar_one_or_none() is not None:
+                return None
     raise HTTPException(status_code=403, detail="Akses tidak diizinkan.")
 
 
