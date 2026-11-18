@@ -66,7 +66,10 @@ _SENSITIVE_SUFFIXES = (
     "secretkey",
 )
 _BEARER = re.compile(r"(?i)(?<![A-Za-z0-9])Bearer[ \t]+[A-Za-z0-9._~+/=-]{12,}")
-_JWT = re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
+_JWT = re.compile(
+    r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])"
+)
+_OPAQUE_KEY = re.compile(r"(?<![A-Za-z0-9])(?:sk-proj-|sk-live-|sb_secret_)[A-Za-z0-9_-]{16,}")
 
 
 def _normalized_key(value: Any) -> str:
@@ -89,5 +92,7 @@ def redact_audit_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return [redact_audit_value(item) for item in value]
     if isinstance(value, str):
-        return _OPAQUE_KEY.sub(_REDACTED, _JWT.sub(_REDACTED, _BEARER.sub(_REDACTED, value)))
+        redacted = _BEARER.sub(_REDACTED, value)
+        redacted = _JWT.sub(_REDACTED, redacted)
+        return _OPAQUE_KEY.sub(_REDACTED, redacted)
     return value
