@@ -178,7 +178,8 @@ async def update_organization(
                 text("""
                     select
                       exists(select 1 from public.organization_units
-                        where tenant_id=:tenant_id and organization_id=:organization_id and status='active')
+                        where tenant_id=:tenant_id and organization_id=:organization_id
+                          and status='active')
                       or exists(select 1 from public.branches
                         where tenant_id=:tenant_id and organization_id=:organization_id and status='active')
                       or exists(select 1 from public.departments
@@ -189,7 +190,13 @@ async def update_organization(
                 {"tenant_id": tenant_id, "organization_id": organization_id},
             )
             if dependencies.scalar_one():
-                raise HTTPException(status_code=409, detail="Archive active organization units, branches, departments and memberships before archiving this organization.")
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Archive active organization units, branches, departments and "
+                        "memberships before archiving this organization."
+                    ),
+                )
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
             text(f"""
@@ -737,7 +744,9 @@ async def assign_membership_role(
 
 class BranchUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
-    code: str | None = Field(default=None, min_length=2, max_length=40, pattern="^[A-Z0-9][A-Z0-9_-]*$")
+    code: str | None = Field(
+        default=None, min_length=2, max_length=40, pattern="^[A-Z0-9][A-Z0-9_-]*$"
+    )
     organization_unit_id: UUID | None = None
     status: str | None = Field(default=None, pattern="^(active|inactive|archived)$")
 
@@ -796,7 +805,10 @@ async def update_branch(
                  "organization_id": branch["organization_id"]},
             )
             if unit.scalar_one_or_none() is None:
-                raise HTTPException(status_code=404, detail="Active organization unit not found in this branch scope.")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Active organization unit not found in this branch scope.",
+                )
         if values.get("status") == "archived":
             dependencies = await connection.execute(
                 text("""
@@ -809,13 +821,17 @@ async def update_branch(
                 {"tenant_id": tenant_id, "branch_id": branch_id},
             )
             if dependencies.scalar_one():
-                raise HTTPException(status_code=409, detail="Archive active departments and memberships before archiving this branch.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Archive active departments and memberships before archiving this branch.",
+                )
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
             text(f"""
                 update public.branches set {assignments},updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant_id
-                returning id,tenant_id,organization_id,organization_unit_id,name,code,status,updated_at
+                returning id,tenant_id,organization_id,organization_unit_id,
+                          name,code,status,updated_at
             """),
             {**values, "actor": UUID(claims["sub"]), "id": branch_id, "tenant_id": tenant_id},
         )
@@ -872,7 +888,10 @@ async def update_department(
                  "organization_id": department["organization_id"]},
             )
             if branch.scalar_one_or_none() is None:
-                raise HTTPException(status_code=404, detail="Active branch not found in this organization.")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Active branch not found in this organization.",
+                )
         if "parent_department_id" in values and values["parent_department_id"] is not None:
             parent_id = values["parent_department_id"]
             parent = await connection.execute(
@@ -886,7 +905,10 @@ async def update_department(
             )
             parent_row = parent.mappings().first()
             if parent_row is None or parent_row["branch_id"] != target_branch:
-                raise HTTPException(status_code=404, detail="Parent department is outside the active hierarchy.")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Parent department is outside the active hierarchy.",
+                )
             descendants = await connection.execute(
                 text("""
                     with recursive descendants(id) as (
@@ -902,26 +924,35 @@ async def update_department(
                 {"department_id": department_id, "tenant_id": tenant_id, "parent_id": parent_id},
             )
             if descendants.scalar_one():
-                raise HTTPException(status_code=409, detail="Department parent change would create a hierarchy cycle.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Department parent change would create a hierarchy cycle.",
+                )
         if values.get("status") == "archived":
             dependencies = await connection.execute(
                 text("""
                     select
                       exists(select 1 from public.departments
-                        where tenant_id=:tenant_id and parent_department_id=:department_id and status='active')
+                        where tenant_id=:tenant_id
+                          and parent_department_id=:department_id and status='active')
                       or exists(select 1 from public.memberships
-                        where tenant_id=:tenant_id and department_id=:department_id and status='active')
+                        where tenant_id=:tenant_id
+                          and department_id=:department_id and status='active')
                 """),
                 {"tenant_id": tenant_id, "department_id": department_id},
             )
             if dependencies.scalar_one():
-                raise HTTPException(status_code=409, detail="Archive child departments and memberships before archiving this department.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Archive child departments and memberships before archiving this department.",
+                )
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
             text(f"""
                 update public.departments set {assignments},updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant_id
-                returning id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,updated_at
+                returning id,tenant_id,organization_id,branch_id,parent_department_id,
+                          name,code,status,updated_at
             """),
             {**values, "actor": UUID(claims["sub"]), "id": department_id, "tenant_id": tenant_id},
         )
