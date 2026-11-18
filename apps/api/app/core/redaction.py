@@ -54,9 +54,16 @@ _SENSITIVE_SUFFIXES = (
     "apikey",
     "privatekey",
     "emailaddress",
+    "email",
     "phonenumber",
+    "phone",
+    "mobile",
     "ipaddress",
+    "ip",
     "sessiontoken",
+    "sessionid",
+    "servicerolekey",
+    "secretkey",
 )
 _BEARER = re.compile(r"(?i)(?<![A-Za-z0-9])Bearer[ \t]+[A-Za-z0-9._~+/=-]{12,}")
 _JWT = re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
@@ -82,5 +89,5 @@ def redact_audit_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return [redact_audit_value(item) for item in value]
     if isinstance(value, str):
-        return _JWT.sub(_REDACTED, _BEARER.sub(_REDACTED, value))
+        return _OPAQUE_KEY.sub(_REDACTED, _JWT.sub(_REDACTED, _BEARER.sub(_REDACTED, value)))
     return value
