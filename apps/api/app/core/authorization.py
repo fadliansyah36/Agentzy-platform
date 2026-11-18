@@ -1,9 +1,14 @@
+import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.abac import PolicyDecision, evaluate_policies
+from app.db.session import engine
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,3 +149,123 @@ def authorize_object(
         raise HTTPException(status_code=404, detail="Resource tidak tersedia.")
     if context.department_id and department_id != context.department_id:
         raise HTTPException(status_code=404, detail="Resource tidak tersedia.")
+
+
+
+async def authorize_action(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    tenant_id: UUID,
+    permission_key: str,
+    platform_permission: str,
+    aal: str | None,
+    resource_type: str,
+    action: str,
+    resource: dict,
+    request_id: str | None = None,
+    request_context: dict | None = None,
+) -> tuple[TenantAccessContext | None, PolicyDecision]:
+    """Enforce membership/RBAC then dynamic ABAC and persist a minimal decision audit."""
+    tenant_context = await authorize_tenant(
+        session,
+        user_id=user_id,
+        tenant_id=tenant_id,
+        permission_key=permission_key,
+        platform_permission=platform_permission,
+        aal=aal,
+    )
+    if tenant_context is None:
+        subject = {
+            "id": str(user_id),
+            "tenant_id": str(tenant_id),
+            "membership_id": None,
+            "roles": ["platform"],
+            "permissions": sorted({permission_key, platform_permission}),
+        }
+    else:
+        subject = {
+            "id": str(user_id),
+            "tenant_id": str(tenant_context.tenant_id),
+            "membership_id": str(tenant_context.membership_id),
+            "organization_id": str(tenant_context.organization_id) if tenant_context.organization_id else None,
+            "organization_unit_id": str(tenant_context.organization_unit_id) if tenant_context.organization_unit_id else None,
+            "branch_id": str(tenant_context.branch_id) if tenant_context.branch_id else None,
+            "department_id": str(tenant_context.department_id) if tenant_context.department_id else None,
+            "roles": sorted(tenant_context.role_keys),
+            "permissions": sorted(tenant_context.permissions),
+        }
+
+    resource_context = {
+        **resource,
+        "tenant_id": str(tenant_id),
+        "type": resource_type,
+    }
+    try:
+        # Policy documents are intentionally private. Query only the resolved tenant
+        # and global baseline policies through the backend's private database role.
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text("""
+                    select id,tenant_id,resource,action,effect,conditions,priority,status,
+                           version,effective_from,effective_until
+                    from public.access_policies
+                    where status='active'
+                      and resource=:resource
+                      and action=:action
+                      and (tenant_id is null or tenant_id=:tenant_id)
+                    order by priority desc,id
+                """),
+                {
+                    "resource": resource_type,
+                    "action": action,
+                    "tenant_id": tenant_id,
+                },
+            )
+            policies = [dict(row) for row in result.mappings().all()]
+        decision = evaluate_policies(
+            policies=policies,
+            tenant_id=str(tenant_id),
+            resource=resource_context,
+            action=action,
+            subject=subject,
+            request_context=request_context or {},
+            now=datetime.now(UTC),
+        )
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("""
+                    insert into public.audit_logs(
+                      tenant_id,actor_user_id,action,resource_type,resource_id,
+                      request_id,metadata
+                    ) values (
+                      :tenant_id,:actor,'authorization.abac.evaluated',:resource_type,
+                      :resource_id,:request_id,cast(:metadata as jsonb)
+                    )
+                """),
+                {
+                    "tenant_id": tenant_id,
+                    "actor": user_id,
+                    "resource_type": resource_type,
+                    "resource_id": str(resource.get("id", "")) or None,
+                    "request_id": request_id,
+                    "metadata": json.dumps({
+                        "decision": decision.decision,
+                        "reason_code": decision.reason_code,
+                        "matched_policies": decision.matched_policies,
+                        "policy_versions": decision.policy_versions,
+                        "evaluated_at": decision.evaluated_at,
+                    }, default=str),
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Authorization policy evaluation is temporarily unavailable.",
+        ) from exc
+
+    if decision.decision != "ALLOW":
+        raise HTTPException(status_code=403, detail="Akses tidak diizinkan.")
+    return tenant_context, decision
