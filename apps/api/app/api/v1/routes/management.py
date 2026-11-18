@@ -516,6 +516,10 @@ async def list_permission_registry(
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ):
+    actor = UUID(claims["sub"])
+    _require_aal2(claims)
+    if not await _has_platform_permission(session, actor, "platform.roles.read"):
+        raise HTTPException(status_code=403, detail="Missing platform.roles.read permission.")
     result = await session.execute(
         text("""
             select key,domain,action,description,resource,risk_level
@@ -612,21 +616,22 @@ async def list_role_templates(
     if is_platform_reader:
         _require_aal2(claims)
     else:
-        tenant_reader = await session.execute(
+        memberships = await session.execute(
             text("""
-                select exists (
-                  select 1 from public.memberships m
-                  join public.tenants t on t.id=m.tenant_id and t.status='active'
-                  join public.membership_roles mr on mr.membership_id=m.id
-                  join public.role_permissions rp on rp.role_id=mr.role_id
-                  where m.user_id=:user_id and m.status='active'
-                    and mr.scope_type='tenant'
-                    and rp.permission_key='corporate.organization.read'
-                )
+                select tenant_id from public.memberships
+                where user_id=:user_id and status='active'
             """),
             {"user_id": user_id},
         )
-        if not bool(tenant_reader.scalar_one()):
+        tenant_ids = [row["tenant_id"] for row in memberships.mappings().all()]
+        tenant_reader = False
+        for tenant_id in tenant_ids:
+            if await _has_tenant_permission(
+                session, user_id, tenant_id, ("corporate.organization.read",)
+            ):
+                tenant_reader = True
+                break
+        if not tenant_reader:
             raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
     role_filter = "" if is_platform_reader else "and r.key not like 'platform_%'"
     result = await session.execute(
