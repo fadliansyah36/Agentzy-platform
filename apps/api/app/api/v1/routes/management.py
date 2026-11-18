@@ -1388,7 +1388,9 @@ async def create_role(
                 "actor": actor,
                 "resource_id": str(row["id"]),
                 "request_id": _request_id(request),
-                "metadata": _audit_metadata(request, {"key": row["key"], "scope_type": row["scope_type"]}),
+                "metadata": _audit_metadata(
+                    request, {"key": row["key"], "scope_type": row["scope_type"]}
+                ),
             },
         )
         await complete_idempotency(
