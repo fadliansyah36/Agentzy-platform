@@ -289,6 +289,25 @@ export const revokeTenantMembership = (accessToken: string, tenantId: string, me
     { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
   );
 
+export const activateTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
+  apiRequest<{ id: string; status: string }>(
+    `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/activate`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
+export const replaceMembershipRole = (
+  accessToken: string,
+  tenantId: string,
+  membershipId: string,
+  payload: { role_key: string; scope_type?: string; scope_id?: string | null; valid_until?: string | null },
+) => apiRequest<{
+  membership_id: string; role_key: string; previous_role_keys: string[];
+  scope_type: string; scope_id: string | null; valid_until: string | null;
+}>(
+  `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/roles`,
+  { method: "PUT", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
+);
+
 export const assignMembershipRole = (
   accessToken: string,
   tenantId: string,
