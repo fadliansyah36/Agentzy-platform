@@ -28,6 +28,7 @@ export function SecurityCenterView({
   breakGlassRequests,
   onOpenBreakGlassModal,
   onDecideBreakGlass,
+  currentUserId,
   onOpenSecurityPolicyModal,
   featureFlags,
   onToggleFeatureFlag,
@@ -41,7 +42,11 @@ export function SecurityCenterView({
   sessionTtlMinutes: number;
   breakGlassRequests: BreakGlassRequestRecord[];
   onOpenBreakGlassModal: () => void;
-  onDecideBreakGlass: (id: string, status: 'Aktif' | 'Ditolak' | 'Selesai') => void;
+  onDecideBreakGlass: (
+    id: string,
+    action: 'approve' | 'reject' | 'activate' | 'revoke' | 'review'
+  ) => void;
+  currentUserId: string | null;
   onOpenSecurityPolicyModal: () => void;
   featureFlags: FeatureFlagRecord[];
   onToggleFeatureFlag: (id: string) => void;
@@ -173,7 +178,7 @@ export function SecurityCenterView({
                     tone={
                       req.status === 'Aktif'
                         ? 'danger'
-                        : req.status === 'Menunggu Approval'
+                        : ['Menunggu Approval', 'Menunggu Aktivasi', 'Menunggu Review'].includes(req.status)
                           ? 'warning'
                           : req.status === 'Selesai'
                             ? 'success'
@@ -184,24 +189,26 @@ export function SecurityCenterView({
                 </div>
                 <p className="text-xs text-[#172B3A]">{req.reason}</p>
                 <p className="font-mono-tabular text-[11px] text-[#718391]">
-                  Actor: {req.actorEmail} · Durasi: {req.durationMinutes} mnt · Approver:{' '}
-                  {req.approver1} + {req.approver2}
+                  Requester: {req.actorEmail} · Durasi: {req.durationMinutes} mnt · Approver: {req.approver1}
+                </p>
+                <p className="font-mono-tabular text-[10px] text-[#718391]">
+                  Scope: {req.permissionKeys?.join(', ') || '—'} · {req.approver2}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {req.status === 'Menunggu Approval' && (
+                {req.status === 'Menunggu Approval' && req.requesterUserId !== currentUserId && (
                   <>
                     <button
                       type="button"
-                      onClick={() => onDecideBreakGlass(req.id, 'Aktif')}
+                      onClick={() => onDecideBreakGlass(req.id, 'approve')}
                       className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#247A55] px-3 text-xs font-semibold text-white"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>Setujui Tahap-2</span>
+                      <span>Setujui</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDecideBreakGlass(req.id, 'Ditolak')}
+                      onClick={() => onDecideBreakGlass(req.id, 'reject')}
                       className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#B23A48]/40 px-2.5 text-xs font-semibold text-[#B23A48]"
                     >
                       <XCircle className="h-3.5 w-3.5" />
@@ -209,16 +216,36 @@ export function SecurityCenterView({
                     </button>
                   </>
                 )}
-                {req.status === 'Aktif' && (
+                {req.status === 'Menunggu Aktivasi' && req.requesterUserId === currentUserId && (
                   <button
                     type="button"
-                    onClick={() => onDecideBreakGlass(req.id, 'Selesai')}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#17324D] px-3 text-xs font-semibold text-white"
+                    onClick={() => onDecideBreakGlass(req.id, 'activate')}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#B23A48] px-3 text-xs font-semibold text-white"
                   >
-                    <span>Tutup &amp; Review</span>
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>Aktifkan</span>
                   </button>
                 )}
-              </div>
+                {req.status === 'Aktif' &&
+                  (req.requesterUserId === currentUserId || req.approverUserId === currentUserId) && (
+                    <button
+                      type="button"
+                      onClick={() => onDecideBreakGlass(req.id, 'revoke')}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#B23A48]/40 px-3 text-xs font-semibold text-[#B23A48]"
+                    >
+                      <span>Cabut Akses</span>
+                    </button>
+                  )}
+                {req.status === 'Menunggu Review' && req.requesterUserId !== currentUserId && (
+                  <button
+                    type="button"
+                    onClick={() => onDecideBreakGlass(req.id, 'review')}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#17324D] px-3 text-xs font-semibold text-white"
+                  >
+                    <span>Review Pasca-Akses</span>
+                  </button>
+                )}
+              </div>>
             </div>
           ))}
         </div>
