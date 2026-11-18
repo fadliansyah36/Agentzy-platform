@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.abac import PolicyValidationError, validate_condition
 from app.core.authorization import authorize_platform_action
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.pagination import PageResponse
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -219,7 +220,7 @@ async def _save_version(connection, row: dict, actor: UUID):
     )
 
 
-@router.get("")
+@router.get("", response_model=PageResponse)
 async def list_access_policies(
     request: Request,
     limit: int = Query(default=50, ge=1, le=100),
