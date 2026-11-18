@@ -28,7 +28,7 @@ router = APIRouter(prefix="/security", tags=["Security Lifecycle"])
 
 
 def _request_id(request: Request) -> str | None:
-    return _request_id(request)
+    return getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
