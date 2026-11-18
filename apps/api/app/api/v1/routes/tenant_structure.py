@@ -395,10 +395,18 @@ async def list_organization_units(
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
+        "branch_id": context.branch_id if context else None,
+        "limit": limit + 1,
+    }
     cursor_clause = ""
     if cursor:
         created_at, row_id = decode_time_id_cursor(cursor)
         cursor_clause = "and (created_at,id) < (:cursor_created_at,:cursor_id)"
+        params.update({"cursor_created_at": created_at, "cursor_id": row_id})
     query = text(f"""
         select id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status,
                created_at,updated_at
@@ -411,20 +419,27 @@ async def list_organization_units(
             where tenant_id=:tenant_id and id=:branch_id
               and organization_unit_id is not null
           ))
-        order by name
+          {cursor_clause}
+        order by created_at desc,id desc
+        limit :limit
     """)
-    params = {
-        "tenant_id": tenant_id,
-        "organization_id": context.organization_id if context else None,
-        "organization_unit_id": context.organization_unit_id if context else None,
-        "branch_id": context.branch_id if context else None,
-    }
     if context is None:
         async with engine.connect() as connection:
             result = await connection.execute(query, params)
     else:
         result = await session.execute(query, params)
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
+            if has_more and rows else None,
+            request_id=_request_id(request),
+        ),
+    )
 
 
 @router.post(
@@ -502,10 +517,18 @@ async def list_branches(
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
+        "branch_id": context.branch_id if context else None,
+        "limit": limit + 1,
+    }
     cursor_clause = ""
     if cursor:
         created_at, row_id = decode_time_id_cursor(cursor)
         cursor_clause = "and (created_at,id) < (:cursor_created_at,:cursor_id)"
+        params.update({"cursor_created_at": created_at, "cursor_id": row_id})
     query = text(f"""
         select id,tenant_id,organization_id,organization_unit_id,name,code,status,
                created_at,updated_at
@@ -513,20 +536,27 @@ async def list_branches(
           and (:organization_id is null or organization_id=:organization_id)
           and (:organization_unit_id is null or organization_unit_id=:organization_unit_id)
           and (:branch_id is null or id=:branch_id)
-        order by name
+          {cursor_clause}
+        order by created_at desc,id desc
+        limit :limit
     """)
-    params = {
-        "tenant_id": tenant_id,
-        "organization_id": context.organization_id if context else None,
-        "organization_unit_id": context.organization_unit_id if context else None,
-        "branch_id": context.branch_id if context else None,
-    }
     if context is None:
         async with engine.connect() as connection:
             result = await connection.execute(query, params)
     else:
         result = await session.execute(query, params)
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
+            if has_more and rows else None,
+            request_id=_request_id(request),
+        ),
+    )
 
 
 @router.post("/{tenant_id}/branches", status_code=status.HTTP_201_CREATED, tags=["Organization"])
@@ -621,10 +651,18 @@ async def list_departments(
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "branch_id": context.branch_id if context else None,
+        "department_id": context.department_id if context else None,
+        "limit": limit + 1,
+    }
     cursor_clause = ""
     if cursor:
         created_at, row_id = decode_time_id_cursor(cursor)
         cursor_clause = "and (created_at,id) < (:cursor_created_at,:cursor_id)"
+        params.update({"cursor_created_at": created_at, "cursor_id": row_id})
     query = text(f"""
         select id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,
                created_at,updated_at
@@ -632,20 +670,27 @@ async def list_departments(
           and (:organization_id is null or organization_id=:organization_id)
           and (:branch_id is null or branch_id=:branch_id)
           and (:department_id is null or id=:department_id)
-        order by name
+          {cursor_clause}
+        order by created_at desc,id desc
+        limit :limit
     """)
-    params = {
-        "tenant_id": tenant_id,
-        "organization_id": context.organization_id if context else None,
-        "branch_id": context.branch_id if context else None,
-        "department_id": context.department_id if context else None,
-    }
     if context is None:
         async with engine.connect() as connection:
             result = await connection.execute(query, params)
     else:
         result = await session.execute(query, params)
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
+            if has_more and rows else None,
+            request_id=_request_id(request),
+        ),
+    )
 
 
 @router.post("/{tenant_id}/departments", status_code=status.HTTP_201_CREATED, tags=["Organization"])
