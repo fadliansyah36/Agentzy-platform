@@ -62,6 +62,7 @@ export function AdminAppShell({
   activeSection,
   adminRole,
   adminEmail,
+  permissions,
   pendingApprovalsCount,
   openIncidentsCount,
   activeBreakGlassCount,
@@ -75,6 +76,7 @@ export function AdminAppShell({
   activeSection: AdminSectionId;
   adminRole: string;
   adminEmail: string;
+  permissions: string[];
   pendingApprovalsCount: number;
   openIncidentsCount: number;
   activeBreakGlassCount: number;
@@ -170,7 +172,48 @@ export function AdminAppShell({
     [activeBreakGlassCount, openIncidentsCount, pendingApprovalsCount]
   );
 
-  const allNavItems = useMemo(() => navGroups.flatMap((g) => g.items), [navGroups]);
+  const requiredPermission: Record<AdminSectionId, string> = {
+    overview: 'platform.tenants.read',
+    'global-analytics': 'platform.audit.read',
+    tenants: 'platform.tenants.read',
+    onboarding: 'platform.tenants.manage',
+    'master-data': 'platform.operations.manage',
+    subscriptions: 'platform.finance.read',
+    organization: 'platform.roles.read',
+    rbac: 'platform.roles.read',
+    'human-workforce': 'platform.memberships.read',
+    'ai-workers': 'platform.operations.manage',
+    'ai-worker-detail': 'platform.operations.manage',
+    'llm-providers': 'platform.operations.manage',
+    'model-registry': 'platform.operations.manage',
+    'model-router': 'platform.operations.manage',
+    skills: 'platform.operations.manage',
+    tools: 'platform.operations.manage',
+    'memory-governance': 'platform.security.manage',
+    'knowledge-rag': 'platform.operations.manage',
+    workflows: 'platform.operations.manage',
+    'ai-credits': 'platform.finance.read',
+    billing: 'platform.finance.read',
+    finance: 'platform.finance.read',
+    contracts: 'platform.finance.read',
+    'commission-schemes': 'platform.finance.manage',
+    integrations: 'platform.operations.manage',
+    security: 'platform.security.manage',
+    'audit-logs': 'platform.audit.read',
+    'data-governance': 'platform.security.manage',
+  };
+
+  const visibleNavGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => permissions.includes(requiredPermission[item.id])),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const allNavItems = useMemo(
+    () => visibleNavGroups.flatMap((group) => group.items),
+    [visibleNavGroups]
+  );
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -227,7 +270,7 @@ export function AdminAppShell({
             aria-label="Navigasi Super Admin Control Plane"
             className="flex-1 overflow-y-auto px-3 py-3 space-y-4"
           >
-            {navGroups.map((group) => (
+            {visibleNavGroups.map((group) => (
               <div key={group.title}>
                 <p className="px-3 pb-1.5 text-[11px] font-semibold text-[#9BB4C7]">
                   {group.title}
