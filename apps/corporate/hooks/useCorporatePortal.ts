@@ -425,7 +425,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
         organizationId: row.organization_id, organizationUnitId: row.organization_unit_id,
         branchId: row.branch_id, departmentId: row.department_id,
         status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
-        mfaEnabled: null, lastActive: 'Belum ada aktivitas',
+        mfaEnabled: null, lastActive: null,
       };
     }));
   }, [auth.session?.access_token, activeTenantId, branches, departments]);
