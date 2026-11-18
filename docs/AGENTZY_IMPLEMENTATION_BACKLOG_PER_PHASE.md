@@ -241,6 +241,15 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 
 **Scope:** Supabase Auth, tenant/org/branch/department/membership, RBAC/ABAC, RLS, FastAPI auth dependencies, session lifecycle, audit.
 
+**Implementation checkpoint — 18 November 2026: PARTIAL / IN PROGRESS**
+
+- Implemented FastAPI identity, tenant directory, organization hierarchy, membership invitation/acceptance/activation/suspension/revocation/reassignment, role assignment/replacement, permission registry, ABAC policy and session/security lifecycle routes.
+- Applied Phase 01 migrations through M015: `20261117175948`, `20261117181011`, `20261117182410`, `20261118062335`, `20261118062647`, `20261118065058`, `20261118124217`, `20261118125909`, `20261118174350`. Live project reports 19/19 public tables with RLS enabled.
+- Existing Admin and Corporate lifecycle controls use the shared FastAPI API client; Human Workforce uses the same Supabase Auth identity, server-derived memberships, workforce tenant context and invitation acceptance; AI Workforce resolves tenant access from the same identity and permission registry.
+- Follow-up implementation commits on `main`: `8c722c5b7bd82a4f04ee94524fde67cf27b546de`, `e4dc45b6deea4e1f1e509f6cb776b6e2cad5d13a`, `a68e89c9c48dd25878bf66f28d798badcacc04ed`, `46eb28488b09dce887b991be4105bd9044693b7b`, `c543cf5e8f9af1ce47a657086e2d696039899a7d`.
+- Remaining external/authentication evidence: hosted Supabase Auth provider/URL/SMTP/MFA/session settings have not been read or changed by the available project connector; `auth.users`, `auth.sessions`, `auth.mfa_factors`, and `public.memberships` currently contain zero rows. No real user identity or credential was fabricated.
+- Cross-portal business feature screens outside the Phase 01 identity/tenant lifecycle still contain local/demo collections and domain actions without matching completed FastAPI domain contracts. Do not mark those screens or Phase 20 complete on the basis of Phase 01 work.
+
 **Exit:** seluruh task applicable memiliki commit SHA, migration evidence bila ada, API/OpenAPI, permission/RLS, UI wiring ke backend, event/integration, observability, dokumentasi dan known limitations. Phase 22 menampung full UAT/staging/security/load/release gate; Phase 23 adalah controlled launch.
 
 ### Phase 02 — Public Landing & Partnership Acquisition
