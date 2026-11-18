@@ -92,15 +92,6 @@ export function useAIWorkforcePortal(
 
   // Human <-> AI binding data remains empty until its FastAPI domain contract is available.
   const [humanAiBindings] = useState<HumanAIBindingRecord[]>([]);
-  const managerRole = useMemo<AgentzyManagerRole>(() => {
-    if (activeMembership?.permissions.includes('platform.security.manage')) return 'Admin Agentzy';
-    if (
-      activeMembership?.permissions.includes('workforce.assignments.manage') ||
-      activeMembership?.permissions.includes('corporate.workforce.manage')
-    ) return 'HRD Agentzy';
-    return 'Corporate / ISP Partner (Read-Only)';
-  }, [activeMembership]);
-
   const [modal, setModal] = useState<AIWorkforceModalState>({ type: 'none' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -142,6 +133,14 @@ export function useAIWorkforcePortal(
   const activeMembership = auth.identity?.memberships.find(
     (membership) => membership.tenant_id === activeTenantId
   );
+  const managerRole = useMemo<AgentzyManagerRole>(() => {
+    if (activeMembership?.permissions.includes('platform.security.manage')) return 'Admin Agentzy';
+    if (
+      activeMembership?.permissions.includes('workforce.assignments.manage') ||
+      activeMembership?.permissions.includes('corporate.workforce.manage')
+    ) return 'HRD Agentzy';
+    return 'Corporate / ISP Partner (Read-Only)';
+  }, [activeMembership]);
   const [workforceTenantContext, setWorkforceTenantContext] =
     useState<AgentzyWorkforceTenantContext | null>(null);
   const [workforceContextError, setWorkforceContextError] = useState<string | null>(null);
