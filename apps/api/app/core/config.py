@@ -25,7 +25,6 @@ class Settings(BaseSettings):
             required = {
                 "SUPABASE_SERVICE_ROLE_KEY": self.supabase_service_role_key,
                 "AUTH_PROVIDER_WEBHOOK_SECRET": self.auth_provider_webhook_secret,
-                "PLATFORM_BOOTSTRAP_TOKEN": self.platform_bootstrap_token,
             }
             missing = [name for name, value in required.items() if not value]
             if missing:
@@ -34,8 +33,8 @@ class Settings(BaseSettings):
                 )
             if len(self.auth_provider_webhook_secret or "") < 32:
                 raise ValueError("AUTH_PROVIDER_WEBHOOK_SECRET must be at least 32 characters.")
-            if len(self.platform_bootstrap_token or "") < 32:
-                raise ValueError("PLATFORM_BOOTSTRAP_TOKEN must be at least 32 characters.")
+            if self.platform_bootstrap_token and len(self.platform_bootstrap_token) < 32:
+                raise ValueError("PLATFORM_BOOTSTRAP_TOKEN must be at least 32 characters when configured.")
         return self
 
     @field_validator("database_url")
