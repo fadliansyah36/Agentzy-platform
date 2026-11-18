@@ -772,3 +772,15 @@ This section records implementation work committed after the latest Phase 01 liv
 - The later `14699812` commit only adds a comment; no functional code changed after the passing check.
 
 **Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.** Identity and tenant membership portal integration is improved but membership role replacement, complete privileged CRUD parity, hosted Auth configuration/lifecycle evidence and remaining endpoint authorization coverage are still outstanding. Phase 02 remains NOT STARTED.
+
+
+## 22. Phase 01 membership lifecycle continuation — 2026-11-18
+
+| Task | Implemented delta | Evidence | Remaining |
+|---|---|---|---|
+| Membership role replacement | Added transactional PUT endpoint, object-scope guard, elevated-role authority, role validity validation, last-owner protection, idempotency and audit. | `a3bff517`; API contract updated in the next evidence commit. | Super Admin and AI Workforce controls; multi-role/scope editing UI parity. |
+| Membership reactivation | Added POST activation for suspended membership with active tenant/hierarchy/Auth account checks, idempotency and audit. | `a3bff517`, hardened at `8f717c29`. | Verify complete status lifecycle and cross-portal action parity. |
+| Corporate portal wiring | Added typed API client and UI actions for role replacement, activate, suspend and revoke; refreshes membership state from FastAPI. | `27013c8f`, `59447a6d`, `63a501f2`, `a998cf39`, `7e9fec7c`. | Super Admin and AI Workforce integration remain incomplete. |
+| Database | No schema change required for these operations. | Live schema baseline already contains memberships and membership_roles; no DDL applied. | No new migration required for this increment. |
+
+Phase 01 remains **PARTIAL / IN PROGRESS — NOT DONE**. No Phase 02 work is authorized.

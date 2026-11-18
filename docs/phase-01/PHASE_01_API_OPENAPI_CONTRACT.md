@@ -26,3 +26,13 @@ All endpoints are under `/api/v1`. Authentication uses a Supabase Auth access to
 Existing tenant creation/update, organization list/create, membership invite/list and bootstrap routes remain in the management/tenant routers.
 
 FastAPI generates OpenAPI from route declarations. OpenAPI generation and the new paths must be confirmed by the commit-triggered CI run. Collection pagination, universal idempotency headers, complete response schemas and remaining CRUD contracts are not yet complete.
+
+
+## Membership lifecycle continuation — 2026-11-18
+
+| Method | Path | Purpose | Authorization |
+|---|---|---|---|
+| POST | /tenants/{tenant_id}/memberships/{membership_id}/activate | Reactivate a suspended membership after validating active tenant, hierarchy and Auth account state | Tenant organization manage or platform membership manage + AAL2; object scope enforced |
+| PUT | /tenants/{tenant_id}/memberships/{membership_id}/roles | Replace the membership's role assignment transactionally | Tenant organization manage or platform membership manage + AAL2; object scope and elevated-role owner guard |
+
+Role replacement validates role namespace, role availability, scope membership, future validity window, and preserves at least one active tenant owner. The operation is idempotent and audited. Existing POST role assignment remains additive/upsert semantics.

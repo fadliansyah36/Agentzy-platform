@@ -149,3 +149,19 @@ Current live catalog checks:
 - `14699812969e0117a7fec98b90f1456b6021d3c4` — documentation-only comment clarifying the server-authorized membership visibility guard.
 - GitHub Actions run [44300592550](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300592550) completed **SUCCESS** at code commit `92bc296d`: frontend frozen install, ESLint, TypeScript; Python compile, Ruff, focused deterministic authorization tests, FastAPI import/OpenAPI generation; and migration source consistency all passed.
 - Run [44300279296](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300279296) also completed **SUCCESS** at `90be22e6`, validating the elevated membership-role validity/scope hardening.
+
+
+## Implementation continuation — membership lifecycle — 2026-11-18
+
+The following code increment is committed after the previous report snapshot. It does not close Phase 01.
+
+- Added FastAPI `POST /tenants/{tenant_id}/memberships/{membership_id}/activate` for reactivating suspended memberships. It checks tenant and hierarchy state, validates that the target Auth account is not deleted or currently banned, enforces object scope, uses idempotency and records an audit event.
+- Added FastAPI `PUT /tenants/{tenant_id}/memberships/{membership_id}/roles` for transactional role replacement. It validates role namespace and scope, future validity, elevated-role authority, and prevents removal of the final active tenant owner. Previous and replacement roles are captured in the audit metadata.
+- Added typed API-client methods for role replacement and activation.
+- Corporate Organization & Users now exposes role replacement, reactivation, suspension and revocation actions through the FastAPI client. The view preserves the existing design system and reloads the authoritative membership list after each action.
+- MFA remains unknown when the API has no evidence; no inferred MFA state is shown.
+- No database schema delta was required. No migration or DDL was applied for this API/UI-only increment.
+
+Commits: `a3bff5177c42694bf098f911b302b606017cd715`, `27013c8fa7ad3dbd45b829fc17bc792a173a57fd`, `59447a6ddcfeed02a89dc51bf5e76aa15fbab06f`, `63a501f29266626c2102cff9fa3552c2c362d816`, `a998cf39cefe6ca61b87e44a43de71bf1cb2d5f4`, `7e9fec7cc292c9214a46abe3a2ce554524dd8aa6`, `8f717c294bbd3d3d17bdf6bd977614ad0eebeb0a`.
+
+**Current disposition remains PARTIAL / IN PROGRESS — NOT DONE.** This increment does not prove full object-level authorization coverage, Super Admin and AI Workforce lifecycle parity, complete hierarchy CRUD parity, universal API contract compliance, hosted Supabase Auth configuration, or live authentication evidence. Engineering workflow for the final code commit must be checked before reporting a pass.
