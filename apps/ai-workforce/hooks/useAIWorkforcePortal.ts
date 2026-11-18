@@ -52,9 +52,8 @@ export function useAIWorkforcePortal(
   initialSection: AIWorkforceSectionId = 'overview'
 ) {
   const auth = useAgentzyAuth();
-  const [activeSection, setActiveSection] = useState<AIWorkforceSectionId>(initialSection);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTenantId, setActiveTenantId] = useState('');
+  const [requestedActiveSection, setActiveSection] = useState<AIWorkforceSectionId>(initialSection);
+  const [selectedTenantId, setActiveTenantId] = useState('');
 
   // Core states
   const [aiWorkers, setAiWorkers] = useState<AIWorkerEntity[]>([]);
@@ -132,22 +131,21 @@ export function useAIWorkforcePortal(
       name: tenant.name,
     }));
   }, [auth.identity, auth.tenants]);
+  const activeTenantId = tenantOptions.some((tenant) => tenant.id === selectedTenantId)
+    ? selectedTenantId
+    : tenantOptions[0]?.id ?? '';
+  const isAuthenticated = Boolean(
+    !auth.loading && auth.session && auth.identity && tenantOptions.length > 0
+  );
+  const activeSection = !auth.loading && !isAuthenticated
+    ? 'login'
+    : isAuthenticated && (requestedActiveSection === 'login' || requestedActiveSection === 'splash')
+      ? 'overview'
+      : requestedActiveSection;
   const activeTenant = useMemo(
     () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
     [tenantOptions, activeTenantId]
   );
-
-  useEffect(() => {
-    if (auth.loading) return;
-    if (auth.session && auth.identity && tenantOptions.length > 0) {
-      const tenant = tenantOptions.find((item) => item.id === activeTenantId) ?? tenantOptions[0];
-      setActiveTenantId(tenant.id);
-      setIsAuthenticated(true);
-      setActiveSection((current) => current === 'login' || current === 'splash' ? 'overview' : current);
-    } else {
-      setIsAuthenticated(false);
-    }
-  }, [auth.loading, auth.session, auth.identity, tenantOptions, activeTenantId]);
 
   const selectedWorker = useMemo(
     () => aiWorkers.find((w) => w.id === selectedWorkerId) ?? aiWorkers[0],
@@ -213,7 +211,6 @@ export function useAIWorkforcePortal(
         throw new Error('Akun belum memiliki permission ai.workers.read pada tenant aktif.');
       }
       setActiveTenantId(tenant.id);
-      setIsAuthenticated(true);
       setActiveSection('overview');
       showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
     },
@@ -222,7 +219,6 @@ export function useAIWorkforcePortal(
 
   const handleLogout = useCallback(async () => {
     await auth.signOut();
-    setIsAuthenticated(false);
     setActiveTenantId('');
     setActiveSection('login');
     setModal({ type: 'none' });
@@ -1038,7 +1034,6 @@ export function useAIWorkforcePortal(
     toastMessage,
     showToast,
     navigateTo,
-    setIsAuthenticated,
     handleLogout,
     handleSwitchTenant,
     setSelectedWorkerId,
