@@ -663,6 +663,7 @@ async def review_break_glass(
 
 @router.get("/break-glass/requests")
 async def list_break_glass_requests(
+    request: Request,
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ):
@@ -670,16 +671,7 @@ async def list_break_glass_requests(
         claims, session, "platform.security.manage", "manage", "break_glass_requests"
     )
     async with engine.begin() as connection:
-        await _expire_break_glass(connection, Request(scope={
-            "type": "http",
-            "headers": [],
-            "method": "GET",
-            "path": "/api/v1/security/break-glass/requests",
-            "query_string": b"",
-            "server": ("localhost", 0),
-            "client": None,
-            "scheme": "https",
-        }))
+        await _expire_break_glass(connection, request)
     async with engine.connect() as connection:
         result = await connection.execute(
             text("""
