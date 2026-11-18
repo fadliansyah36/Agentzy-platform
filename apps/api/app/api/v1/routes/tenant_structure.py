@@ -173,6 +173,23 @@ async def update_organization(
             raise HTTPException(status_code=404, detail="Organization tidak ditemukan.")
         if context is not None:
             authorize_object(context, resource_tenant_id=tenant_id, organization_id=organization_id)
+        if values.get("status") == "archived":
+            dependencies = await connection.execute(
+                text("""
+                    select
+                      exists(select 1 from public.organization_units
+                        where tenant_id=:tenant_id and organization_id=:organization_id and status='active')
+                      or exists(select 1 from public.branches
+                        where tenant_id=:tenant_id and organization_id=:organization_id and status='active')
+                      or exists(select 1 from public.departments
+                        where tenant_id=:tenant_id and organization_id=:organization_id and status='active')
+                      or exists(select 1 from public.memberships
+                        where tenant_id=:tenant_id and organization_id=:organization_id and status='active')
+                """),
+                {"tenant_id": tenant_id, "organization_id": organization_id},
+            )
+            if dependencies.scalar_one():
+                raise HTTPException(status_code=409, detail="Archive active organization units, branches, departments and memberships before archiving this organization.")
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
             text(f"""
