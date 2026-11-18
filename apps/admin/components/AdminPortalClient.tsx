@@ -86,6 +86,7 @@ export function AdminPortalClient({
         {portal.activeSection === 'overview' && (
           <GlobalOverviewView
             tenants={portal.tenants}
+        permissionRegistry={portal.permissionRegistry}
             providersCount={portal.providers.length}
             humanTotal={portal.tenants.reduce((total, tenant) => total + tenant.humanCount, 0)}
             aiWorkersTotal={portal.tenants.reduce((total, tenant) => total + tenant.aiWorkerCount, 0)}
