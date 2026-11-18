@@ -310,17 +310,16 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     return () => { active = false; };
   }, [auth.session?.access_token, auth.identity, auth.aal, showToast]);
 
+  const canReadMembershipDirectory = Boolean(
+    auth.session?.access_token &&
+    auth.aal === 'aal2' &&
+    platformPermissions.includes('platform.memberships.read') &&
+    tenants.length > 0
+  );
+
   useEffect(() => {
     const accessToken = auth.session?.access_token;
-    if (
-      !accessToken ||
-      auth.aal !== 'aal2' ||
-      !platformPermissions.includes('platform.memberships.read') ||
-      tenants.length === 0
-    ) {
-      setUsers([]);
-      return;
-    }
+    if (!accessToken || !canReadMembershipDirectory) return;
     let active = true;
     void Promise.all(tenants.map(async (tenant) => {
       const memberships = await listTenantMemberships(accessToken, tenant.id);
@@ -354,7 +353,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       }
     });
     return () => { active = false; };
-  }, [auth.session?.access_token, auth.aal, platformPermissions, tenants, roles, showToast]);
+  }, [auth.session?.access_token, canReadMembershipDirectory, tenants, roles, showToast]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
@@ -1905,7 +1904,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     orgUnits,
     upsertOrgUnit,
     deleteOrgUnit,
-    users,
+    users: canReadMembershipDirectory ? users : [],
     upsertPlatformUser,
     deletePlatformUser,
     roles,
