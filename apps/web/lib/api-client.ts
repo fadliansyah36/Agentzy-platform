@@ -454,6 +454,35 @@ export type AgentzyAuditLog = {
   metadata: Record<string, unknown>;
   created_at: string;
 };
+
+export type AgentzySecurityAlert = {
+  id: string; tenant_id: string | null; source_type: 'audit_log' | 'auth_provider_event';
+  source_id: string; alert_key: string; severity: 'critical' | 'high' | 'medium' | 'low';
+  status: 'open' | 'acknowledged' | 'resolved'; title: string; summary: string;
+  actor_user_id: string | null; subject_user_id: string | null;
+  request_id: string | null; correlation_id: string | null; trace_id: string | null;
+  details: Record<string, unknown>; occurred_at: string; acknowledged_by: string | null;
+  acknowledged_at: string | null; resolved_at: string | null; created_at: string;
+};
+export const listSecurityAlerts = (accessToken: string, filters: {
+  tenant_id?: string; status?: 'open' | 'acknowledged' | 'resolved';
+  severity?: 'critical' | 'high' | 'medium' | 'low'; limit?: number;
+} = {}) => {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return apiRequest<{ data: AgentzySecurityAlert[]; meta: { has_more: boolean; next_cursor: string | null; request_id: string | null } }>(
+    `/security/alerts${suffix}`, { method: 'GET', accessToken },
+  );
+};
+export const acknowledgeSecurityAlert = (accessToken: string, alertId: string) =>
+  apiRequest<AgentzySecurityAlert>(
+    `/security/alerts/${encodeURIComponent(alertId)}/acknowledge`,
+    { method: 'PATCH', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
 export const listAuditLogs = (
   accessToken: string,
   params: { tenant_id?: string; limit?: number; cursor?: string; resource_type?: string } = {},
