@@ -245,7 +245,7 @@ export function SecurityCenterView({
                     <span>Review Pasca-Akses</span>
                   </button>
                 )}
-              </div>>
+              </div>
             </div>
           ))}
         </div>
