@@ -154,7 +154,8 @@ async def ingest_auth_provider_event(
                   request_id,occurred_at,processing_status,processed_at,payload_digest,metadata
                 ) values (
                   'supabase',:event_id,:event_type,:user_id,:session_id,:tenant_id,
-                  :request_id,:occurred_at,'processed',now(),:payload_digest,'{}'::jsonb
+                  :request_id,:occurred_at,'received',null,:payload_digest,
+                  cast(:metadata as jsonb)
                 )
                 on conflict(provider,provider_event_id) do nothing
                 returning id
@@ -168,6 +169,10 @@ async def ingest_auth_provider_event(
                 "request_id": payload.request_id or request.headers.get("x-request-id"),
                 "occurred_at": payload.occurred_at,
                 "payload_digest": payload.payload_digest,
+                "metadata": json.dumps({
+                    "correlation_id": request.headers.get("x-correlation-id"),
+                    "trace_id": request.headers.get("x-trace-id"),
+                }),
             },
         )
         event_id = result.scalar_one_or_none()
@@ -181,6 +186,69 @@ async def ingest_auth_provider_event(
             )
             row = existing.mappings().first()
             return {"status": "duplicate", "event_id": str(row["id"]) if row else None}
+
+        if payload.event_type in {"session.revoked", "user.signed_out"} and payload.session_id:
+            session_row = await connection.execute(
+                text("""
+                    select user_id,not_after from auth.sessions where id=:session_id
+                """),
+                {"session_id": payload.session_id},
+            )
+            session = session_row.mappings().first()
+            if session is not None:
+                if payload.user_id and payload.user_id != session["user_id"]:
+                    raise HTTPException(status_code=422, detail="Session event identity mismatch.")
+                await connection.execute(
+                    text("""
+                        insert into public.revoked_sessions(
+                          session_id,user_id,expires_at,reason,request_id
+                        ) values (
+                          :session_id,:user_id,:expires_at,:reason,:request_id
+                        )
+                        on conflict(session_id) do nothing
+                    """),
+                    {
+                        "session_id": payload.session_id,
+                        "user_id": session["user_id"],
+                        "expires_at": session["not_after"],
+                        "reason": f"auth_provider_event:{payload.event_type}",
+                        "request_id": payload.request_id or request.headers.get("x-request-id"),
+                    },
+                )
+
+        if payload.event_type == "user.banned" and payload.user_id:
+            active_sessions = await connection.execute(
+                text("""
+                    select id,not_after from auth.sessions where user_id=:user_id
+                """),
+                {"user_id": payload.user_id},
+            )
+            for auth_session in active_sessions.mappings().all():
+                await connection.execute(
+                    text("""
+                        insert into public.revoked_sessions(
+                          session_id,user_id,expires_at,reason,request_id
+                        ) values (
+                          :session_id,:user_id,:expires_at,'auth_provider_event:user.banned',:request_id
+                        )
+                        on conflict(session_id) do nothing
+                    """),
+                    {
+                        "session_id": auth_session["id"],
+                        "user_id": payload.user_id,
+                        "expires_at": auth_session["not_after"],
+                        "request_id": payload.request_id or request.headers.get("x-request-id"),
+                    },
+                )
+
+        await connection.execute(
+            text("""
+                update public.auth_provider_events
+                set processing_status='processed',processed_at=now()
+                where id=:event_id
+            """),
+            {"event_id": event_id},
+        )
         await _audit(
             connection,
             request,
@@ -189,7 +257,13 @@ async def ingest_auth_provider_event(
             "auth_provider_event",
             event_id,
             payload.tenant_id,
-            {"provider": "supabase", "event_type": payload.event_type},
+            {
+                "provider": "supabase",
+                "event_type": payload.event_type,
+                "session_revocations_applied": payload.event_type in {
+                    "session.revoked", "user.signed_out", "user.banned"
+                },
+            },
         )
     return {"status": "processed", "event_id": str(event_id)}
 
