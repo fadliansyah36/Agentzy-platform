@@ -1294,8 +1294,7 @@ async def update_role(
             )
         target_result = await connection.execute(
             text(
-                "select id,key,tenant_id,scope_type from public.roles "
-                "where id=:role_id for update"
+                "select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"
             ),
             {"role_id": role_id},
         )
