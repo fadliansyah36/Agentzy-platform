@@ -1,6 +1,5 @@
 import json
 from dataclasses import dataclass
-import json
 from datetime import UTC, datetime
 from uuid import UUID
 
