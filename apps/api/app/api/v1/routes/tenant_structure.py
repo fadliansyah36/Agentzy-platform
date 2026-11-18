@@ -847,6 +847,12 @@ async def assign_membership_role(
                 ),
             )
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, UUID(claims["sub"]), tenant_id,
+            f"membership.role.assign:{membership_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         membership = await connection.execute(
             text("""
                 select id,organization_id,organization_unit_id,branch_id,department_id
@@ -911,6 +917,12 @@ async def assign_membership_role(
                 "valid_until": payload.valid_until,
             },
         )
+        response_body = {
+            "membership_id": str(membership_id),
+            "role_key": role_key,
+            "scope_type": payload.scope_type,
+            "scope_id": payload.scope_id,
+        }
         await _audit(
             connection,
             request,
@@ -921,12 +933,11 @@ async def assign_membership_role(
             membership_id,
             {"role_key": role_key, "scope_type": payload.scope_type},
         )
-    return {
-        "membership_id": str(membership_id),
-        "role_key": role_key,
-        "scope_type": payload.scope_type,
-        "scope_id": payload.scope_id,
-    }
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
 
 
 class BranchUpdate(BaseModel):
@@ -1075,6 +1086,12 @@ async def update_branch(
     if not values:
         raise HTTPException(status_code=422, detail="No branch changes supplied.")
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, UUID(claims["sub"]), tenant_id,
+            f"branch.update:{branch_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         current = await connection.execute(
             text("""
                 select id,tenant_id,organization_id,organization_unit_id,status
@@ -1152,6 +1169,10 @@ async def update_branch(
             branch_id,
             values,
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=updated,
+        )
     return updated
 
 
@@ -1171,6 +1192,12 @@ async def update_department(
     if not values:
         raise HTTPException(status_code=422, detail="No department changes supplied.")
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, UUID(claims["sub"]), tenant_id,
+            f"department.update:{department_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         current = await connection.execute(
             text("""
                 select id,tenant_id,organization_id,branch_id,parent_department_id,status
@@ -1290,6 +1317,10 @@ async def update_department(
             "department",
             department_id,
             values,
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=updated,
         )
     return updated
 
