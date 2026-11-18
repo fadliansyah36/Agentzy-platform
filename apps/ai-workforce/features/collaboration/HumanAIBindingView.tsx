@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Link2,
   ShieldCheck,
-  Lock,
   Plus,
   Bot,
   Briefcase,
@@ -24,39 +23,11 @@ import type {
   WorkforceHumanRole,
 } from '@/lib/human-ai-bindings';
 
-const MANAGER_ROLES: Array<{
-  role: AgentzyManagerRole;
-  badge: string;
-  desc: string;
-}> = [
-  {
-    role: 'HRD Agentzy',
-    badge: 'Penuh · People & Pairing',
-    desc: 'Rekrutmen, penempatan & pengikatan Staff Sales / Teknisi dengan AI Worker.',
-  },
-  {
-    role: 'Admin Agentzy',
-    badge: 'Penuh · Operasional Workforce',
-    desc: 'Mengelola jadwal, akun Affiliate & penyesuaian akses kolaborasi.',
-  },
-  {
-    role: 'Direksi Agentzy',
-    badge: 'Penuh · Tata Kelola & KPI',
-    desc: 'Persetujuan akhir batas otonomi L1–L3 & target produktivitas lintas tim.',
-  },
-  {
-    role: 'Corporate / ISP Partner (Read-Only)',
-    badge: 'Terkunci · Hanya Portal Corporate',
-    desc: 'Mitra ISP hanya memantau hasil operasional & SLA di Portal Corporate.',
-  },
-];
-
 export function HumanAIBindingView({
   bindings,
   aiWorkers,
   managerRole,
   canManageBindings,
-  onChangeManagerRole,
   onOpenCreateBinding,
   onToggleBindingStatus,
   onUpdateBindingAiWorker,
@@ -65,7 +36,6 @@ export function HumanAIBindingView({
   aiWorkers: AIWorkerEntity[];
   managerRole: AgentzyManagerRole;
   canManageBindings: boolean;
-  onChangeManagerRole: (role: AgentzyManagerRole) => void;
   onOpenCreateBinding: () => void;
   onToggleBindingStatus: (bindingId: string) => void;
   onUpdateBindingAiWorker: (
@@ -168,42 +138,8 @@ export function HumanAIBindingView({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          {MANAGER_ROLES.map((item) => {
-            const active = managerRole === item.role;
-            const isReadOnly = item.role.includes('Read-Only');
-            return (
-              <button
-                key={item.role}
-                type="button"
-                onClick={() => onChangeManagerRole(item.role)}
-                className={`rounded-[11px] border p-3 text-left transition ${
-                  active
-                    ? isReadOnly
-                      ? 'border-[#B23A48] bg-[#B23A48]/5'
-                      : 'border-[#0284C7] bg-[#E6F4F9]'
-                    : 'border-[#D8E3E9] bg-[#F5F8FA] hover:border-[#87CEEB]'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-xs font-bold text-[#17324D]">
-                    {item.role}
-                  </span>
-                  {isReadOnly && <Lock className="h-3.5 w-3.5 text-[#B23A48]" />}
-                </div>
-                <p
-                  className={`mt-0.5 text-[10px] font-semibold ${
-                    isReadOnly ? 'text-[#B23A48]' : 'text-[#0284C7]'
-                  }`}
-                >
-                  {item.badge}
-                </p>
-                <p className="mt-1 text-[11px] leading-snug text-[#526675]">
-                  {item.desc}
-                </p>
-              </button>
-            );
-          })}
+        <div className="rounded-[11px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-xs leading-relaxed text-[#526675]">
+          Mode pengelola ditentukan oleh permission aktif pada membership dan tidak dapat dipilih atau dinaikkan melalui UI. Backend FastAPI tetap memvalidasi setiap tindakan.
         </div>
 
         {!canManageBindings && (
