@@ -347,6 +347,9 @@ async def update_access_policy(
         existing = current.mappings().first()
         if existing is None:
             raise HTTPException(status_code=404, detail="Policy not found")
+        await _authorize_policy_object(
+            session, actor=actor, policy=dict(existing), request_id=_request_id(request)
+        )
         start = values.get("effective_from", existing["effective_from"])
         end = values.get("effective_until", existing["effective_until"])
         if start and end and end <= start:
