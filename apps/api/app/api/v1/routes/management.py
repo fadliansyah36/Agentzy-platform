@@ -426,6 +426,21 @@ async def invite_tenant_member(
             branch_id=payload.branch_id,
             department_id=payload.department_id,
         )
+    async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection,
+            actor_user_id=user_id,
+            tenant_id=tenant_id,
+            command_key=f"membership.invite:{tenant_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
+
     role_key = payload.role_key.strip().lower()
     if role_key in (
         "corporate_owner",
@@ -621,12 +636,19 @@ async def invite_tenant_member(
                 "role_key": role_key,
             },
         )
-    return {
-        **membership,
-        "email": payload.email.strip().lower(),
-        "role_key": role_key,
-        "invitation_status": "sent",
-    }
+        response_body = {
+            **membership,
+            "email": payload.email.strip().lower(),
+            "role_key": role_key,
+            "invitation_status": "sent",
+        }
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=response_body,
+        )
+    return response_body
 
 
 @router.get("/permissions", tags=["Access Control"])
