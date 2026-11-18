@@ -13,6 +13,7 @@ from app.core.abac import PolicyValidationError, validate_condition
 from app.core.authorization import authorize_platform_action
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.pagination import PageResponse
+from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -195,14 +196,16 @@ async def _audit(
             "action": action,
             "resource_id": str(policy_id),
             "request_id": _request_id(request),
-            "ip": request.client.host if request.client else None,
-            "user_agent": request.headers.get("user-agent"),
+            "ip": None,
+            "user_agent": None,
             "metadata": json.dumps(
-                {
-                    **(metadata or {}),
-                    "correlation_id": getattr(request.state, "correlation_id", None),
-                    "trace_id": getattr(request.state, "trace_id", None),
-                },
+                redact_audit_value(
+                    {
+                        **(metadata or {}),
+                        "correlation_id": getattr(request.state, "correlation_id", None),
+                        "trace_id": getattr(request.state, "trace_id", None),
+                    }
+                ),
                 default=str,
             ),
         },
