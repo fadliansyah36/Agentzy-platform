@@ -566,3 +566,35 @@ Read-only findings are recorded in `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_
 - API runtime, secrets, production Auth configuration, bootstrap/TOTP and minimum static engineering checks remain outstanding.
 
 **Current Phase 01 disposition: PARTIAL / BLOCKED — not DONE.** The Phase 00 execution guard remains in force: no Phase 01 task may be marked IN PROGRESS until Phase 00 mandatory gates are signed off. No code/schema/configuration was changed during this read-only review; only this evidence record was added. No staging/UAT/real-world/load/security-acceptance/release test was run.
+
+
+## 17. Phase 00 closure re-audit — 18 November 2026
+
+The authoritative current evidence is `docs/phase-00/PHASE00_CLOSURE_READINESS_REAUDIT_2026-11-18.md`. This re-audit supersedes older empty-schema/empty-migration-history statements where they conflict with the current live state.
+
+### Current repository / Supabase facts
+
+- Pre-audit `main` HEAD: `4d3db7b36df411aefc5ad81aaa04e5892d99493c`; recursive tree 1,350 entries, `truncated=false`.
+- Supabase `Agentzy-db` is `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
+- Three Phase 01 migrations are present in both source and remote history. Nine public Agentzy tables exist and RLS is enabled on all nine. Current live catalogue includes 15 system roles, 45 permission keys and 134 role-permission links. Auth users: 0; Storage buckets: 0.
+- Current `public.rls_auto_enable()` remains SECURITY DEFINER, publicly executable and fail-open on exception. Security Advisor retains two WARN findings. No production security change was applied.
+- Current public table grants and default privileges are broader than least privilege. Auth provider/security/SMTP/redirect/MFA settings and hosted Data API exposed schemas remain unverified.
+
+### Gate status after re-audit
+
+| Gate | Status | Closure requirement |
+|---|---|---|
+| P00-AC-01 | PARTIAL | Product/Engineering sign-off |
+| P00-AC-02 | PARTIAL | Full screen, control, form, hook, service and action inventory with API mapping |
+| P00-AC-03 | PARTIAL | Resolve 26 LGPL/MPL, 5 manual-expression and 40 missing-license-file package findings; record approved provenance for all 31 raster assets |
+| P00-AC-04 | PARTIAL | Approve canonical API/domain/permission/database owner for each action |
+| P00-AC-05 | PARTIAL / BLOCKED | Obtain authoritative hosted Auth/Data API evidence and approve/apply least-privilege configuration |
+| P00-AC-06 | BLOCKED | Resolve fail-open event-trigger behavior and two Security Advisor WARN findings with verified safe remediation |
+| P00-AC-07 | COMPLETE | ADR register exists; future ADR decisions remain phase-owned |
+| P00-AC-08 | PARTIAL | M000 audit-only; M010 applied via three migrations; M020–M220 not applied and mapped to their future phases; approval remains pending |
+| P00-AC-09 | PARTIAL | Final DoD checklist documented; formal approval pending |
+| P00-AC-10 | BLOCKED / NOT APPROVED | Explicit Product Owner readiness approval after all other gates close |
+
+### Execution guard
+
+Do not mark Phase 00 CLOSED and do not start additional Phase 01 coding. Existing applied M010 migrations are recorded as live state only; they do not waive Phase 00 gates. Build/lint/type-check, Python compile/import, migration consistency and OpenAPI checks were not run in this re-audit and must not be represented as passed. No staging, UAT, real-world, load, security-acceptance or production-release testing was run.
