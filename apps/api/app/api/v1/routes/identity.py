@@ -17,6 +17,8 @@ router = APIRouter()
 
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
+
+
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 

@@ -29,6 +29,8 @@ router = APIRouter(prefix="/security", tags=["Security Lifecycle"])
 
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
+
+
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
@@ -135,11 +137,14 @@ async def _audit(
             "resource_type": resource_type,
             "resource_id": str(resource_id),
             "request_id": _request_id(request),
-            "metadata": json.dumps({
-                **(metadata or {}),
-                "correlation_id": getattr(request.state, "correlation_id", None),
-                "trace_id": getattr(request.state, "trace_id", None),
-            }, default=str),
+            "metadata": json.dumps(
+                {
+                    **(metadata or {}),
+                    "correlation_id": getattr(request.state, "correlation_id", None),
+                    "trace_id": getattr(request.state, "trace_id", None),
+                },
+                default=str,
+            ),
         },
     )
 
@@ -209,10 +214,12 @@ async def ingest_auth_provider_event(
                 "request_id": payload.request_id or _request_id(request),
                 "occurred_at": payload.occurred_at,
                 "payload_digest": payload.payload_digest,
-                "metadata": json.dumps({
-                    "correlation_id": getattr(request.state, "correlation_id", None),
-                    "trace_id": getattr(request.state, "trace_id", None),
-                }),
+                "metadata": json.dumps(
+                    {
+                        "correlation_id": getattr(request.state, "correlation_id", None),
+                        "trace_id": getattr(request.state, "trace_id", None),
+                    }
+                ),
             },
         )
         event_id = result.scalar_one_or_none()
@@ -301,9 +308,8 @@ async def ingest_auth_provider_event(
             {
                 "provider": "supabase",
                 "event_type": payload.event_type,
-                "session_revocations_applied": payload.event_type in {
-                    "session.revoked", "user.signed_out", "user.banned"
-                },
+                "session_revocations_applied": payload.event_type
+                in {"session.revoked", "user.signed_out", "user.banned"},
             },
         )
     return {"status": "processed", "event_id": str(event_id)}

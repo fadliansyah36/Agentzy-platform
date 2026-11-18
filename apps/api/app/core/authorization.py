@@ -127,9 +127,7 @@ async def authorize_tenant(
     resource_id: UUID | None = None,
 ) -> TenantAccessContext | None:
     try:
-        context = await resolve_tenant_context(
-            session, user_id, tenant_id, resource_id=resource_id
-        )
+        context = await resolve_tenant_context(session, user_id, tenant_id, resource_id=resource_id)
     except HTTPException as exc:
         if exc.status_code != 404:
             raise

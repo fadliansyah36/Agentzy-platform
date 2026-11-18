@@ -17,6 +17,8 @@ router = APIRouter()
 
 def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
+
+
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
@@ -202,11 +204,13 @@ async def _audit(
             "request_id": _request_id(request),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
-            "metadata": json.dumps({
-                **(metadata or {}),
-                "correlation_id": getattr(request.state, "correlation_id", None),
-                "trace_id": getattr(request.state, "trace_id", None),
-            }),
+            "metadata": json.dumps(
+                {
+                    **(metadata or {}),
+                    "correlation_id": getattr(request.state, "correlation_id", None),
+                    "trace_id": getattr(request.state, "trace_id", None),
+                }
+            ),
         },
     )
 
@@ -253,8 +257,12 @@ async def update_organization(
         raise HTTPException(status_code=422, detail="Slug organisasi harus huruf kecil.")
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, UUID(claims["sub"]), tenant_id,
-            f"organization.update:{organization_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            f"organization.update:{organization_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -348,8 +356,10 @@ async def update_organization(
             values,
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=updated,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=updated,
         )
     return updated
 
@@ -411,8 +421,12 @@ async def create_organization_unit(
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, actor, tenant_id,
-            f"organization_unit.create:{tenant_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"organization_unit.create:{tenant_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -440,8 +454,10 @@ async def create_organization_unit(
             {"code": payload.code},
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=201, response_body=row,
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=row,
         )
     return row
 
@@ -515,8 +531,12 @@ async def create_branch(
                     detail="Active organization unit not found in this branch scope.",
                 )
         reservation = await _reserve_command(
-            connection, request, actor, tenant_id,
-            f"branch.create:{tenant_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"branch.create:{tenant_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -544,8 +564,10 @@ async def create_branch(
             {"code": payload.code},
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=201, response_body=row,
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=row,
         )
     return row
 
@@ -638,8 +660,12 @@ async def create_department(
                     detail="Parent department is outside the active branch hierarchy.",
                 )
         reservation = await _reserve_command(
-            connection, request, actor, tenant_id,
-            f"department.create:{tenant_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"department.create:{tenant_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -670,8 +696,10 @@ async def create_department(
             {"code": payload.code},
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=201, response_body=row,
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=row,
         )
     return row
 
@@ -690,8 +718,12 @@ async def accept_membership(
     user_id = UUID(claims["sub"])
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, user_id, tenant_id,
-            f"membership.accept:{membership_id}", {},
+            connection,
+            request,
+            user_id,
+            tenant_id,
+            f"membership.accept:{membership_id}",
+            {},
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -772,8 +804,10 @@ async def accept_membership(
             membership_id,
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=accepted,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=accepted,
         )
     return accepted
 
@@ -796,8 +830,12 @@ async def suspend_membership(
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, actor, tenant_id,
-            f"membership.suspend:{membership_id}", {},
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"membership.suspend:{membership_id}",
+            {},
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -842,8 +880,10 @@ async def suspend_membership(
         )
         response_body = {"id": str(membership_id), "status": "suspended"}
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=response_body,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response_body,
         )
     return response_body
 
@@ -866,8 +906,12 @@ async def revoke_membership(
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, actor, tenant_id,
-            f"membership.revoke:{membership_id}", {},
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"membership.revoke:{membership_id}",
+            {},
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -909,8 +953,10 @@ async def revoke_membership(
         )
         response_body = {"id": str(membership_id), "status": "revoked"}
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=response_body,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response_body,
         )
     return response_body
 
@@ -981,8 +1027,12 @@ async def assign_membership_role(
             )
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, UUID(claims["sub"]), tenant_id,
-            f"membership.role.assign:{membership_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            f"membership.role.assign:{membership_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -1067,8 +1117,10 @@ async def assign_membership_role(
             {"role_key": role_key, "scope_type": payload.scope_type},
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=response_body,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response_body,
         )
     return response_body
 
@@ -1207,8 +1259,7 @@ async def read_workforce_tenant_context(
         role_keys=sorted(context.role_keys) if context else ["platform"],
         permissions=sorted(context.permissions) if context else ["platform.tenants.read"],
         organizations=[
-            HierarchyOrganizationRead(**dict(row))
-            for row in organizations.mappings().all()
+            HierarchyOrganizationRead(**dict(row)) for row in organizations.mappings().all()
         ],
         organization_units=[HierarchyUnitRead(**dict(row)) for row in units.mappings().all()],
         branches=[HierarchyBranchRead(**dict(row)) for row in branches.mappings().all()],
@@ -1233,8 +1284,12 @@ async def update_branch(
         raise HTTPException(status_code=422, detail="No branch changes supplied.")
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, UUID(claims["sub"]), tenant_id,
-            f"branch.update:{branch_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            f"branch.update:{branch_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -1336,8 +1391,10 @@ async def update_branch(
             values,
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=updated,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=updated,
         )
     return updated
 
@@ -1359,8 +1416,12 @@ async def update_department(
         raise HTTPException(status_code=422, detail="No department changes supplied.")
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, UUID(claims["sub"]), tenant_id,
-            f"department.update:{department_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            f"department.update:{department_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -1501,8 +1562,10 @@ async def update_department(
             values,
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=updated,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=updated,
         )
     return updated
 
