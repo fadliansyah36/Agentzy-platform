@@ -207,10 +207,14 @@ export function CorporatePortalClient({
             tenant={portal.activeTenant}
             users={portal.users}
             organizations={portal.organizations}
+            organizationUnits={portal.organizationUnits}
+            branches={portal.branches}
+            departments={portal.departments}
             canManageOrganization={portal.canManageOrganizations}
             onCreateOrganization={portal.handleCreateOrganization}
             onOpenInviteModal={() => portal.setModal({ type: 'invite-user' })}
             onReplaceMembershipRole={portal.handleReplaceMembershipRole}
+            onReassignMembership={portal.handleReassignMembership}
             onActivateMembership={portal.handleActivateMembership}
             onSuspendMembership={portal.handleSuspendMembership}
             onRevokeMembership={portal.handleRevokeMembership}
