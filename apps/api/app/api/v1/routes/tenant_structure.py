@@ -986,10 +986,12 @@ async def activate_membership(
             return reservation
         target_result = await connection.execute(
             text("""
-                select id,organization_id,organization_unit_id,branch_id,department_id,status
-                from public.memberships
-                where id=:membership_id and tenant_id=:tenant_id
-                for update
+                select m.id,m.user_id,m.organization_id,m.organization_unit_id,
+                       m.branch_id,m.department_id,m.status,u.deleted_at,u.banned_until
+                from public.memberships m
+                join auth.users u on u.id=m.user_id
+                where m.id=:membership_id and m.tenant_id=:tenant_id
+                for update of m
             """),
             {"membership_id": membership_id, "tenant_id": tenant_id},
         )
@@ -1008,6 +1010,12 @@ async def activate_membership(
         if target["status"] != "suspended":
             raise HTTPException(
                 status_code=409, detail="Hanya membership suspended yang dapat diaktifkan kembali."
+            )
+        if target["deleted_at"] is not None or (
+            target["banned_until"] is not None and target["banned_until"] > datetime.now(UTC)
+        ):
+            raise HTTPException(
+                status_code=409, detail="Akun Auth target tidak aktif dan tidak dapat diaktifkan."
             )
         tenant = await connection.execute(
             text("select status from public.tenants where id=:tenant_id"),
