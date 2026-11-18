@@ -222,6 +222,51 @@ export const listDepartments = (accessToken: string, tenantId: string) =>
     method: "GET", accessToken,
   });
 
+
+export const updateBranch = (
+  accessToken: string,
+  tenantId: string,
+  branchId: string,
+  payload: { name?: string; code?: string; organization_unit_id?: string | null; status?: 'active' | 'inactive' | 'archived' },
+) => apiRequest<AgentzyBranch>(
+  `/tenants/${encodeURIComponent(tenantId)}/branches/${encodeURIComponent(branchId)}`,
+  { method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
+);
+
+export const updateDepartment = (
+  accessToken: string,
+  tenantId: string,
+  departmentId: string,
+  payload: { name?: string; code?: string; branch_id?: string | null; parent_department_id?: string | null; status?: 'active' | 'inactive' | 'archived' },
+) => apiRequest<AgentzyDepartment>(
+  `/tenants/${encodeURIComponent(tenantId)}/departments/${encodeURIComponent(departmentId)}`,
+  { method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
+);
+
+export const archiveBranch = (accessToken: string, tenantId: string, branchId: string) =>
+  apiRequest<AgentzyBranch>(
+    `/tenants/${encodeURIComponent(tenantId)}/branches/${encodeURIComponent(branchId)}/archive`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
+export const restoreBranch = (accessToken: string, tenantId: string, branchId: string) =>
+  apiRequest<AgentzyBranch>(
+    `/tenants/${encodeURIComponent(tenantId)}/branches/${encodeURIComponent(branchId)}/restore`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
+export const archiveDepartment = (accessToken: string, tenantId: string, departmentId: string) =>
+  apiRequest<AgentzyDepartment>(
+    `/tenants/${encodeURIComponent(tenantId)}/departments/${encodeURIComponent(departmentId)}/archive`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
+export const restoreDepartment = (accessToken: string, tenantId: string, departmentId: string) =>
+  apiRequest<AgentzyDepartment>(
+    `/tenants/${encodeURIComponent(tenantId)}/departments/${encodeURIComponent(departmentId)}/restore`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
 export const acceptTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
   apiRequest<{ id: string; tenant_id: string; user_id: string; status: string }>(
     `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/accept`,
@@ -231,13 +276,13 @@ export const acceptTenantMembership = (accessToken: string, tenantId: string, me
 export const suspendTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
   apiRequest<{ id: string; status: string }>(
     `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/suspend`,
-    { method: "POST", accessToken, body: JSON.stringify({}) },
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
   );
 
 export const revokeTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
   apiRequest<{ id: string; status: string }>(
     `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/revoke`,
-    { method: "POST", accessToken, body: JSON.stringify({}) },
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
   );
 
 export const assignMembershipRole = (
@@ -256,7 +301,7 @@ export const createOrganizationUnit = (
   payload: { organization_id: string; parent_unit_id?: string | null; name: string; code: string; unit_type: string },
 ) => apiRequest<AgentzyOrganizationUnit>(
   `/tenants/${encodeURIComponent(tenantId)}/organization-units`,
-  { method: "POST", accessToken, body: JSON.stringify(payload) },
+  { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
 
 export const createBranch = (
