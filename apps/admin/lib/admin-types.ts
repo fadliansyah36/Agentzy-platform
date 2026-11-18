@@ -139,7 +139,7 @@ export interface PlatformUserRecord {
   name: string;
   email: string;
   roleId: string;
-  roleKey: string;
+  roleKey?: string;
   roleName: string;
   department: string;
   branchScope: string;
