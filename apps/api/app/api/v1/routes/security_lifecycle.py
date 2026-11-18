@@ -46,7 +46,7 @@ class BreakGlassRequestIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(min_length=20, max_length=2000)
     permission_keys: list[str] = Field(min_length=1, max_length=5)
-    tenant_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    tenant_ids: list[UUID] = Field(min_length=1, max_length=20)
     duration_minutes: int = Field(default=30, ge=5, le=60)
 
 
@@ -196,14 +196,26 @@ async def request_break_glass(
             )
         permissions = await connection.execute(
             text("""
-                select key from public.permissions
+                select key,risk_level from public.permissions
                 where key = any(:keys) and key like 'platform.%'
+                  and risk_level in ('privileged','critical')
             """),
             {"keys": payload.permission_keys},
         )
         valid_keys = {row["key"] for row in permissions.mappings().all()}
         if valid_keys != set(payload.permission_keys):
             raise HTTPException(status_code=422, detail="Requested permission scope contains an unknown or non-platform key.")
+        tenant_check = await connection.execute(
+            text("""
+                select count(*) from public.tenants
+                where id = any(:tenant_ids) and status='active'
+            """),
+            {"tenant_ids": payload.tenant_ids},
+        )
+        if tenant_check.scalar_one() != len(payload.tenant_ids):
+            raise HTTPException(status_code=422, detail="Break-glass tenant scope contains an unknown or inactive tenant.")
+        if len(set(payload.tenant_ids)) != len(payload.tenant_ids):
+            raise HTTPException(status_code=422, detail="Duplicate tenant scope entries are not allowed.")
         row = await connection.execute(
             text("""
                 insert into public.break_glass_requests(
