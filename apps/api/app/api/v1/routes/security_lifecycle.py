@@ -131,7 +131,11 @@ async def _audit(
             "resource_type": resource_type,
             "resource_id": str(resource_id),
             "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
-            "metadata": json.dumps(metadata or {}, default=str),
+            "metadata": json.dumps({
+                **(metadata or {}),
+                "correlation_id": getattr(request.state, "correlation_id", None),
+                "trace_id": getattr(request.state, "trace_id", None),
+            }, default=str),
         },
     )
 
