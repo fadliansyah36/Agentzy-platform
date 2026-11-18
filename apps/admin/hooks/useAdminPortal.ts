@@ -17,6 +17,9 @@ import {
   listPlatformTenants,
   updateTenant as updateTenantApi,
   archiveTenant as archiveTenantApi,
+  createAgentzyRole,
+  updateAgentzyRole,
+  deleteAgentzyRole,
   listRoleTemplates,
   listPermissionRegistry,
   replaceRolePermissions,
@@ -670,37 +673,68 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
 
   // RBAC CRUD & Matrix
   const upsertRbacRole = useCallback(
-    (payload: Omit<RbacRoleRecord, 'id' | 'userCount' | 'isSystemRole'> & { id?: string }) => {
-      if (payload.id) {
-        setRoles((prev) => prev.map((r) => (r.id === payload.id ? { ...r, ...payload } : r)));
-        showToast(`Role ${payload.name} diperbarui.`);
-      } else {
-        setRoles((prev) => [
-          ...prev,
-          { ...payload, id: nextId('role'), userCount: 0, isSystemRole: false },
-        ]);
-        showToast(`Role baru ${payload.name} dibuat.`);
+    async (payload: Omit<RbacRoleRecord, 'id' | 'userCount' | 'isSystemRole'> & { id?: string }) => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk mengelola role.');
+        return;
       }
-      appendAudit('Kelola RBAC Role', payload.name, payload.scopeType, `key: ${payload.key}`);
-      setModal({ type: 'none' });
+      try {
+        const saved = payload.id
+          ? await updateAgentzyRole(accessToken, payload.id, {
+              name: payload.name,
+              description: payload.description,
+            })
+          : await createAgentzyRole(accessToken, {
+              key: payload.key,
+              name: payload.name,
+              description: payload.description,
+              scope_type: payload.scopeType === 'Platform' ? 'platform' : 'tenant',
+            });
+        const nextRole: RbacRoleRecord = {
+          id: saved.id,
+          key: saved.key,
+          name: saved.name,
+          scopeType: saved.scope_type === 'platform' ? 'Platform' : 'Tenant',
+          description: saved.description ?? '',
+          userCount: 0,
+          isSystemRole: saved.is_system,
+          permissionKeys: saved.permissions,
+          permissions: payload.permissions ?? {},
+        };
+        setRoles((prev) => payload.id
+          ? prev.map((role) => role.id === saved.id ? { ...role, ...nextRole } : role)
+          : [nextRole, ...prev]);
+        showToast(`Role ${saved.name} berhasil disimpan melalui FastAPI.`);
+        setModal({ type: 'none' });
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Gagal menyimpan role.');
+      }
     },
-    [appendAudit, showToast]
+    [auth.session?.access_token, auth.aal, showToast]
   );
 
   const deleteRbacRole = useCallback(
-    (id: string) => {
-      const target = roles.find((r) => r.id === id);
+    async (id: string) => {
+      const accessToken = auth.session?.access_token;
+      const target = roles.find((role) => role.id === id);
       if (target?.isSystemRole) {
         showToast('System role inti tidak dapat dihapus.');
         return;
       }
-      setRoles((prev) => prev.filter((r) => r.id !== id));
-      if (target) {
-        appendAudit('Hapus RBAC Role', target.name, target.scopeType, `key: ${target.key}`);
-        showToast(`Role ${target.name} dihapus.`);
+      if (!accessToken || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk menghapus role.');
+        return;
+      }
+      try {
+        await deleteAgentzyRole(accessToken, id);
+        setRoles((prev) => prev.filter((role) => role.id !== id));
+        showToast(`Role ${target?.name ?? id} dihapus melalui FastAPI.`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Gagal menghapus role.');
       }
     },
-    [appendAudit, roles, showToast]
+    [auth.session?.access_token, auth.aal, roles, showToast]
   );
 
   const cycleRolePermission = useCallback(
