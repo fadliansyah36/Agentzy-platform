@@ -204,6 +204,19 @@ async def create_tenant(
         )
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
+    await _authorize_platform_resource(
+        session,
+        user_id=user_id,
+        permission="platform.tenants.manage",
+        resource={
+            "id": payload.slug,
+            "slug": payload.slug,
+            "name": payload.name,
+            "tenant_type": payload.tenant_type,
+            "status": "pending",
+        },
+        request_id=_request_id(request),
+    )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
             connection,
@@ -1206,6 +1219,19 @@ async def create_role(
     _require_aal2(claims)
     if not await _has_platform_permission(session, actor, "platform.roles.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
+    await _authorize_platform_resource(
+        session,
+        user_id=actor,
+        permission="platform.roles.manage",
+        resource={
+            "id": payload.key,
+            "key": payload.key,
+            "scope_type": payload.scope_type,
+            "name": payload.name,
+            "is_system": False,
+        },
+        request_id=_request_id(request),
+    )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
             connection,
