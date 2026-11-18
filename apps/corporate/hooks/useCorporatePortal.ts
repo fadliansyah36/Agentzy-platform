@@ -13,6 +13,7 @@ import {
   suspendTenantMembership,
   revokeTenantMembership,
   replaceMembershipRole,
+  reassignMembershipHierarchy,
   listTenantMemberships,
   listTenantOrganizations,
   listOrganizationUnits,
@@ -207,8 +208,16 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           email: row.email ?? '',
           roleKey,
           roleLabel: roleMeta?.label ?? roleKey,
-          department: '',
-          branchScope: '',
+          department: row.department_id
+            ? departments.find((item) => item.id === row.department_id)?.name ?? '—'
+            : '',
+          branchScope: row.branch_id
+            ? branches.find((item) => item.id === row.branch_id)?.name ?? '—'
+            : '',
+          organizationId: row.organization_id,
+          organizationUnitId: row.organization_unit_id,
+          branchId: row.branch_id,
+          departmentId: row.department_id,
           status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
           mfaEnabled: null,
           lastActive: 'Belum ada aktivitas',
@@ -218,7 +227,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat membership tenant.');
     });
     return () => { active = false; };
-  }, [auth.session?.access_token, activeTenantId, showToast]);
+  }, [auth.session?.access_token, activeTenantId, branches, departments, showToast]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
@@ -380,8 +389,16 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           email: row.email ?? '',
           roleKey,
           roleLabel: roleMeta?.label ?? roleKey,
-          department: '',
-          branchScope: '',
+          department: row.department_id
+            ? departments.find((item) => item.id === row.department_id)?.name ?? '—'
+            : '',
+          branchScope: row.branch_id
+            ? branches.find((item) => item.id === row.branch_id)?.name ?? '—'
+            : '',
+          organizationId: row.organization_id,
+          organizationUnitId: row.organization_unit_id,
+          branchId: row.branch_id,
+          departmentId: row.department_id,
           status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
           mfaEnabled: null,
           lastActive: 'Undangan dikirim',
@@ -390,7 +407,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       setModal({ type: 'none' });
       showToast(`Undangan Supabase dikirim ke ${payload.email}.`);
     },
-    [auth.session?.access_token, activeTenantId, showToast]
+    [auth.session?.access_token, activeTenantId, branches, departments, showToast]
   );
 
   const refreshTenantMemberships = useCallback(async () => {
@@ -403,12 +420,15 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       return {
         id: row.id, name: row.display_name ?? row.email ?? row.user_id,
         email: row.email ?? '', roleKey, roleLabel: roleMeta?.label ?? roleKey,
-        department: '', branchScope: '',
+        department: row.department_id ? departments.find((item) => item.id === row.department_id)?.name ?? '—' : '',
+        branchScope: row.branch_id ? branches.find((item) => item.id === row.branch_id)?.name ?? '—' : '',
+        organizationId: row.organization_id, organizationUnitId: row.organization_unit_id,
+        branchId: row.branch_id, departmentId: row.department_id,
         status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
         mfaEnabled: null, lastActive: 'Belum ada aktivitas',
       };
     }));
-  }, [auth.session?.access_token, activeTenantId]);
+  }, [auth.session?.access_token, activeTenantId, branches, departments]);
 
   const handleReplaceMembershipRole = useCallback(async (membershipId: string, roleKey: CorporateRoleKey) => {
     const accessToken = auth.session?.access_token;
@@ -416,6 +436,22 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     await replaceMembershipRole(accessToken, activeTenantId, membershipId, { role_key: roleKey, scope_type: 'tenant' });
     await refreshTenantMemberships();
     showToast('Role membership berhasil diganti melalui FastAPI.');
+  }, [auth.session?.access_token, activeTenantId, refreshTenantMemberships, showToast]);
+
+  const handleReassignMembership = useCallback(async (
+    membershipId: string,
+    assignment: {
+      organization_id: string | null;
+      organization_unit_id: string | null;
+      branch_id: string | null;
+      department_id: string | null;
+    },
+  ) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+    await reassignMembershipHierarchy(accessToken, activeTenantId, membershipId, assignment);
+    await refreshTenantMemberships();
+    showToast('Penempatan membership berhasil diperbarui melalui FastAPI.');
   }, [auth.session?.access_token, activeTenantId, refreshTenantMemberships, showToast]);
 
   const handleActivateMembership = useCallback(async (membershipId: string) => {
@@ -542,6 +578,9 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     payments,
     users,
     organizations: visibleOrganizations,
+    organizationUnits,
+    branches,
+    departments,
     canManageOrganizations,
     alerts,
     reportHistory,
@@ -557,6 +596,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     handleInviteUser,
     handleCreateOrganization,
     handleReplaceMembershipRole,
+    handleReassignMembership,
     handleActivateMembership,
     handleSuspendMembership,
     handleRevokeMembership,
