@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 from uuid import uuid4
+
 import structlog
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
 from app.db.session import engine
@@ -20,11 +22,19 @@ async def lifespan(_: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title="Agentzy API", version="0.1.0",
-              description="Unified Human & AI Workforce Platform API", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-                   allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-                   allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"])
+app = FastAPI(
+    title="Agentzy API",
+    version="0.1.0",
+    description="Unified Human & AI Workforce Platform API",
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+)
 
 
 @app.middleware("http")
@@ -52,14 +62,23 @@ async def http_exception_handler(_: Request, exc: HTTPException):
 async def validation_exception_handler(_: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=422,
-        content={"error": {"code": "VALIDATION_ERROR", "message": "Data permintaan tidak valid.", "details": jsonable_encoder(exc.errors())}},
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Data permintaan tidak valid.",
+                "details": jsonable_encoder(exc.errors()),
+            }
+        },
     )
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception(_: Request, exc: Exception):
     logger.exception("unhandled_api_error", error=str(exc))
-    return JSONResponse(status_code=500, content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"}})
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"}},
+    )
 
 
 @app.get("/health", tags=["Operations"])

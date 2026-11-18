@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,7 +13,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = None
     supabase_service_role_key: str | None = None
     platform_bootstrap_token: str | None = None
-    app_base_url: str = 'http://localhost:3000'
+    app_base_url: str = "http://localhost:3000"
     database_url: str
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
@@ -20,7 +21,11 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
-        return value.replace("postgresql://", "postgresql+asyncpg://", 1) if value.startswith("postgresql://") else value
+        return (
+            value.replace("postgresql://", "postgresql+asyncpg://", 1)
+            if value.startswith("postgresql://")
+            else value
+        )
 
 
 @lru_cache

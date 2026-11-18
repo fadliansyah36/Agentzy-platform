@@ -18,13 +18,16 @@ async def list_tenants(
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ) -> list[TenantRead]:
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         select t.id, t.name, t.slug, t.status, m.status as membership_status
         from public.tenants t
         join public.memberships m on m.tenant_id = t.id
         where m.user_id = :user_id and m.status = 'active' and t.status = 'active'
         order by t.name
-    """), {"user_id": UUID(claims["sub"])})
+    """),
+        {"user_id": UUID(claims["sub"])},
+    )
     return [TenantRead(**dict(row)) for row in result.mappings().all()]
 
 
@@ -34,7 +37,8 @@ async def list_organizations(
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ) -> list[OrganizationRead]:
-    permission = await session.execute(text("""
+    permission = await session.execute(
+        text("""
         select exists (
           select 1
           from public.memberships m
@@ -52,7 +56,9 @@ async def list_organizations(
             and pm.status='active'
             and prp.permission_key='platform.tenants.read'
         ))
-    """), {"tenant_id": tenant_id, "user_id": UUID(claims["sub"]), "aal2": claims.get("aal")})
+    """),
+        {"tenant_id": tenant_id, "user_id": UUID(claims["sub"]), "aal2": claims.get("aal")},
+    )
     if not permission.scalar_one():
         raise HTTPException(status_code=403, detail="Missing tenant organization read permission.")
 
