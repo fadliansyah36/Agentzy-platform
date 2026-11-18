@@ -15,6 +15,63 @@ claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
 
+class HierarchyOrganizationRead(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    parent_id: UUID | None
+    name: str
+    slug: str
+    organization_type: str
+    status: str
+
+
+class HierarchyUnitRead(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    organization_id: UUID
+    parent_unit_id: UUID | None
+    name: str
+    code: str
+    unit_type: str
+    status: str
+
+
+class HierarchyBranchRead(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    organization_id: UUID
+    organization_unit_id: UUID | None
+    name: str
+    code: str
+    status: str
+
+
+class HierarchyDepartmentRead(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    organization_id: UUID
+    branch_id: UUID | None
+    parent_department_id: UUID | None
+    name: str
+    code: str
+    status: str
+
+
+class WorkforceTenantContextRead(BaseModel):
+    tenant_id: UUID
+    membership_id: UUID | None
+    organization_id: UUID | None
+    organization_unit_id: UUID | None
+    branch_id: UUID | None
+    department_id: UUID | None
+    role_keys: list[str]
+    permissions: list[str]
+    organizations: list[HierarchyOrganizationRead]
+    organization_units: list[HierarchyUnitRead]
+    branches: list[HierarchyBranchRead]
+    departments: list[HierarchyDepartmentRead]
+
+
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     slug: str | None = Field(
@@ -791,6 +848,117 @@ class DepartmentUpdate(BaseModel):
     branch_id: UUID | None = None
     parent_department_id: UUID | None = None
     status: str | None = Field(default=None, pattern="^(active|inactive|archived)$")
+
+
+@router.get(
+    "/{tenant_id}/workforce-context",
+    response_model=WorkforceTenantContextRead,
+    tags=["Workforce Identity"],
+)
+async def read_workforce_tenant_context(
+    tenant_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = UUID(claims["sub"])
+    context = None
+    candidates = (
+        ("workforce.profile.read", "workforce.profile", "read"),
+        ("workforce.assignments.read", "workforce.assignments", "read"),
+        ("ai.workers.read", "ai.workers", "read"),
+        ("corporate.organization.read", "corporate.organization", "read"),
+    )
+    last_error: HTTPException | None = None
+    for permission, resource_type, action in candidates:
+        try:
+            context, _ = await authorize_action(
+                session,
+                user_id=actor,
+                tenant_id=tenant_id,
+                permission_key=permission,
+                platform_permission="platform.tenants.read",
+                aal=claims.get("aal"),
+                resource_type=resource_type,
+                action=action,
+                resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+                request_id=request.headers.get("x-request-id"),
+            )
+            break
+        except HTTPException as exc:
+            last_error = exc
+            if exc.status_code not in (403, 404):
+                raise
+    else:
+        raise last_error or HTTPException(status_code=403, detail="Workforce tenant access denied.")
+
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
+        "branch_id": context.branch_id if context else None,
+        "department_id": context.department_id if context else None,
+    }
+    async with engine.connect() as connection:
+        organizations = await connection.execute(
+            text("""
+                select id,tenant_id,parent_id,name,slug,organization_type,status
+                from public.organizations
+                where tenant_id=:tenant_id and status='active'
+                  and (:organization_id is null or id=:organization_id)
+                order by name
+            """),
+            params,
+        )
+        units = await connection.execute(
+            text("""
+                select id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status
+                from public.organization_units
+                where tenant_id=:tenant_id and status='active'
+                  and (:organization_id is null or organization_id=:organization_id)
+                  and (:organization_unit_id is null or id=:organization_unit_id)
+                order by name
+            """),
+            params,
+        )
+        branches = await connection.execute(
+            text("""
+                select id,tenant_id,organization_id,organization_unit_id,name,code,status
+                from public.branches
+                where tenant_id=:tenant_id and status='active'
+                  and (:organization_id is null or organization_id=:organization_id)
+                  and (:organization_unit_id is null or organization_unit_id=:organization_unit_id)
+                  and (:branch_id is null or id=:branch_id)
+                order by name
+            """),
+            params,
+        )
+        departments = await connection.execute(
+            text("""
+                select id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status
+                from public.departments
+                where tenant_id=:tenant_id and status='active'
+                  and (:organization_id is null or organization_id=:organization_id)
+                  and (:branch_id is null or branch_id=:branch_id)
+                  and (:department_id is null or id=:department_id)
+                order by name
+            """),
+            params,
+        )
+    return WorkforceTenantContextRead(
+        tenant_id=tenant_id,
+        membership_id=context.membership_id if context else None,
+        organization_id=context.organization_id if context else None,
+        organization_unit_id=context.organization_unit_id if context else None,
+        branch_id=context.branch_id if context else None,
+        department_id=context.department_id if context else None,
+        role_keys=sorted(context.role_keys) if context else ["platform"],
+        permissions=sorted(context.permissions) if context else ["platform.tenants.read"],
+        organizations=[HierarchyOrganizationRead(**dict(row)) for row in organizations.mappings().all()],
+        organization_units=[HierarchyUnitRead(**dict(row)) for row in units.mappings().all()],
+        branches=[HierarchyBranchRead(**dict(row)) for row in branches.mappings().all()],
+        departments=[HierarchyDepartmentRead(**dict(row)) for row in departments.mappings().all()],
+    )
 
 
 @router.patch("/{tenant_id}/branches/{branch_id}", tags=["Organization"])
