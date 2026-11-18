@@ -24,7 +24,10 @@ class TenantAccessContext:
 
 
 async def resolve_tenant_context(
-    session: AsyncSession, user_id: UUID, tenant_id: UUID
+    session: AsyncSession,
+    user_id: UUID,
+    tenant_id: UUID,
+    resource_id: UUID | None = None,
 ) -> TenantAccessContext:
     result = await session.execute(
         text("""
@@ -55,6 +58,7 @@ async def resolve_tenant_context(
                 or (mr.scope_type='organization_unit' and mr.scope_id=:organization_unit_id)
                 or (mr.scope_type='branch' and mr.scope_id=:branch_id)
                 or (mr.scope_type='department' and mr.scope_id=:department_id)
+                or (mr.scope_type='resource' and mr.scope_id=:resource_id)
               )
         """),
         {
@@ -64,6 +68,7 @@ async def resolve_tenant_context(
             "organization_unit_id": membership["organization_unit_id"],
             "branch_id": membership["branch_id"],
             "department_id": membership["department_id"],
+            "resource_id": resource_id,
         },
     )
     rows = roles_result.mappings().all()
@@ -110,9 +115,12 @@ async def authorize_tenant(
     permission_key: str,
     platform_permission: str,
     aal: str | None,
+    resource_id: UUID | None = None,
 ) -> TenantAccessContext | None:
     try:
-        context = await resolve_tenant_context(session, user_id, tenant_id)
+        context = await resolve_tenant_context(
+            session, user_id, tenant_id, resource_id=resource_id
+        )
     except HTTPException as exc:
         if exc.status_code != 404:
             raise
@@ -217,6 +225,11 @@ async def authorize_action(
             permission_key=permission_key,
             platform_permission=platform_permission,
             aal=aal,
+            resource_id=(
+                UUID(str(resource["id"]))
+                if resource.get("id") is not None
+                else None
+            ),
         )
     except HTTPException as exc:
         if exc.status_code != 403 or aal != "aal2":
