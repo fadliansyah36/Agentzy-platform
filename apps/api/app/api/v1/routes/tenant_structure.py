@@ -1542,14 +1542,21 @@ async def assign_membership_role(
             )
         role = await connection.execute(
             text("""
-                select id from public.roles
+                select id,scope_type,tenant_id from public.roles
                 where key=:role_key and (tenant_id is null or tenant_id=:tenant_id)
+                order by tenant_id nulls first
+                limit 1
             """),
             {"role_key": role_key, "tenant_id": tenant_id},
         )
-        role_id = role.scalar_one_or_none()
-        if role_id is None:
+        role_row = role.mappings().first()
+        if role_row is None:
             raise HTTPException(status_code=404, detail="Role tidak ditemukan.")
+        if role_row["scope_type"] != "tenant":
+            raise HTTPException(
+                status_code=422, detail="Platform-scoped role tidak dapat diberikan ke tenant."
+            )
+        role_id = role_row["id"]
         scope_columns = {
             "organization": "organization_id",
             "organization_unit": "organization_unit_id",
@@ -1711,7 +1718,7 @@ async def replace_membership_role(
             )
         role_result = await connection.execute(
             text("""
-                select id,key,tenant_id from public.roles
+                select id,key,tenant_id,scope_type from public.roles
                 where key=:role_key and (tenant_id is null or tenant_id=:tenant_id)
                 order by tenant_id nulls first limit 1
             """),
@@ -1720,6 +1727,10 @@ async def replace_membership_role(
         role = role_result.mappings().first()
         if role is None:
             raise HTTPException(status_code=404, detail="Role tidak ditemukan.")
+        if role["scope_type"] != "tenant":
+            raise HTTPException(
+                status_code=422, detail="Platform-scoped role tidak dapat diberikan ke tenant."
+            )
         if payload.scope_type != "tenant":
             column = scope_columns[payload.scope_type]
             if target[column] != payload.scope_id:
