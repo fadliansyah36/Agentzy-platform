@@ -21,6 +21,7 @@ export function AuditIncidentView({
   auditLogs,
   incidents,
   onOpenAuditDetail,
+  onExportAudit,
   onOpenCreateIncident,
   onResolveIncident,
   onNotify,
@@ -29,6 +30,7 @@ export function AuditIncidentView({
   auditLogs: AuditLogRecord[];
   incidents: IncidentRecord[];
   onOpenAuditDetail: (logId: string) => void;
+  onExportAudit: () => void;
   onOpenCreateIncident: () => void;
   onResolveIncident: (id: string) => void;
   onNotify: (msg: string) => void;
@@ -50,21 +52,8 @@ export function AuditIncidentView({
   }, [auditLogs, query]);
 
   const handleExportAudit = () => {
-    const header = 'ID,Action,Actor,Target,TenantScope,Timestamp,Result,Diff\n';
-    const rows = auditLogs
-      .map(
-        (l) =>
-          `${l.id},"${l.action}",${l.actorEmail},"${l.targetResource}","${l.tenantScope}","${l.timestamp}",${l.result},"${l.diffSummary}"`
-      )
-      .join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'agentzy-audit-log-immutable.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-    onNotify('Audit Log immutable berhasil diekspor (CSV).');
+    void onExportAudit();
+    onNotify('Audit export diminta melalui FastAPI dengan permission export.');
   };
 
   return (
