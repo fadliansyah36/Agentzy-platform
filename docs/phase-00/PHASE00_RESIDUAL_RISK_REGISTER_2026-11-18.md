@@ -289,3 +289,39 @@ This section adds evidence paths only. It does not change any canonical risk ID,
 ### Non-actions and authority boundary
 
 No Supabase migration, DDL, grant, policy, function, trigger, hosted setting, data or deployment was changed. No assets were modified or approved. No owner approval, independent review, legal decision, severity rating or Product Owner final closure was invented. RR-014, RR-015 and RR-016 remain DONE. Phase 00 remains NOT CLOSED; Phase 01 remains prohibited.
+
+
+## Latest evidence and owner-dependency revalidation — 18 November 2026
+
+This addendum supersedes older snapshots in this file where later evidence is available. Risk IDs and accountable owners are unchanged. RR-014, RR-015 and RR-016 remain DONE.
+
+| Risk ID | Current evidence | Current status | Required next action |
+|---|---|---|---|
+| RR-001 | Current plan is Free; Supabase docs indicate PITR is not available on Free and requires eligible paid plan plus Small compute. No backup/export/restore evidence supplied. Fail-open function remains unchanged. | BLOCKED | Project Owner/Security Lead approve backup strategy and recovery plan before reviewed fail-closed migration |
+| RR-002 | Security Advisor at 2026-11-18T05:10:30.245Z still reports 0028 and 0029 WARN; function remains SECURITY DEFINER with public role EXECUTE grants | BLOCKED | Reviewed ACL correction, event-trigger behavior review and post-change Advisor verification |
+| RR-003 | Current catalog baseline remains broad grants to anon/authenticated/service_role across nine public application tables | BLOCKED | Complete action/API permission matrix and per-object least-privilege plan |
+| RR-004 | Broad project/default ACL entries remain; managed-role boundary must be respected | BLOCKED | DBA review of project-owned defaults and dependency mapping |
+| RR-005 | Hosted Auth Dashboard configuration not exposed by connector; no screenshot/export received | BLOCKED / PENDING EXTERNAL EVIDENCE | Supabase Project Owner/Admin supplies exact-project redacted Dashboard evidence |
+| RR-006 | Hosted Data API exposed schemas/roles are not verifiable from catalog-only data | BLOCKED / PENDING EXTERNAL EVIDENCE | Project Owner/Admin supplies Data API settings evidence |
+| RR-007 | Fresh Storage catalog has 0 buckets, 0 objects and 0 policies | DONE for catalog fact only; owner decision pending | Product Owner confirms intentionally unused vs required Storage and signs decision |
+| RR-008–RR-010 | Existing inventory remains 26 LGPL/MPL, five manual-expression cases, 40 missing bundled LICENSE files; no legal disposition supplied | BLOCKED | Dependency Maintainer and Legal/IP provide exact upstream evidence and written decision |
+| RR-011 | Canonical 31-path matrix committed; six exact duplicate path entries; no source/rightsholder/license/permission evidence | BLOCKED | Asset Owner supplies source and rights evidence per Asset ID; Legal/IP issues disposition |
+| RR-012 | Structural screen/route inventory exists; complete control/callback trace still absent | PARTIAL | Frontend Lead completes screen → action → callback → API → permission → data source trace |
+| RR-013 | Domain mapping exists; named owner approval and complete operation-level mapping absent | PARTIAL | Backend Lead/Domain Owners approve canonical OpenAPI operation and domain ownership |
+| RR-014 | Successful frozen Bun install in Actions run 44229181139 remains current evidence | DONE — unchanged | Preserve evidence; do not reopen without contradictory failure |
+| RR-015 | Ruff check passed in Actions run 44229181139 without suppressing configured rules | DONE — unchanged | Preserve evidence; do not reopen without contradictory failure |
+| RR-016 | Job 134549717755 SUCCESS; all 20 steps passed including ESLint, TypeScript, Ruff, compileall, FastAPI import/OpenAPI, migration source filename/order and diff check | DONE — unchanged | Preserve evidence; note focused deterministic unit tests were not evidenced |
+| RR-017 | GitHub main branch API still reports `protected=false`; current connector has push/admin permission | PARTIAL | Repository Owner decides branch protection and required-check policy |
+| RR-018 | Four role-based reviewer slots documented; no named candidates, competence/COI evidence, confirmation or signed review | PENDING INDEPENDENT REVIEW | Product Owner/Governance Owner provides four separate qualified reviewer candidates |
+
+### Current plan and backup evidence
+
+Supabase organization `hfxqdyoretyybhgrgmsa` reports `plan=free`, `tier=tier_free`. Supabase's current Database Backups documentation says automatic daily backups are provided for Pro, Team and Enterprise plans and recommends regular CLI logical exports plus off-site backup for Free projects. Supabase PITR documentation identifies PITR as a paid add-on for Pro/Team/Enterprise and requires at least Small compute. No Agentzy backup/export schedule, backup artifact, off-site retention or verified restore is evidenced. PITR is not available under the current Free plan. See:
+- https://supabase.com/docs/guides/platform/backups
+- https://supabase.com/docs/guides/platform/manage-your-usage/point-in-time-recovery
+
+### External coordination and change boundary
+
+No external contact identities or communication channels were supplied. No Dashboard evidence request, asset-rights request or reviewer invitation has been transmitted; documents are prepared for owner action only. No database migration, DDL, grant, policy, function, trigger, hosted setting, plan upgrade, backup job, restore, asset modification or deployment was performed. No approval or review was fabricated.
+
+**Phase 00 remains NOT CLOSED / PARTIAL / BLOCKED. Phase 01 remains prohibited.**
