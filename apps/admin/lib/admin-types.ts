@@ -154,7 +154,7 @@ export interface RbacRoleRecord {
   description: string;
   userCount: number;
   isSystemRole: boolean;
-  permissionKeys: string[];
+  permissionKeys?: string[];
   permissions: Record<string, 'F' | 'C/U' | 'A' | 'R' | 'S' | '---'>;
 }
 
