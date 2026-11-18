@@ -119,7 +119,10 @@ def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
 async def _require_security_admin(claims: dict, session: AsyncSession) -> UUID:
     actor = UUID(claims["sub"])
     if claims.get("aal") != "aal2":
-        raise HTTPException(status_code=403, detail="Platform security administration requires AAL2.")
+        raise HTTPException(
+            status_code=403,
+            detail="Platform security administration requires AAL2.",
+        )
     await authorize_platform_action(
         session,
         user_id=actor,
@@ -156,7 +159,9 @@ async def _audit(connection, request: Request, actor: UUID, tenant_id: UUID | No
 async def _save_version(connection, row: dict, actor: UUID):
     await connection.execute(
         text("""
-            insert into public.access_policy_versions(policy_id,tenant_id,version,snapshot,changed_by)
+            insert into public.access_policy_versions(
+              policy_id,tenant_id,version,snapshot,changed_by
+            )
             values(:id,:tenant_id,:version,cast(:snapshot as jsonb),:actor)
         """),
         {
@@ -194,7 +199,10 @@ async def list_access_policies(
     rows = [dict(row) for row in result.mappings().all()]
     has_more = len(rows) > limit
     rows = rows[:limit]
-    next_cursor = _encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else None
+    next_cursor = (
+        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"])
+        if has_more and rows else None
+    )
     return {
         "data": [AccessPolicyRead(**row).model_dump(mode="json") for row in rows],
         "meta": {"next_cursor": next_cursor, "has_more": has_more,
@@ -226,13 +234,16 @@ async def create_access_policy(
         result = await connection.execute(text("""
             insert into public.access_policies(
               tenant_id,policy_key,policy_name,description,resource,action,effect,
-              conditions,priority,status,version,effective_from,effective_until,created_by,updated_by
+              conditions,priority,status,version,effective_from,effective_until,
+              created_by,updated_by
             ) values (
               :tenant_id,:policy_key,:policy_name,:description,:resource,:action,:effect,
-              cast(:conditions as jsonb),:priority,'active',1,:effective_from,:effective_until,:actor,:actor
+              cast(:conditions as jsonb),:priority,'active',1,
+              :effective_from,:effective_until,:actor,:actor
             ) returning *
         """), {
-            **payload.model_dump(exclude={"conditions"}), "conditions": json.dumps(payload.conditions),
+            **payload.model_dump(exclude={"conditions"}),
+            "conditions": json.dumps(payload.conditions),
             "actor": actor,
         })
         row = dict(result.mappings().one())
@@ -269,7 +280,10 @@ async def update_access_policy(
         start = values.get("effective_from", existing["effective_from"])
         end = values.get("effective_until", existing["effective_until"])
         if start and end and end <= start:
-            raise HTTPException(status_code=422, detail="effective_until must be later than effective_from")
+            raise HTTPException(
+                status_code=422,
+                detail="effective_until must be later than effective_from",
+            )
         result = await connection.execute(text(f"""
             update public.access_policies
             set {", ".join(assignments)},version=version+1,updated_by=:actor,updated_at=now()
