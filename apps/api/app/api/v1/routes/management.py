@@ -417,14 +417,77 @@ async def invite_tenant_member(
             action="manage",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
         )
+    organization_unit_id = payload.organization_unit_id
+    branch_id = payload.branch_id
+    department_id = payload.department_id
+    organization = await session.execute(
+        text("""
+            select 1 from public.organizations
+            where id=:organization_id and tenant_id=:tenant_id and status='active'
+        """),
+        {"organization_id": payload.organization_id, "tenant_id": tenant_id},
+    )
+    if organization.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Active organization not found in this tenant.")
+    if organization_unit_id is not None:
+        unit = await session.execute(
+            text("""
+                select 1 from public.organization_units
+                where id=:unit_id and tenant_id=:tenant_id
+                  and organization_id=:organization_id and status='active'
+            """),
+            {
+                "unit_id": organization_unit_id,
+                "tenant_id": tenant_id,
+                "organization_id": payload.organization_id,
+            },
+        )
+        if unit.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Organization unit not found in this tenant.")
+    if branch_id is not None:
+        branch = await session.execute(
+            text("""
+                select organization_unit_id from public.branches
+                where id=:branch_id and tenant_id=:tenant_id
+                  and organization_id=:organization_id and status='active'
+            """),
+            {
+                "branch_id": branch_id,
+                "tenant_id": tenant_id,
+                "organization_id": payload.organization_id,
+            },
+        )
+        branch_row = branch.mappings().first()
+        if branch_row is None:
+            raise HTTPException(status_code=404, detail="Branch not found in this organization.")
+        if branch_row["organization_unit_id"] is not None:
+            if organization_unit_id not in (None, branch_row["organization_unit_id"]):
+                raise HTTPException(status_code=422, detail="Membership unit and branch scopes do not match.")
+            organization_unit_id = branch_row["organization_unit_id"]
+    if department_id is not None:
+        department = await session.execute(
+            text("""
+                select branch_id from public.departments
+                where id=:department_id and tenant_id=:tenant_id
+                  and organization_id=:organization_id and status='active'
+            """),
+            {
+                "department_id": department_id,
+                "tenant_id": tenant_id,
+                "organization_id": payload.organization_id,
+            },
+        )
+        department_row = department.mappings().first()
+        if department_row is None or department_row["branch_id"] != branch_id:
+            raise HTTPException(status_code=404, detail="Department is outside the selected branch.")
     if context is not None:
         authorize_object(
             context,
             resource_tenant_id=tenant_id,
             organization_id=payload.organization_id,
-            organization_unit_id=payload.organization_unit_id,
-            branch_id=payload.branch_id,
-            department_id=payload.department_id,
+            organization_unit_id=organization_unit_id,
+            branch_id=branch_id,
+            department_id=department_id,
         )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
@@ -570,9 +633,9 @@ async def invite_tenant_member(
                 "user_id": invited_user_id,
                 "actor": user_id,
                 "organization_id": payload.organization_id,
-                "organization_unit_id": payload.organization_unit_id,
-                "branch_id": payload.branch_id,
-                "department_id": payload.department_id,
+                "organization_unit_id": organization_unit_id,
+                "branch_id": branch_id,
+                "department_id": department_id,
             },
         )
         membership_row = membership_result.mappings().first()
@@ -583,19 +646,19 @@ async def invite_tenant_member(
         membership = dict(membership_row)
         scope_type = (
             "department"
-            if payload.department_id
+            if department_id
             else "branch"
-            if payload.branch_id
+            if branch_id
             else "organization_unit"
-            if payload.organization_unit_id
+            if organization_unit_id
             else "organization"
             if payload.organization_id
             else "tenant"
         )
         scope_id = (
-            payload.department_id
-            or payload.branch_id
-            or payload.organization_unit_id
+            department_id
+            or branch_id
+            or organization_unit_id
             or payload.organization_id
         )
         await connection.execute(
