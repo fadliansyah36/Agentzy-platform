@@ -98,7 +98,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   const [payments, setPayments] = useState<CorporatePaymentRecord[]>(
     initialCollections.payments
   );
-  const [users, setUsers] = useState<CorporateUserMember[]>(initialCollections.users);
+  const [users, setUsers] = useState<CorporateUserMember[]>([]);
   const [organizations, setOrganizations] = useState<AgentzyOrganization[]>([]);
   const [organizationUnits, setOrganizationUnits] = useState<AgentzyOrganizationUnit[]>([]);
   const [branches, setBranches] = useState<AgentzyBranch[]>([]);

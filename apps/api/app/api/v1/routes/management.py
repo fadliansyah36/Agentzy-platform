@@ -121,6 +121,27 @@ async def _has_platform_permission(session: AsyncSession, user_id: UUID, permiss
         raise
 
 
+async def _authorize_platform_resource(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    permission: str,
+    resource: dict,
+    request_id: str | None = None,
+) -> None:
+    """Apply the platform permission and ABAC policy to the actual target object."""
+    resource_type, action = permission.rsplit(".", 1)
+    await authorize_platform_action(
+        session,
+        user_id=user_id,
+        permission_key=permission,
+        resource_type=resource_type,
+        action=action,
+        resource=resource,
+        request_id=request_id,
+    )
+
+
 async def _has_tenant_role(
     session: AsyncSession, user_id: UUID, tenant_id: UUID, role_key: str
 ) -> bool:
@@ -783,6 +804,13 @@ async def replace_role_permissions(
         role = role_result.mappings().first()
         if role is None:
             raise HTTPException(status_code=404, detail="Role tidak ditemukan.")
+        await _authorize_platform_resource(
+            session,
+            user_id=actor,
+            permission="platform.roles.manage",
+            resource={"id": str(role_id), "key": role["key"], "tenant_id": str(role["tenant_id"]) if role["tenant_id"] else None, "scope_type": role["scope_type"]},
+            request_id=_request_id(request),
+        )
         if role["scope_type"] == "platform":
             invalid = [key for key in permission_keys if not key.startswith("platform.")]
         else:
@@ -1022,6 +1050,23 @@ async def update_tenant(
                 status_code=reservation.replay_status or 200,
                 content=reservation.replay_body or {},
             )
+        current_result = await connection.execute(
+            text("""
+                select id,tenant_type,status,name,slug from public.tenants
+                where id=:tenant_id for update
+            """),
+            {"tenant_id": tenant_id},
+        )
+        current_tenant = current_result.mappings().first()
+        if current_tenant is None:
+            raise HTTPException(status_code=404, detail="Tenant tidak ditemukan.")
+        await _authorize_platform_resource(
+            session,
+            user_id=user_id,
+            permission="platform.tenants.manage",
+            resource={**dict(current_tenant), "id": str(tenant_id), "tenant_id": str(tenant_id)},
+            request_id=_request_id(request),
+        )
         result = await connection.execute(
             text(f"""
             update public.tenants set {assignments},updated_at=now()
@@ -1087,6 +1132,23 @@ async def archive_tenant(
                 status_code=reservation.replay_status or 200,
                 content=reservation.replay_body or {},
             )
+        current_result = await connection.execute(
+            text("""
+                select id,tenant_type,status,name,slug from public.tenants
+                where id=:tenant_id for update
+            """),
+            {"tenant_id": tenant_id},
+        )
+        current_tenant = current_result.mappings().first()
+        if current_tenant is None:
+            raise HTTPException(status_code=404, detail="Tenant tidak ditemukan.")
+        await _authorize_platform_resource(
+            session,
+            user_id=user_id,
+            permission="platform.tenants.manage",
+            resource={**dict(current_tenant), "id": str(tenant_id), "tenant_id": str(tenant_id)},
+            request_id=_request_id(request),
+        )
         result = await connection.execute(
             text("""
             update public.tenants set status='archived',updated_at=now()
@@ -1222,6 +1284,20 @@ async def update_role(
                 status_code=reservation.replay_status or 200,
                 content=reservation.replay_body or {},
             )
+        target_result = await connection.execute(
+            text("select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"),
+            {"role_id": role_id},
+        )
+        target_role = target_result.mappings().first()
+        if target_role is None or target_role["tenant_id"] is not None or target_role["scope_type"] != "platform":
+            raise HTTPException(status_code=404, detail="Custom platform role not found.")
+        await _authorize_platform_resource(
+            session,
+            user_id=actor,
+            permission="platform.roles.manage",
+            resource={"id": str(role_id), "key": target_role["key"], "scope_type": target_role["scope_type"]},
+            request_id=_request_id(request),
+        )
         result = await connection.execute(
             text(f"""
                 update public.roles set {assignments}
@@ -1293,7 +1369,7 @@ async def delete_role(
             )
         result = await connection.execute(
             text("""
-                select id,key,is_system from public.roles
+                select id,key,is_system,scope_type,tenant_id from public.roles
                 where id=:role_id and tenant_id is null for update
             """),
             {"role_id": role_id},
@@ -1301,6 +1377,13 @@ async def delete_role(
         role = result.mappings().first()
         if role is None or role["is_system"]:
             raise HTTPException(status_code=404, detail="Custom role not found.")
+        await _authorize_platform_resource(
+            session,
+            user_id=actor,
+            permission="platform.roles.manage",
+            resource={"id": str(role_id), "key": role["key"], "scope_type": role["scope_type"], "tenant_id": str(role["tenant_id"]) if role["tenant_id"] else None},
+            request_id=_request_id(request),
+        )
         assigned = await connection.execute(
             text("select exists(select 1 from public.membership_roles where role_id=:role_id)"),
             {"role_id": role_id},

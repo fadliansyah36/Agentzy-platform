@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { getMyIdentity, getMyTenants, revokeMySessions, type AgentzyIdentity, type AgentzyTenant } from '@/apps/web/lib/api-client';
 import { getSupabaseBrowserClient } from '@/apps/web/lib/supabase/client';
@@ -31,12 +31,14 @@ async function loadContext(client: SupabaseClient, session: Session): Promise<Au
 export function useAgentzyAuth() {
   const [client] = useState(() => getSupabaseBrowserClient());
   const [snapshot, setSnapshot] = useState<AuthSnapshot>({ session: null, identity: null, tenants: [], aal: null });
+  const hydrationVersion = useRef(0);
   const [loading, setLoading] = useState(() => Boolean(client));
   const [error, setError] = useState<string | null>(() =>
     client ? null : 'Konfigurasi Supabase belum tersedia. Atur NEXT_PUBLIC_SUPABASE_URL dan publishable/anon key.'
   );
 
   const hydrate = useCallback(async (client: SupabaseClient, session: Session | null) => {
+    const version = ++hydrationVersion.current;
     if (!session) {
       setSnapshot({ session: null, identity: null, tenants: [], aal: null });
       setError(null);
@@ -45,13 +47,16 @@ export function useAgentzyAuth() {
     }
     setLoading(true);
     try {
-      setSnapshot(await loadContext(client, session));
+      const context = await loadContext(client, session);
+      if (version !== hydrationVersion.current) return;
+      setSnapshot(context);
       setError(null);
     } catch (cause) {
+      if (version !== hydrationVersion.current) return;
       setSnapshot({ session, identity: null, tenants: [], aal: null });
       setError(cause instanceof Error ? cause.message : 'Gagal memuat identitas Agentzy.');
     } finally {
-      setLoading(false);
+      if (version === hydrationVersion.current) setLoading(false);
     }
   }, []);
 

@@ -144,7 +144,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const isAuthenticated = Boolean(
     !auth.loading && auth.session && auth.identity && hasPlatformAccess && auth.aal === 'aal2'
   );
-  const adminRole = verifiedRole ?? 'platform_admin';
+  const adminRole = verifiedRole ?? '';
   const adminEmail = auth.identity?.email ?? auth.session?.user.email ?? '';
   const [requestedActiveSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const activeSection = !auth.loading && !isAuthenticated
@@ -166,7 +166,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
   const [orgUnits, setOrgUnits] = useState<OrgUnitRecord[]>([]);
   const [users, setUsers] = useState<PlatformUserRecord[]>([]);
-  const [roles, setRoles] = useState<RbacRoleRecord[]>(initial.roles);
+  const [roles, setRoles] = useState<RbacRoleRecord[]>([]);
   const [permissionRegistry, setPermissionRegistry] = useState<AgentzyPermissionDefinition[]>([]);
   const [staffList, setStaffList] = useState<HumanStaffRecord[]>(initial.staff);
   const [aiWorkers, setAiWorkers] = useState<AdminAIWorkerRecord[]>(initial.aiWorkers);
