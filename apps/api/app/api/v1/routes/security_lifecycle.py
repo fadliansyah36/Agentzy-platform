@@ -269,7 +269,8 @@ async def ingest_auth_provider_event(
                         insert into public.revoked_sessions(
                           session_id,user_id,expires_at,reason,request_id
                         ) values (
-                          :session_id,:user_id,:expires_at,'auth_provider_event:user.banned',:request_id
+                          :session_id,:user_id,:expires_at,
+                          'auth_provider_event:user.banned',:request_id
                         )
                         on conflict(session_id) do nothing
                     """),
