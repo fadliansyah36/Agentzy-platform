@@ -678,6 +678,7 @@ This section supersedes stale Phase 01 status rows above where they conflict wit
 | Auth user and security lifecycle rows | Zero at time of query; live user-based workflows not exercised |
 
 Reports:
+- `docs/phase-01/PHASE_01_ENDPOINT_AUTHORIZATION_INVENTORY.md` — route-level authorization coverage and remaining legacy management gaps.
 - `docs/phase-01/M010_POST_MIGRATION_VERIFICATION.md`
 - `docs/phase-01/M011_SECURITY_LIFECYCLE_VERIFICATION.md`
 - `docs/phase-01/M012_SECURITY_PERMISSION_VERIFICATION.md`
