@@ -208,6 +208,11 @@ export function AIWorkforceLoginView({
             </div>
           </div>
 
+          <div className="flex justify-end">
+            <Link href="/auth/recovery" className="text-xs font-semibold text-[#0284C7] hover:underline">
+              Lupa kata sandi?
+            </Link>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <label className="flex items-center gap-2 text-[#526675]">
               <input
