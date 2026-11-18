@@ -33,18 +33,43 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-Trace-ID",
+    ],
 )
 
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID") or str(uuid4())
-    structlog.contextvars.bind_contextvars(request_id=request_id, path=request.url.path)
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    structlog.contextvars.clear_contextvars()
-    return response
+    def normalized_id(header_name: str) -> str:
+        value = request.headers.get(header_name, "").strip()
+        return value if 8 <= len(value) <= 128 else str(uuid4())
+
+    request_id = normalized_id("X-Request-ID")
+    correlation_id = normalized_id("X-Correlation-ID")
+    trace_id = normalized_id("X-Trace-ID")
+    request.state.request_id = request_id
+    request.state.correlation_id = correlation_id
+    request.state.trace_id = trace_id
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        correlation_id=correlation_id,
+        trace_id=trace_id,
+        path=request.url.path,
+    )
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["X-Trace-ID"] = trace_id
+        return response
+    finally:
+        structlog.contextvars.clear_contextvars()
 
 
 @app.exception_handler(HTTPException)
