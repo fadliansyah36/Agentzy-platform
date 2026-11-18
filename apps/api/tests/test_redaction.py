@@ -42,3 +42,11 @@ class AuditRedactionTests(TestCase):
         result = redact_audit_value({"message": f"provider credential {secret}"})
         self.assertNotIn(secret, result["message"])
         self.assertIn("[REDACTED]", result["message"])
+
+    def test_redacts_raw_validation_input_values(self):
+        result = redact_audit_value([
+            {"loc": ["body", "password"], "input": "plain-password"},
+            {"loc": ["body", "email"], "input": "person@example.com"},
+        ])
+        self.assertEqual(result[0]["input"], "[REDACTED]")
+        self.assertEqual(result[1]["input"], "[REDACTED]")
