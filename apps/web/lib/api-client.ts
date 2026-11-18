@@ -60,6 +60,10 @@ export type AgentzyTenantMembership = {
   id: string;
   tenant_id: string;
   user_id: string;
+  organization_id: string | null;
+  organization_unit_id: string | null;
+  branch_id: string | null;
+  department_id: string | null;
   display_name: string | null;
   email: string | null;
   status: string;
@@ -294,6 +298,27 @@ export const activateTenantMembership = (accessToken: string, tenantId: string, 
     `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/activate`,
     { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
   );
+
+
+export type ReassignMembershipHierarchyInput = {
+  organization_id: string | null;
+  organization_unit_id: string | null;
+  branch_id: string | null;
+  department_id: string | null;
+};
+export const reassignMembershipHierarchy = (
+  accessToken: string,
+  tenantId: string,
+  membershipId: string,
+  payload: ReassignMembershipHierarchyInput,
+) => apiRequest<{
+  id: string; tenant_id: string; user_id: string;
+  organization_id: string | null; organization_unit_id: string | null;
+  branch_id: string | null; department_id: string | null; status: string;
+}>(
+  `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/assignment`,
+  { method: 'PATCH', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() }, body: JSON.stringify(payload) },
+);
 
 export const replaceMembershipRole = (
   accessToken: string,
