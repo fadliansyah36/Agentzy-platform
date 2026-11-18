@@ -197,7 +197,14 @@ async def _audit(
             "request_id": _request_id(request),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
-            "metadata": json.dumps(metadata or {}, default=str),
+            "metadata": json.dumps(
+                {
+                    **(metadata or {}),
+                    "correlation_id": getattr(request.state, "correlation_id", None),
+                    "trace_id": getattr(request.state, "trace_id", None),
+                },
+                default=str,
+            ),
         },
     )
 
