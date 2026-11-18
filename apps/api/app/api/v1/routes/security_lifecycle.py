@@ -25,6 +25,10 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter(prefix="/security", tags=["Security Lifecycle"])
+
+
+def _request_id(request: Request) -> str | None:
+    return _request_id(request)
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
@@ -130,7 +134,7 @@ async def _audit(
             "action": action,
             "resource_type": resource_type,
             "resource_id": str(resource_id),
-            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            "request_id": _request_id(request),
             "metadata": json.dumps({
                 **(metadata or {}),
                 "correlation_id": getattr(request.state, "correlation_id", None),
@@ -202,12 +206,12 @@ async def ingest_auth_provider_event(
                 "user_id": payload.user_id,
                 "session_id": payload.session_id,
                 "tenant_id": payload.tenant_id,
-                "request_id": payload.request_id or getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": payload.request_id or _request_id(request),
                 "occurred_at": payload.occurred_at,
                 "payload_digest": payload.payload_digest,
                 "metadata": json.dumps({
-                    "correlation_id": getattr(request.state, "correlation_id", None) or request.headers.get("x-correlation-id"),
-                    "trace_id": getattr(request.state, "trace_id", None) or request.headers.get("x-trace-id"),
+                    "correlation_id": getattr(request.state, "correlation_id", None),
+                    "trace_id": getattr(request.state, "trace_id", None),
                 }),
             },
         )
@@ -248,7 +252,7 @@ async def ingest_auth_provider_event(
                         "user_id": session["user_id"],
                         "expires_at": session["not_after"],
                         "reason": f"auth_provider_event:{payload.event_type}",
-                        "request_id": payload.request_id or getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                        "request_id": payload.request_id or _request_id(request),
                     },
                 )
 
@@ -273,7 +277,7 @@ async def ingest_auth_provider_event(
                         "session_id": auth_session["id"],
                         "user_id": payload.user_id,
                         "expires_at": auth_session["not_after"],
-                        "request_id": payload.request_id or getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                        "request_id": payload.request_id or _request_id(request),
                     },
                 )
 
@@ -381,7 +385,7 @@ async def request_break_glass(
                         "duration_minutes": payload.duration_minutes,
                     }
                 ),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
             },
         )
         result = dict(row.mappings().one())
@@ -879,7 +883,7 @@ async def read_audit_logs(
             resource_type="corporate.audit",
             action="read",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-            request_id=getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            request_id=_request_id(request),
         )
     if platform_read:
         tenant_context = None
@@ -903,7 +907,7 @@ async def read_audit_logs(
         "meta": {
             "has_more": has_more,
             "next_cursor": next_cursor,
-            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            "request_id": _request_id(request),
         },
     }
 
@@ -942,7 +946,7 @@ async def export_audit_logs(
             resource_type="corporate.audit",
             action="export",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-            request_id=getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            request_id=_request_id(request),
         )
     if platform_export:
         tenant_context = None
