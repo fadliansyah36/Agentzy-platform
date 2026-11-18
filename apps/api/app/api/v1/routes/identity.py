@@ -175,11 +175,16 @@ async def list_my_invitations(claims: dict = claims_dependency):
             select m.id,m.tenant_id,t.name as tenant_name,m.invitation_expires_at,
                    coalesce(
                      array_agg(distinct r.key) filter (where r.key is not null), '{}'
-                   ) as role_keys
+                   ) as role_keys,
+                   coalesce(
+                     array_agg(distinct rp.permission_key)
+                       filter (where rp.permission_key is not null), '{}'
+                   ) as permission_keys
             from public.memberships m
             join public.tenants t on t.id=m.tenant_id
             left join public.membership_roles mr on mr.membership_id=m.id
             left join public.roles r on r.id=mr.role_id
+            left join public.role_permissions rp on rp.role_id=r.id
             where m.user_id=:user_id and m.status='invited' and t.status='active'
               and (m.invitation_expires_at is null or m.invitation_expires_at>now())
             group by m.id,m.tenant_id,t.name,m.invitation_expires_at
