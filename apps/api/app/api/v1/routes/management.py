@@ -3,7 +3,7 @@ import re
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
@@ -12,6 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.pagination import (
+    PageMeta,
+    PageResponse,
+    decode_key_cursor,
+    decode_time_id_cursor,
+    encode_key_cursor,
+    encode_time_id_cursor,
+)
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -763,23 +771,40 @@ async def invite_tenant_member(
     return response_body
 
 
-@router.get("/permissions", tags=["Access Control"])
+@router.get("/permissions", tags=["Access Control"], response_model=PageResponse)
 async def list_permission_registry(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
-):
+) -> PageResponse:
     actor = UUID(claims["sub"])
     _require_aal2(claims)
     if not await _has_platform_permission(session, actor, "platform.roles.read"):
         raise HTTPException(status_code=403, detail="Missing platform.roles.read permission.")
+    cursor_key = decode_key_cursor(cursor) if cursor else None
     result = await session.execute(
         text("""
             select key,domain,action,description,resource,risk_level
             from public.permissions
-            order by domain,action,key
-        """)
+            where (:cursor_key is null or key > :cursor_key)
+            order by key
+            limit :limit
+        """),
+        {"cursor_key": cursor_key, "limit": limit + 1},
     )
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=encode_key_cursor(rows[-1]["key"]) if has_more and rows else None,
+            request_id=_request_id(request),
+        ),
+    )
 
 
 @router.put("/roles/{role_id}/permissions", tags=["Access Control"])
@@ -890,11 +915,14 @@ async def replace_role_permissions(
     return response_body
 
 
-@router.get("/roles", tags=["Access Control"])
+@router.get("/roles", tags=["Access Control"], response_model=PageResponse)
 async def list_role_templates(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
-):
+) -> PageResponse:
     user_id = UUID(claims["sub"])
     is_platform_reader = await _has_platform_permission(session, user_id, "platform.roles.read")
     if is_platform_reader:
@@ -918,28 +946,52 @@ async def list_role_templates(
         if not tenant_reader:
             raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
     role_filter = "" if is_platform_reader else "and r.key not like 'platform_%'"
+    cursor_clause = ""
+    params = {"limit": limit + 1}
+    if cursor:
+        created_at, role_id = decode_time_id_cursor(cursor)
+        cursor_clause = "and (r.created_at,r.id) < (:created_at,:cursor_id)"
+        params.update({"created_at": created_at, "cursor_id": role_id})
     result = await session.execute(
         text(f"""
-        select r.id,r.key,r.name,r.description,r.is_system,r.scope_type,r.tenant_id,
+        select r.id,r.key,r.name,r.description,r.is_system,r.scope_type,r.tenant_id,r.created_at,
                coalesce(
                    array_agg(rp.permission_key)
                        filter (where rp.permission_key is not null),
                    '{{}}'
                ) as permissions
         from public.roles r left join public.role_permissions rp on rp.role_id=r.id
-        where r.tenant_id is null {role_filter}
-        group by r.id order by r.key
-    """)
+        where r.tenant_id is null {role_filter} {cursor_clause}
+        group by r.id order by r.created_at desc,r.id desc
+        limit :limit
+    """),
+        params,
     )
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=(
+                encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
+                if has_more and rows else None
+            ),
+            request_id=_request_id(request),
+        ),
+    )
 
 
-@router.get("/tenants/{tenant_id}/memberships", tags=["Membership"])
+@router.get("/tenants/{tenant_id}/memberships", tags=["Membership"], response_model=PageResponse)
 async def list_tenant_memberships(
     tenant_id: UUID,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
-):
+) -> PageResponse:
     user_id = UUID(claims["sub"])
     context = None
     try:
@@ -967,12 +1019,18 @@ async def list_tenant_memberships(
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
         )
     params = {
+        "limit": limit + 1,
         "tenant_id": tenant_id,
         "organization_id": context.organization_id if context else None,
         "organization_unit_id": context.organization_unit_id if context else None,
         "branch_id": context.branch_id if context else None,
         "department_id": context.department_id if context else None,
     }
+    cursor_clause = ""
+    if cursor:
+        created_at, membership_id = decode_time_id_cursor(cursor)
+        cursor_clause = "and (m.created_at,m.id) < (:cursor_created_at,:cursor_id)"
+        params.update({"cursor_created_at": created_at, "cursor_id": membership_id})
     async with engine.connect() as connection:
         result = await connection.execute(
             text("""
@@ -999,31 +1057,71 @@ async def list_tenant_memberships(
               and (:organization_unit_id is null or m.organization_unit_id=:organization_unit_id)
               and (:branch_id is null or m.branch_id=:branch_id)
               and (:department_id is null or m.department_id=:department_id)
+              {cursor_clause}
             group by m.id,p.display_name,p.email
-            order by m.created_at desc
+            order by m.created_at desc,m.id desc
+            limit :limit
         """),
             params,
         )
-        return [dict(row) for row in result.mappings().all()]
+        rows = [dict(row) for row in result.mappings().all()]
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return PageResponse(
+            data=rows,
+            meta=PageMeta(
+                has_more=has_more,
+                next_cursor=(
+                    encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
+                    if has_more and rows else None
+                ),
+                request_id=_request_id(request),
+            ),
+        )
 
 
-@router.get("/tenants/directory", tags=["Tenant Administration"])
+@router.get("/tenants/directory", tags=["Tenant Administration"], response_model=PageResponse)
 async def list_platform_tenants(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
-):
+) -> PageResponse:
     user_id = UUID(claims["sub"])
     _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.read"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.read permission.")
+    params = {"limit": limit + 1}
+    cursor_clause = ""
+    if cursor:
+        created_at, tenant_id = decode_time_id_cursor(cursor)
+        cursor_clause = "where (created_at,id) < (:created_at,:cursor_id)"
+        params.update({"created_at": created_at, "cursor_id": tenant_id})
     async with engine.connect() as connection:
         result = await connection.execute(
-            text("""
+            text(f"""
             select id,name,slug,tenant_type,status,created_at,updated_at
-            from public.tenants order by created_at desc
-        """)
+            from public.tenants {cursor_clause}
+            order by created_at desc,id desc
+            limit :limit
+        """),
+            params,
         )
-        return [dict(row) for row in result.mappings().all()]
+        rows = [dict(row) for row in result.mappings().all()]
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return PageResponse(
+            data=rows,
+            meta=PageMeta(
+                has_more=has_more,
+                next_cursor=(
+                    encode_time_id_cursor(rows[-1]["created_at"], rows[-1]["id"])
+                    if has_more and rows else None
+                ),
+                request_id=_request_id(request),
+            ),
+        )
 
 
 class TenantUpdate(BaseModel):
