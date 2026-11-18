@@ -1,7 +1,7 @@
 # Phase 00 — Engineering Checks Report
 
 **Date:** 18 November 2026  
-**Status:** **PARTIAL — workflow added; first run pending**
+**Status:** **PARTIAL — workflow executed; multiple checks failed and are now evidence-backed**
 
 ## 1. Governing requirements
 
@@ -39,9 +39,9 @@ The workflow runs on pushes to main when application/API/migration/toolchain fil
 
 The workflow is engineering CI only. It does not deploy, run staging/UAT, call production application endpoints, perform load tests or modify Supabase.
 
-**First run:** pending verification through GitHub Actions after workflow commit. No passing result is claimed in this report.
+**First run:** GitHub Actions run `44224158408` on commit `3a427e3a4990bee3889192eca83fcf285531e332` completed with overall `failure`. [Run details](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44224158408).
 
-## 4. Checks not yet evidenced
+## 4. Actual first-run results (GitHub Actions run 44224158408)\n\n| Check | Result | Evidence / reason |\n|---|---|---|\n| Migration filename/version/order consistency | **PASS** | Job `Migration source consistency` completed successfully; 3 migration source files validated. |\n| Python compileall | **PASS** | `python -m compileall -q app` completed successfully. |\n| Ruff | **FAIL** | `ruff check app` reported **101 errors**, including import ordering (`I001`) and line-length (`E501`); 7 findings are auto-fixable. The codebase does not currently meet its configured Ruff rules. |\n| FastAPI import + OpenAPI generation | **SKIPPED** | Step was skipped because Ruff failed earlier in the same job. |\n| Frozen Bun lockfile install | **FAIL** | `bun install --frozen-lockfile` detected `@supabase/supabase-js` added to `package.json` but missing from the saved `bun.lock`. |\n| ESLint | **SKIPPED** | Dependency install failed. |\n| TypeScript `tsc --noEmit` | **SKIPPED** | Dependency install failed. |\n\nThe lockfile mismatch is a repository dependency consistency defect. Do not regenerate/commit a lockfile blindly: inspect the exact intended version and dependency tree, then update `bun.lock` with Bun and rerun frozen install. Ruff findings should be reviewed and fixed in a dedicated engineering cleanup, without changing portal behavior or Phase 01 feature scope.\n\n## 5. Checks not yet evidenced
 
 - Remote migration-history vs local source reconciliation in CI: not automated.
 - Live schema vs migration source diff: not executed.
@@ -50,6 +50,6 @@ The workflow is engineering CI only. It does not deploy, run staging/UAT, call p
 - Static security/dependency review: license workflow exists, but package/legal disposition remains open.
 - Supabase Security Advisor after remediation: not run because remediation has not been applied.
 
-## 5. Explicit non-execution
+## 6. Explicit non-execution
 
-No staging, UAT, real-world testing, load testing, production deployment, production API smoke test or destructive database test was performed. No production database DDL or privilege changes were applied.
+No staging, UAT, real-world testing, load testing, production deployment, production API smoke test or destructive database test was performed. No production database DDL or privilege changes were applied. The workflow's static checks are not a substitute for runtime/production acceptance tests.
