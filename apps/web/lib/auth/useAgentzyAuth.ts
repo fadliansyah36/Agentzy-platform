@@ -144,6 +144,7 @@ export function useAgentzyAuth() {
 
   const signOut = useCallback(async () => {
     const client = getSupabaseBrowserClient();
+    let revocationFailure: Error | null = null;
     if (client) {
       const { data, error: sessionError } = await client.auth.getSession();
       if (sessionError) throw sessionError;
@@ -152,8 +153,11 @@ export function useAgentzyAuth() {
         try {
           await revokeMySessions(data.session.access_token);
           serverRevoked = true;
-        } catch {
-          // Fall back to Supabase Auth global sign-out if the API cannot revoke sessions.
+        } catch (cause) {
+          // Do not hide a failed backend revocation behind a successful browser sign-out.
+          revocationFailure = cause instanceof Error
+            ? cause
+            : new Error('Backend session revocation failed.');
         }
       }
       const { error: signOutError } = await client.auth.signOut({
@@ -164,6 +168,11 @@ export function useAgentzyAuth() {
     setSnapshot({ session: null, identity: null, tenants: [], aal: null });
     setError(null);
     setLoading(false);
+    if (revocationFailure) {
+      throw new Error(
+        `Sesi browser telah ditutup melalui Supabase Auth, tetapi revokasi sesi backend gagal: ${revocationFailure.message}`
+      );
+    }
   }, []);
 
   return { ...snapshot, loading, error, signIn, signInWithOAuth, signOut, refresh };
