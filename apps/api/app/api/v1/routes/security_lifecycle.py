@@ -123,7 +123,10 @@ async def ingest_auth_provider_event(
 ):
     configured = get_settings().auth_provider_webhook_secret
     if not configured:
-        raise HTTPException(status_code=503, detail="Auth provider event ingestion is not configured.")
+        raise HTTPException(
+            status_code=503,
+            detail="Auth provider event ingestion is not configured.",
+        )
     if not webhook_secret or not hmac.compare_digest(webhook_secret, configured):
         raise HTTPException(status_code=401, detail="Invalid event source credential.")
     async with engine.begin() as connection:
@@ -204,7 +207,10 @@ async def request_break_glass(
         )
         valid_keys = {row["key"] for row in permissions.mappings().all()}
         if valid_keys != set(payload.permission_keys):
-            raise HTTPException(status_code=422, detail="Requested permission scope contains an unknown or non-platform key.")
+            raise HTTPException(
+                status_code=422,
+                detail="Requested permission scope contains an unknown or non-platform key.",
+            )
         tenant_check = await connection.execute(
             text("""
                 select count(*) from public.tenants
@@ -213,9 +219,15 @@ async def request_break_glass(
             {"tenant_ids": payload.tenant_ids},
         )
         if tenant_check.scalar_one() != len(payload.tenant_ids):
-            raise HTTPException(status_code=422, detail="Break-glass tenant scope contains an unknown or inactive tenant.")
+            raise HTTPException(
+                status_code=422,
+                detail="Break-glass tenant scope contains an unknown or inactive tenant.",
+            )
         if len(set(payload.tenant_ids)) != len(payload.tenant_ids):
-            raise HTTPException(status_code=422, detail="Duplicate tenant scope entries are not allowed.")
+            raise HTTPException(
+                status_code=422,
+                detail="Duplicate tenant scope entries are not allowed.",
+            )
         row = await connection.execute(
             text("""
                 insert into public.break_glass_requests(
@@ -274,9 +286,15 @@ async def approve_break_glass(
         if row is None:
             raise HTTPException(status_code=404, detail="Break-glass request not found.")
         if row["requester_user_id"] == actor:
-            raise HTTPException(status_code=403, detail="Requester cannot approve their own emergency request.")
+            raise HTTPException(
+                status_code=403,
+                detail="Requester cannot approve their own emergency request.",
+            )
         if row["status"] != "requested":
-            raise HTTPException(status_code=409, detail="Only requested emergency access can be approved.")
+            raise HTTPException(
+                status_code=409,
+                detail="Only requested emergency access can be approved.",
+            )
         updated = await connection.execute(
             text("""
                 update public.break_glass_requests
@@ -328,9 +346,15 @@ async def activate_break_glass(
         if row is None:
             raise HTTPException(status_code=404, detail="Break-glass request not found.")
         if row["requester_user_id"] != actor:
-            raise HTTPException(status_code=403, detail="Only the original requester can activate approved access.")
+            raise HTTPException(
+                status_code=403,
+                detail="Only the original requester can activate approved access.",
+            )
         if row["status"] != "approved" or row["approver_user_id"] is None:
-            raise HTTPException(status_code=409, detail="Break-glass request must be approved first.")
+            raise HTTPException(
+                status_code=409,
+                detail="Break-glass request must be approved first.",
+            )
         duration = payload.duration_minutes or row["requested_scope"].get("duration_minutes", 30)
         updated = await connection.execute(
             text("""
@@ -382,9 +406,15 @@ async def revoke_break_glass(
         if row is None:
             raise HTTPException(status_code=404, detail="Break-glass request not found.")
         if actor not in {row["requester_user_id"], row["approver_user_id"]}:
-            raise HTTPException(status_code=403, detail="Only requester or approver can revoke this access.")
+            raise HTTPException(
+                status_code=403,
+                detail="Only requester or approver can revoke this access.",
+            )
         if row["status"] not in {"active", "approved"}:
-            raise HTTPException(status_code=409, detail="Only approved or active access can be revoked.")
+            raise HTTPException(
+                status_code=409,
+                detail="Only approved or active access can be revoked.",
+            )
         updated = await connection.execute(
             text("""
                 update public.break_glass_requests
@@ -434,9 +464,15 @@ async def review_break_glass(
         if row is None:
             raise HTTPException(status_code=404, detail="Break-glass request not found.")
         if row["requester_user_id"] == actor:
-            raise HTTPException(status_code=403, detail="Requester cannot perform the post-incident review.")
+            raise HTTPException(
+                status_code=403,
+                detail="Requester cannot perform the post-incident review.",
+            )
         if row["status"] not in {"expired", "revoked"}:
-            raise HTTPException(status_code=409, detail="Only expired or revoked access can be reviewed.")
+            raise HTTPException(
+                status_code=409,
+                detail="Only expired or revoked access can be reviewed.",
+            )
         updated = await connection.execute(
             text("""
                 update public.break_glass_requests
@@ -475,7 +511,8 @@ async def list_break_glass_requests(
         result = await connection.execute(
             text("""
                 select id,tenant_id,requester_user_id,approver_user_id,reason,requested_scope,
-                       status,requested_at,approved_at,activated_at,expires_at,revoked_at,reviewed_at
+                       status,requested_at,approved_at,activated_at,expires_at,
+                       revoked_at,reviewed_at
                 from public.break_glass_requests
                 order by requested_at desc,id desc
                 limit 200
@@ -529,7 +566,10 @@ async def _audit_rows(connection, tenant_id: UUID | None, resource_type: str | N
     rows = [dict(row) for row in result.mappings().all()]
     has_more = len(rows) > limit
     rows = rows[:limit]
-    next_cursor = _encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else None
+    next_cursor = (
+        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"])
+        if has_more and rows else None
+    )
     safe = [{
         **row,
         "metadata": _redact(row.get("metadata") or {}),
@@ -560,7 +600,10 @@ async def read_audit_logs(
             raise
     if not platform_read:
         if tenant_id is None:
-            raise HTTPException(status_code=403, detail="Tenant-scoped audit access requires tenant_id.")
+            raise HTTPException(
+                status_code=403,
+                detail="Tenant-scoped audit access requires tenant_id.",
+            )
         await authorize_action(
             session, user_id=actor, tenant_id=tenant_id,
             permission_key="corporate.audit.read", platform_permission="",
@@ -603,7 +646,10 @@ async def export_audit_logs(
             raise
     if not platform_export:
         if tenant_id is None:
-            raise HTTPException(status_code=403, detail="Tenant-scoped audit export requires tenant_id.")
+            raise HTTPException(
+                status_code=403,
+                detail="Tenant-scoped audit export requires tenant_id.",
+            )
         await authorize_action(
             session, user_id=actor, tenant_id=tenant_id,
             permission_key="corporate.audit.export", platform_permission="",
@@ -662,9 +708,15 @@ async def reject_break_glass(
         if row is None:
             raise HTTPException(status_code=404, detail="Break-glass request not found.")
         if row["requester_user_id"] == actor:
-            raise HTTPException(status_code=403, detail="Requester cannot reject their own emergency request.")
+            raise HTTPException(
+                status_code=403,
+                detail="Requester cannot reject their own emergency request.",
+            )
         if row["status"] != "requested":
-            raise HTTPException(status_code=409, detail="Only requested emergency access can be rejected.")
+            raise HTTPException(
+                status_code=409,
+                detail="Only requested emergency access can be rejected.",
+            )
         updated = await connection.execute(
             text("""
                 update public.break_glass_requests
