@@ -46,12 +46,6 @@ jobs:
       - name: Verify regenerated lockfile is frozen
         run: bun install --frozen-lockfile
 
-      - name: ESLint
-        run: bun run lint
-
-      - name: TypeScript
-        run: bunx tsc --noEmit
-
       - name: Commit verified Bun lockfile independently
         run: |
           git config user.name "github-actions[bot]"
@@ -63,6 +57,12 @@ jobs:
             git commit -m "fix(phase-00): synchronize Bun lockfile [skip ci]"
             git push origin HEAD:main
           fi
+
+      - name: ESLint
+        run: bun run lint
+
+      - name: TypeScript
+        run: bunx tsc --noEmit
 
       - name: Install API and engineering tools
         working-directory: apps/api
