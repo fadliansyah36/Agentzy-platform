@@ -1014,7 +1014,7 @@ async def reassign_membership_hierarchy(
             return reservation
         current_result = await connection.execute(
             text("""
-                select id,user_id,status,organization_id,organization_unit_id,branch_id,department_id
+                select id,user_id,status,organization_id,organization_unit_id,\n                       branch_id,department_id
                 from public.memberships
                 where id=:membership_id and tenant_id=:tenant_id
                 for update
@@ -1025,7 +1025,7 @@ async def reassign_membership_hierarchy(
         if current is None:
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
         if current["status"] == "revoked":
-            raise HTTPException(status_code=409, detail="Membership revoked tidak dapat dipindahkan.")
+            raise HTTPException(\n                status_code=409, detail="Membership revoked tidak dapat dipindahkan."\n            )
         if context is not None:
             authorize_object(
                 context,
@@ -1080,7 +1080,7 @@ async def reassign_membership_hierarchy(
             if branch_row["organization_unit_id"] is not None:
                 if organization_unit_id != branch_row["organization_unit_id"]:
                     raise HTTPException(
-                        status_code=422, detail="Branch harus berada pada organization unit yang dipilih."
+                        status_code=422,\n                        detail="Branch harus berada pada organization unit yang dipilih."
                     )
         if department_id is not None:
             if organization_id is None:
@@ -1133,12 +1133,12 @@ async def reassign_membership_hierarchy(
             scope_type = role_scope["scope_type"]
             if scope_type not in new_scopes:
                 raise HTTPException(
-                    status_code=409, detail="Membership memiliki role dengan scope yang tidak dikenal."
+                    status_code=409,\n                    detail="Membership memiliki role dengan scope yang tidak dikenal."
                 )
             if scope_type != "tenant" and new_scopes[scope_type] is None:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Role scope {scope_type} harus dihapus atau diganti sebelum reassignment.",
+                    detail=(\n                        f"Role scope {scope_type} harus dihapus atau diganti sebelum reassignment."\n                    ),
                 )
 
         await connection.execute(
@@ -1202,10 +1202,10 @@ async def reassign_membership_hierarchy(
             membership_id,
             {
                 "previous": {
-                    "organization_id": str(current["organization_id"]) if current["organization_id"] else None,
-                    "organization_unit_id": str(current["organization_unit_id"]) if current["organization_unit_id"] else None,
+                    "organization_id": (\n                        str(current["organization_id"]) if current["organization_id"] else None\n                    ),
+                    "organization_unit_id": (\n                        str(current["organization_unit_id"]) if current["organization_unit_id"] else None\n                    ),
                     "branch_id": str(current["branch_id"]) if current["branch_id"] else None,
-                    "department_id": str(current["department_id"]) if current["department_id"] else None,
+                    "department_id": (\n                        str(current["department_id"]) if current["department_id"] else None\n                    ),
                 },
                 "current": {
                     "organization_id": response["organization_id"],
