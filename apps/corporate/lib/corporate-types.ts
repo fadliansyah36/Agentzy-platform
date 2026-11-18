@@ -136,7 +136,7 @@ export interface CorporateUserMember {
   id: string;
   name: string;
   email: string;
-  roleKey: CorporateRoleKey;
+  roleKey: CorporateRoleKey | null;
   roleLabel: string;
   department: string;
   branchScope?: string;
