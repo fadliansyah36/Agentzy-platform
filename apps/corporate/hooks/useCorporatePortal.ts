@@ -443,7 +443,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     const rows = await listTenantMemberships(accessToken, activeTenantId);
     setUsers(rows.map((row) => {
       const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? null) as CorporateRoleKey | null;
-      const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
+      const roleMeta = tenantRoleOptions.find((role) => role.key === roleKey);
       return {
         id: row.id, name: row.display_name ?? row.email ?? row.user_id,
         email: row.email ?? '', roleKey, roleLabel: roleMeta?.label ?? roleKey ?? 'Belum ada role',
