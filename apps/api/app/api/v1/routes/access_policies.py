@@ -526,7 +526,10 @@ async def read_access_policy_versions(
         params = {"policy_id": policy_id, "limit": limit + 1}
         cursor_clause = ""
         if cursor:
-            cursor_version = int(decode_key_cursor(cursor))
+            try:
+                cursor_version = int(decode_key_cursor(cursor))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail="Invalid cursor") from exc
             if cursor_version < 1:
                 raise HTTPException(status_code=422, detail="Invalid cursor")
             cursor_clause = "and version < :cursor_version"
