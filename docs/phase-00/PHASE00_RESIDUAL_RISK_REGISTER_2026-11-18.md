@@ -261,3 +261,31 @@ The live database has nine Agentzy public tables with RLS enabled 9/9 and FORCE 
 - No risk is converted to ACCEPTED RISK.
 - Phase 00 remains **NOT CLOSED / PARTIAL / BLOCKED**.
 - Phase 01 remains prohibited until every required evidence and independent approval is obtained and a separate explicit Product Owner instruction is received.
+
+
+## Execution evidence continuation — 18 November 2026, 05:03 UTC
+
+This section adds evidence paths only. It does not change any canonical risk ID, owner or risk status.
+
+| Risk | Evidence added / rechecked | Current disposition |
+|---|---|---|
+| RR-001 | `security/PHASE_00_SUPABASE_SECURITY_REMEDIATION.md`; current function body rechecked; fail-open handler unchanged; verified PITR/DBA approval not supplied | BLOCKED |
+| RR-002 | `security/PHASE_00_SECURITY_ADVISOR_CLOSURE.md`; Advisor at 05:03:51.909Z still returns 0028 and 0029 WARN; ACL unchanged | BLOCKED |
+| RR-003 | `security/PHASE_00_RLS_GRANTS_EVIDENCE.md`; fresh query confirms all seven listed privileges for anon/authenticated/service_role on all nine tables | BLOCKED |
+| RR-004 | `security/PHASE_00_RLS_GRANTS_EVIDENCE.md`; postgres and supabase_admin default ACLs remain broad; no default privileges changed | BLOCKED |
+| RR-005 | `supabase/PHASE_00_HOSTED_CONFIGURATION_EVIDENCE.md`; hosted Auth settings still require Project Owner Dashboard evidence | BLOCKED |
+| RR-006 | `supabase/PHASE_00_HOSTED_CONFIGURATION_EVIDENCE.md`; hosted exposed-schema setting still unverified | BLOCKED |
+| RR-007 | `supabase/PHASE_00_HOSTED_CONFIGURATION_EVIDENCE.md`; live catalog confirms 0 buckets, 0 objects, 0 policies; Product Owner intent decision still pending | DONE (catalog only); decision PENDING |
+| RR-008–RR-010 | `legal/PHASE_00_LEGAL_IP_APPROVAL.md`; 26 LGPL/MPL, five manual-expression and 40 missing-license cases remain without legal disposition; 966 attribution checks remain | BLOCKED |
+| RR-011 | `legal/PHASE_00_ASSET_PROVENANCE_MATRIX.md`; all 31 entries individually recorded and remain PENDING EVIDENCE | BLOCKED |
+| RR-012 | `architecture/PHASE_00_CALLBACK_API_OWNERSHIP_MATRIX.md`; structural routes and domains mapped; exhaustive callback tracing remains incomplete | PARTIAL |
+| RR-013 | `architecture/PHASE_00_DOMAIN_OWNERSHIP_APPROVAL.md`; no domain-owner sign-offs supplied | PARTIAL |
+| RR-014 | GitHub Actions run 44229181139 re-opened; job 134549717755 SUCCESS; frozen Bun install step completed successfully | DONE |
+| RR-015 | Same successful job; Ruff verification step completed successfully without rule suppression | DONE |
+| RR-016 | Same successful job; ESLint, TypeScript, Python compile, FastAPI import/OpenAPI, migration filename/order and whitespace steps succeeded. Focused deterministic tests were not evidenced | DONE |
+| RR-017 | Branch protection state remains as last recorded in the acceptance audit; no policy change applied | PARTIAL |
+| RR-018 | Four individual independent-review records created under `reviews/PHASE_00_INDEPENDENT_REVIEW_*.md`; reviewer identity/competence/independence/findings/sign-off still absent | PENDING INDEPENDENT REVIEW |
+
+### Non-actions and authority boundary
+
+No Supabase migration, DDL, grant, policy, function, trigger, hosted setting, data or deployment was changed. No assets were modified or approved. No owner approval, independent review, legal decision, severity rating or Product Owner final closure was invented. RR-014, RR-015 and RR-016 remain DONE. Phase 00 remains NOT CLOSED; Phase 01 remains prohibited.
