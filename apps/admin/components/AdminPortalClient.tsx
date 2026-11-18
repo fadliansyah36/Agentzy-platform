@@ -86,7 +86,6 @@ export function AdminPortalClient({
         {portal.activeSection === 'overview' && (
           <GlobalOverviewView
             tenants={portal.tenants}
-        permissionRegistry={portal.permissionRegistry}
             providersCount={portal.providers.length}
             humanTotal={portal.tenants.reduce((total, tenant) => total + tenant.humanCount, 0)}
             aiWorkersTotal={portal.tenants.reduce((total, tenant) => total + tenant.aiWorkerCount, 0)}
@@ -171,6 +170,7 @@ export function AdminPortalClient({
         {portal.activeSection === 'rbac' && (
           <RbacMatrixView
             roles={portal.roles}
+            permissionRegistry={portal.permissionRegistry}
             onOpenRoleModal={(role) => portal.setModal({ type: 'role-crud', role })}
             onCyclePermission={portal.cycleRolePermission}
             onDeleteRole={portal.deleteRbacRole}
