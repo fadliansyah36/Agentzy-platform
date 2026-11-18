@@ -241,7 +241,12 @@ export function WorkforcePortalClient() {
     setLoginError(null);
     try {
       const context = await auth.signIn(email, password);
-      const keys = new Set(context.identity.memberships.flatMap((membership) => membership.role_keys));
+      if (!context.session || !context.identity) {
+        throw new Error('Identity atau sesi autentikasi tidak tersedia.');
+      }
+      const keys = new Set(
+        context.identity.memberships.flatMap((membership) => membership.role_keys)
+      );
       const nextRole: WorkforceRoleMode | null =
         ['sales_manager', 'sales_supervisor', 'sales_official'].some((key) => keys.has(key))
           ? 'sales'
