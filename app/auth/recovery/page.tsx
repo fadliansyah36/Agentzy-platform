@@ -10,6 +10,7 @@ export default function PasswordRecoveryPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [hasRecoverySession, setHasRecoverySession] = useState(false);
+  const [returnPath, setReturnPath] = useState('/admin');
   const [phase, setPhase] = useState<'request' | 'sent' | 'reset' | 'done'>('request');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -19,6 +20,21 @@ export default function PasswordRecoveryPage() {
     const client = getSupabaseBrowserClient();
     if (!client) return;
     let alive = true;
+    const params = new URLSearchParams(window.location.search);
+    const requestedReturn = params.get('returnTo');
+    const allowedReturnPaths = new Set(['/admin', '/corporate', '/ai-workforce', '/workforce']);
+    if (requestedReturn && allowedReturnPaths.has(requestedReturn)) {
+      setReturnPath(requestedReturn);
+    }
+    const errorCode = params.get('error_code');
+    if (errorCode) {
+      setError(
+        errorCode === 'otp_expired'
+          ? 'Tautan pemulihan sudah kedaluwarsa. Minta tautan baru.'
+          : 'Tautan pemulihan tidak valid. Minta tautan baru.'
+      );
+      setPhase('request');
+    }
     void client.auth.getSession().then(({ data }) => {
       if (!alive) return;
       const recovery = Boolean(data.session);
@@ -50,7 +66,7 @@ export default function PasswordRecoveryPage() {
     setMessage(null);
     try {
       await client.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/recovery`,
+        redirectTo: `${window.location.origin}/auth/recovery?returnTo=${encodeURIComponent(returnPath)}`,
       });
       setPhase('sent');
       setMessage('Jika alamat email terdaftar, instruksi pemulihan akan dikirim. Periksa inbox dan folder spam.');
@@ -160,7 +176,7 @@ export default function PasswordRecoveryPage() {
         )}
 
         {phase === 'done' && (
-          <Link href="/admin" className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-[10px] bg-[#17324D] text-sm font-semibold text-white">
+          <Link href={returnPath} className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-[10px] bg-[#17324D] text-sm font-semibold text-white">
             Kembali ke halaman masuk
           </Link>
         )}
