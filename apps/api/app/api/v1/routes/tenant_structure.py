@@ -796,7 +796,8 @@ async def update_branch(
             raise HTTPException(status_code=404, detail="Branch not found.")
         if context is not None:
             authorize_object(
-                context, resource_tenant_id=tenant_id,
+                context,
+                resource_tenant_id=tenant_id,
                 organization_id=branch["organization_id"],
                 organization_unit_id=branch["organization_unit_id"],
                 branch_id=branch_id,
@@ -808,8 +809,11 @@ async def update_branch(
                     where id=:unit_id and tenant_id=:tenant_id
                       and organization_id=:organization_id and status='active'
                 """),
-                {"unit_id": values["organization_unit_id"], "tenant_id": tenant_id,
-                 "organization_id": branch["organization_id"]},
+                {
+                    "unit_id": values["organization_unit_id"],
+                    "tenant_id": tenant_id,
+                    "organization_id": branch["organization_id"],
+                },
             )
             if unit.scalar_one_or_none() is None:
                 raise HTTPException(
@@ -845,8 +849,16 @@ async def update_branch(
             {**values, "actor": UUID(claims["sub"]), "id": branch_id, "tenant_id": tenant_id},
         )
         updated = dict(result.mappings().one())
-        await _audit(connection, request, UUID(claims["sub"]), tenant_id,
-                      "branch.updated", "branch", branch_id, values)
+        await _audit(
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            "branch.updated",
+            "branch",
+            branch_id,
+            values,
+        )
     return updated
 
 
@@ -880,7 +892,8 @@ async def update_department(
             raise HTTPException(status_code=404, detail="Department not found.")
         if context is not None:
             authorize_object(
-                context, resource_tenant_id=tenant_id,
+                context,
+                resource_tenant_id=tenant_id,
                 organization_id=department["organization_id"],
                 branch_id=department["branch_id"],
                 department_id=department_id,
@@ -893,8 +906,11 @@ async def update_department(
                     where id=:branch_id and tenant_id=:tenant_id
                       and organization_id=:organization_id and status='active'
                 """),
-                {"branch_id": target_branch, "tenant_id": tenant_id,
-                 "organization_id": department["organization_id"]},
+                {
+                    "branch_id": target_branch,
+                    "tenant_id": tenant_id,
+                    "organization_id": department["organization_id"],
+                },
             )
             if branch.scalar_one_or_none() is None:
                 raise HTTPException(
@@ -909,8 +925,11 @@ async def update_department(
                     where id=:parent_id and tenant_id=:tenant_id
                       and organization_id=:organization_id and status='active'
                 """),
-                {"parent_id": parent_id, "tenant_id": tenant_id,
-                 "organization_id": department["organization_id"]},
+                {
+                    "parent_id": parent_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": department["organization_id"],
+                },
             )
             parent_row = parent.mappings().first()
             if parent_row is None or parent_row["branch_id"] != target_branch:
@@ -969,15 +988,26 @@ async def update_department(
             {**values, "actor": UUID(claims["sub"]), "id": department_id, "tenant_id": tenant_id},
         )
         updated = dict(result.mappings().one())
-        await _audit(connection, request, UUID(claims["sub"]), tenant_id,
-                      "department.updated", "department", department_id, values)
+        await _audit(
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            "department.updated",
+            "department",
+            department_id,
+            values,
+        )
     return updated
 
 
 @router.post("/{tenant_id}/branches/{branch_id}/archive", tags=["Organization"])
 async def archive_branch(
-    tenant_id: UUID, branch_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    branch_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     return await update_branch(
         tenant_id, branch_id, BranchUpdate(status="archived"), request, claims, session
@@ -986,8 +1016,11 @@ async def archive_branch(
 
 @router.post("/{tenant_id}/branches/{branch_id}/restore", tags=["Organization"])
 async def restore_branch(
-    tenant_id: UUID, branch_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    branch_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     return await update_branch(
         tenant_id, branch_id, BranchUpdate(status="active"), request, claims, session
@@ -996,8 +1029,11 @@ async def restore_branch(
 
 @router.post("/{tenant_id}/departments/{department_id}/archive", tags=["Organization"])
 async def archive_department(
-    tenant_id: UUID, department_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    department_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     return await update_department(
         tenant_id, department_id, DepartmentUpdate(status="archived"), request, claims, session
@@ -1006,8 +1042,11 @@ async def archive_department(
 
 @router.post("/{tenant_id}/departments/{department_id}/restore", tags=["Organization"])
 async def restore_department(
-    tenant_id: UUID, department_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    department_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     return await update_department(
         tenant_id, department_id, DepartmentUpdate(status="active"), request, claims, session

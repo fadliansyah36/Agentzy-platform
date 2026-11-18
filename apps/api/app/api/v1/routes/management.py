@@ -79,8 +79,12 @@ async def _has_platform_permission(session: AsyncSession, user_id: UUID, permiss
     resource, action = permission.rsplit(".", 1)
     try:
         await authorize_platform_action(
-            session, user_id=user_id, permission_key=permission,
-            resource_type=resource, action=action, resource={"id": permission},
+            session,
+            user_id=user_id,
+            permission_key=permission,
+            resource_type=resource,
+            action=action,
+            resource={"id": permission},
         )
         return True
     except HTTPException as exc:
@@ -115,9 +119,14 @@ async def _has_tenant_permission(
         resource, action = permission.rsplit(".", 1)
         try:
             await authorize_action(
-                session, user_id=user_id, tenant_id=tenant_id,
-                permission_key=permission, platform_permission="", aal=None,
-                resource_type=resource, action=action,
+                session,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                permission_key=permission,
+                platform_permission="",
+                aal=None,
+                resource_type=resource,
+                action=action,
                 resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
             )
             return True

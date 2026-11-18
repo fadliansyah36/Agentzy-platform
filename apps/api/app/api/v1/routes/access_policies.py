@@ -134,8 +134,15 @@ async def _require_security_admin(claims: dict, session: AsyncSession) -> UUID:
     return actor
 
 
-async def _audit(connection, request: Request, actor: UUID, tenant_id: UUID | None,
-                 action: str, policy_id: UUID, metadata: dict | None = None):
+async def _audit(
+    connection,
+    request: Request,
+    actor: UUID,
+    tenant_id: UUID | None,
+    action: str,
+    policy_id: UUID,
+    metadata: dict | None = None,
+):
     await connection.execute(
         text("""
             insert into public.audit_logs(
@@ -147,8 +154,11 @@ async def _audit(connection, request: Request, actor: UUID, tenant_id: UUID | No
             )
         """),
         {
-            "tenant_id": tenant_id, "actor": actor, "action": action,
-            "resource_id": str(policy_id), "request_id": request.headers.get("x-request-id"),
+            "tenant_id": tenant_id,
+            "actor": actor,
+            "action": action,
+            "resource_id": str(policy_id),
+            "request_id": request.headers.get("x-request-id"),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "metadata": json.dumps(metadata or {}, default=str),
@@ -165,8 +175,11 @@ async def _save_version(connection, row: dict, actor: UUID):
             values(:id,:tenant_id,:version,cast(:snapshot as jsonb),:actor)
         """),
         {
-            "id": row["id"], "tenant_id": row["tenant_id"], "version": row["version"],
-            "snapshot": json.dumps(row, default=str), "actor": actor,
+            "id": row["id"],
+            "tenant_id": row["tenant_id"],
+            "version": row["version"],
+            "snapshot": json.dumps(row, default=str),
+            "actor": actor,
         },
     )
 
@@ -187,7 +200,8 @@ async def list_access_policies(
         clause = "and (created_at, id) < (:created_at, :cursor_id)"
         params.update({"created_at": created_at, "cursor_id": policy_id})
     async with engine.connect() as connection:
-        result = await connection.execute(text(f"""
+        result = await connection.execute(
+            text(f"""
             select id,tenant_id,policy_key,policy_name,description,resource,action,effect,
                    conditions,priority,status,version,effective_from,effective_until,
                    created_by,updated_by,created_at,updated_at
@@ -195,18 +209,22 @@ async def list_access_policies(
             where true {clause}
             order by created_at desc,id desc
             limit :limit
-        """), params)
+        """),
+            params,
+        )
     rows = [dict(row) for row in result.mappings().all()]
     has_more = len(rows) > limit
     rows = rows[:limit]
     next_cursor = (
-        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"])
-        if has_more and rows else None
+        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else None
     )
     return {
         "data": [AccessPolicyRead(**row).model_dump(mode="json") for row in rows],
-        "meta": {"next_cursor": next_cursor, "has_more": has_more,
-                 "request_id": request.headers.get("x-request-id")},
+        "meta": {
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+            "request_id": request.headers.get("x-request-id"),
+        },
     }
 
 
@@ -225,13 +243,17 @@ async def create_access_policy(
             )
             if exists.scalar_one_or_none() is None:
                 raise HTTPException(status_code=404, detail="Tenant not found")
-        duplicate = await connection.execute(text("""
+        duplicate = await connection.execute(
+            text("""
             select id from public.access_policies
             where policy_key=:key and tenant_id is not distinct from :tenant_id limit 1
-        """), {"key": payload.policy_key, "tenant_id": payload.tenant_id})
+        """),
+            {"key": payload.policy_key, "tenant_id": payload.tenant_id},
+        )
         if duplicate.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Policy key already exists in this scope")
-        result = await connection.execute(text("""
+        result = await connection.execute(
+            text("""
             insert into public.access_policies(
               tenant_id,policy_key,policy_name,description,resource,action,effect,
               conditions,priority,status,version,effective_from,effective_until,
@@ -241,15 +263,24 @@ async def create_access_policy(
               cast(:conditions as jsonb),:priority,'active',1,
               :effective_from,:effective_until,:actor,:actor
             ) returning *
-        """), {
-            **payload.model_dump(exclude={"conditions"}),
-            "conditions": json.dumps(payload.conditions),
-            "actor": actor,
-        })
+        """),
+            {
+                **payload.model_dump(exclude={"conditions"}),
+                "conditions": json.dumps(payload.conditions),
+                "actor": actor,
+            },
+        )
         row = dict(result.mappings().one())
         await _save_version(connection, row, actor)
-        await _audit(connection, request, actor, row["tenant_id"], "access_policy.created",
-                     row["id"], {"policy_key": row["policy_key"], "version": row["version"]})
+        await _audit(
+            connection,
+            request,
+            actor,
+            row["tenant_id"],
+            "access_policy.created",
+            row["id"],
+            {"policy_key": row["policy_key"], "version": row["version"]},
+        )
     return AccessPolicyRead(**row)
 
 
@@ -266,8 +297,7 @@ async def update_access_policy(
     if "conditions" in values and values["conditions"] is not None:
         values["conditions"] = json.dumps(values["conditions"])
     assignments = [
-        f"{key}=cast(:{key} as jsonb)" if key == "conditions" else f"{key}=:{key}"
-        for key in values
+        f"{key}=cast(:{key} as jsonb)" if key == "conditions" else f"{key}=:{key}" for key in values
     ]
     async with engine.begin() as connection:
         current = await connection.execute(
@@ -284,56 +314,89 @@ async def update_access_policy(
                 status_code=422,
                 detail="effective_until must be later than effective_from",
             )
-        result = await connection.execute(text(f"""
+        result = await connection.execute(
+            text(f"""
             update public.access_policies
             set {", ".join(assignments)},version=version+1,updated_by=:actor,updated_at=now()
             where id=:id returning *
-        """), {**values, "actor": actor, "id": policy_id})
+        """),
+            {**values, "actor": actor, "id": policy_id},
+        )
         row = dict(result.mappings().one())
         await _save_version(connection, row, actor)
-        await _audit(connection, request, actor, row["tenant_id"], "access_policy.updated",
-                     row["id"], {"policy_key": row["policy_key"], "version": row["version"]})
+        await _audit(
+            connection,
+            request,
+            actor,
+            row["tenant_id"],
+            "access_policy.updated",
+            row["id"],
+            {"policy_key": row["policy_key"], "version": row["version"]},
+        )
     return AccessPolicyRead(**row)
 
 
-async def _set_policy_status(policy_id: UUID, new_status: str, request: Request,
-                             claims: dict, session: AsyncSession):
+async def _set_policy_status(
+    policy_id: UUID, new_status: str, request: Request, claims: dict, session: AsyncSession
+):
     actor = await _require_security_admin(claims, session)
     async with engine.begin() as connection:
-        result = await connection.execute(text("""
+        result = await connection.execute(
+            text("""
             update public.access_policies
             set status=:status,version=version+1,updated_by=:actor,updated_at=now()
             where id=:id returning *
-        """), {"status": new_status, "actor": actor, "id": policy_id})
+        """),
+            {"status": new_status, "actor": actor, "id": policy_id},
+        )
         row = result.mappings().first()
         if row is None:
             raise HTTPException(status_code=404, detail="Policy not found")
         row = dict(row)
         await _save_version(connection, row, actor)
-        await _audit(connection, request, actor, row["tenant_id"], f"access_policy.{new_status}",
-                     row["id"], {"policy_key": row["policy_key"], "version": row["version"]})
+        await _audit(
+            connection,
+            request,
+            actor,
+            row["tenant_id"],
+            f"access_policy.{new_status}",
+            row["id"],
+            {"policy_key": row["policy_key"], "version": row["version"]},
+        )
     return AccessPolicyRead(**row)
 
 
 @router.post("/{policy_id}/activate", response_model=AccessPolicyRead)
-async def activate_access_policy(policy_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency):
+async def activate_access_policy(
+    policy_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
     return await _set_policy_status(policy_id, "active", request, claims, session)
 
 
 @router.post("/{policy_id}/disable", response_model=AccessPolicyRead)
-async def disable_access_policy(policy_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency):
+async def disable_access_policy(
+    policy_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
     return await _set_policy_status(policy_id, "inactive", request, claims, session)
 
 
 @router.get("/{policy_id}/versions")
-async def read_access_policy_versions(policy_id: UUID,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency):
+async def read_access_policy_versions(
+    policy_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
+):
     await _require_security_admin(claims, session)
     async with engine.connect() as connection:
-        result = await connection.execute(text("""
+        result = await connection.execute(
+            text("""
             select version,snapshot,changed_by,created_at
             from public.access_policy_versions where policy_id=:id order by version desc
-        """), {"id": policy_id})
+        """),
+            {"id": policy_id},
+        )
     return {"data": [dict(row) for row in result.mappings().all()]}

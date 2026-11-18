@@ -279,7 +279,6 @@ async def authorize_action(
     return tenant_context, decision
 
 
-
 async def authorize_platform_action(
     session: AsyncSession,
     *,
@@ -338,13 +337,16 @@ async def authorize_platform_action(
                     "resource_type": resource_type,
                     "resource_id": str(resource.get("id", "")) or None,
                     "request_id": request_id,
-                    "metadata": json.dumps({
-                        "decision": decision.decision,
-                        "reason_code": decision.reason_code,
-                        "matched_policies": decision.matched_policies,
-                        "policy_versions": decision.policy_versions,
-                        "evaluated_at": decision.evaluated_at,
-                    }, default=str),
+                    "metadata": json.dumps(
+                        {
+                            "decision": decision.decision,
+                            "reason_code": decision.reason_code,
+                            "matched_policies": decision.matched_policies,
+                            "policy_versions": decision.policy_versions,
+                            "evaluated_at": decision.evaluated_at,
+                        },
+                        default=str,
+                    ),
                 },
             )
     except Exception as exc:
