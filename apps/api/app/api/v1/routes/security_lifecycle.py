@@ -168,11 +168,13 @@ async def _audit(
             "resource_id": str(resource_id),
             "request_id": _request_id(request),
             "metadata": json.dumps(
-                {
-                    **(metadata or {}),
-                    "correlation_id": getattr(request.state, "correlation_id", None),
-                    "trace_id": getattr(request.state, "trace_id", None),
-                },
+                redact_audit_value(
+                    {
+                        **(metadata or {}),
+                        "correlation_id": getattr(request.state, "correlation_id", None),
+                        "trace_id": getattr(request.state, "trace_id", None),
+                    }
+                ),
                 default=str,
             ),
         },
