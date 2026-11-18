@@ -96,9 +96,21 @@ async def update_identity(
 ) -> IdentityRead:
     user_id = UUID(claims["sub"])
     values = payload.model_dump(exclude_unset=True)
+    if not values:
+        raise HTTPException(status_code=422, detail="No profile fields supplied.")
     assignments = ", ".join(f"{key}=:{key}" for key in values)
     values["user_id"] = user_id
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection,
+            actor_user_id=user_id,
+            tenant_id=None,
+            command_key=f"identity.profile.update:{user_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return IdentityRead.model_validate(reservation.replay_body)
         await connection.execute(
             text(f"""
                 insert into public.profiles(user_id,display_name,locale,timezone)
@@ -132,7 +144,15 @@ async def update_identity(
         )
 
     # Re-read through the same authenticated/RLS-scoped identity path.
-    return await read_identity(claims=claims, session=session)
+    identity = await read_identity(claims=claims, session=session)
+    async with engine.begin() as connection:
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=identity.model_dump(mode="json"),
+        )
+    return identity
 
 
 @router.get("/me/permissions")
