@@ -645,7 +645,7 @@ async def list_role_templates(
     role_filter = "" if is_platform_reader else "and r.key not like 'platform_%'"
     result = await session.execute(
         text(f"""
-        select r.id,r.key,r.name,r.description,r.is_system,
+        select r.id,r.key,r.name,r.description,r.is_system,r.scope_type,r.tenant_id,
                coalesce(
                    array_agg(rp.permission_key)
                        filter (where rp.permission_key is not null),
