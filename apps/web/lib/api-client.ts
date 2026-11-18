@@ -85,12 +85,12 @@ export const createTenant = (accessToken: string, payload: CreateTenantInput) =>
 
 export const createOrganization = (accessToken: string, tenantId: string, payload: CreateOrganizationInput) =>
   apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
-    method: "POST", accessToken, body: JSON.stringify(payload),
+    method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
   });
 
 export const inviteTenantMember = (accessToken: string, tenantId: string, payload: InviteTenantMemberInput) =>
   apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/memberships/invite`, {
-    method: "POST", accessToken, body: JSON.stringify(payload),
+    method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
   });
 
 export const listTenantMemberships = (accessToken: string, tenantId: string) =>
@@ -120,12 +120,12 @@ export type UpdateTenantInput = Partial<CreateTenantInput> & { status?: 'pending
 
 export const updateTenant = (accessToken: string, tenantId: string, payload: UpdateTenantInput) =>
   apiRequest<AgentzyPlatformTenant>(`/tenants/${encodeURIComponent(tenantId)}`, {
-    method: "PATCH", accessToken, body: JSON.stringify(payload),
+    method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
   });
 
 export const archiveTenant = (accessToken: string, tenantId: string) =>
   apiRequest<{ id: string; name: string; slug: string; status: string }>(
-    `/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE", accessToken },
+    `/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() } },
   );
 
 
@@ -225,7 +225,7 @@ export const listDepartments = (accessToken: string, tenantId: string) =>
 export const acceptTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
   apiRequest<{ id: string; tenant_id: string; user_id: string; status: string }>(
     `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/accept`,
-    { method: "POST", accessToken, body: JSON.stringify({}) },
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
   );
 
 export const suspendTenantMembership = (accessToken: string, tenantId: string, membershipId: string) =>
@@ -247,7 +247,7 @@ export const assignMembershipRole = (
   payload: { role_key: string; scope_type?: string; scope_id?: string | null; valid_until?: string | null },
 ) => apiRequest<Record<string, unknown>>(
   `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/roles`,
-  { method: "POST", accessToken, body: JSON.stringify(payload) },
+  { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
 
 export const createOrganizationUnit = (
@@ -298,7 +298,7 @@ export const replaceRolePermissions = (
   permissionKeys: string[],
 ) => apiRequest<{ role_id: string; permission_keys: string[] }>(
   `/roles/${encodeURIComponent(roleId)}/permissions`,
-  { method: "PUT", accessToken, body: JSON.stringify({ permission_keys: permissionKeys }) },
+  { method: "PUT", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({ permission_keys: permissionKeys }) },
 );
 
 
@@ -310,18 +310,18 @@ export type CreateAgentzyRoleInput = {
 };
 export const createAgentzyRole = (accessToken: string, payload: CreateAgentzyRoleInput) =>
   apiRequest<AgentzyRoleTemplate>("/roles", {
-    method: "POST", accessToken, body: JSON.stringify(payload),
+    method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
   });
 export const updateAgentzyRole = (
   accessToken: string,
   roleId: string,
   payload: { name?: string; description?: string | null },
 ) => apiRequest<AgentzyRoleTemplate>(`/roles/${encodeURIComponent(roleId)}`, {
-  method: "PATCH", accessToken, body: JSON.stringify(payload),
+  method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
 });
 export const deleteAgentzyRole = (accessToken: string, roleId: string) =>
   apiRequest<{ id: string; status: string }>(`/roles/${encodeURIComponent(roleId)}`, {
-    method: "DELETE", accessToken,
+    method: "DELETE", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() },
   });
 
 
