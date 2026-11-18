@@ -645,3 +645,67 @@ The 2026-11-17 repository audit is a historical snapshot. The current main branc
 | AGZ-P01-OBS-001 | Audit events and security observability | Agentzy Engineering | P1 | Audit schema | IN PROGRESS | db5318fbca7816f3e57960394ccebca5cf46711b; 4ba07728bc2f81eefb11e9219f52be837d86826d; d5ffb7954ef160c755c9acbffb559348a1bf9671; ecbac30e8e21566a27043a9a07c5e62467732aad | routes/identity.py; routes/management.py; routes/tenant_structure.py | Existing audit_logs used; M010 does not replace it | N/A | N/A | N/A | Profile, session, invitation, tenant/org and membership actions logged | PASS — run 44248766881 (commit 4ba0772); final Workforce guard commit ecbac30 not separately rerun | Authentication failure and provider-native event correlation not yet implemented |
 | AGZ-P01-DOC-001 | Phase 01 implementation evidence and known limitations | Agentzy Engineering | P1 | Implementation artifacts | IN PROGRESS | db5318fbca7816f3e57960394ccebca5cf46711b; 4ba07728bc2f81eefb11e9219f52be837d86826d; d5ffb7954ef160c755c9acbffb559348a1bf9671; ecbac30e8e21566a27043a9a07c5e62467732aad | docs/phase-01/*; this backlog | Migration status explicitly source-only | API inventory documented | RLS/grants matrix documents intended post-migration state | Frontend integration state documented | Evidence report in progress | PASS — run 44248766881 (commit 4ba0772); final Workforce guard commit ecbac30 not separately rerun | Phase 01 acceptance remains PARTIAL until migration and end-to-end wiring are verified |
 
+
+
+## 19. Phase 01 live reconciliation — 2026-11-18 (authoritative current state)
+
+This section supersedes stale Phase 01 status rows above where they conflict with live repository or database evidence. Phase 00 remains IN PROGRESS and is tracked in parallel; it is not used as a Phase 01 entry gate. Phase 02 remains NOT STARTED.
+
+### Canonical current baseline
+
+- Repository: `fadliansyah36/Agentzy-platform`, branch `main`.
+- Code head before this documentation update: `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8`.
+- Supabase: Agentzy-db, ref `cwhjdnkotuhueeudpgeu`.
+- Current remote migration history contains six versions: three original identity migrations, M010 `20261118062335`, M011 `20261118062647`, and M012 `20261118065058`.
+- The old 2026-11-17 audit and earlier Phase 01 report statements that M010 was source-only are historical and superseded by the current remote ledger and M010 post-migration report.
+
+### Database evidence
+
+| Check | Current result |
+|---|---|
+| M010 | APPLIED; catalog verification report exists |
+| M011 | APPLIED; security lifecycle verification report exists |
+| M012 | APPLIED; permission registry verification report exists |
+| Public application tables | 18; RLS enabled on 18/18 |
+| FORCE RLS | 0/18 |
+| Permission definitions | 67 |
+| Global baseline ABAC policies | 67 |
+| Policy version snapshots | 67 |
+| Current policy effects | 67 ALLOW / active; no live DENY policies |
+| Server-only security table grants | No anon/authenticated/service_role grants on access policies/versions, auth provider events, break-glass, idempotency or revoked sessions |
+| Hierarchy table grants | Authenticated SELECT only on organization units, branches and departments |
+| Security Advisor | Six INFO findings for intentionally server-only RLS tables without client policies; no current anon/authenticated SECURITY DEFINER EXECUTE WARN returned |
+| Auth user and security lifecycle rows | Zero at time of query; live user-based workflows not exercised |
+
+Reports:
+- `docs/phase-01/M010_POST_MIGRATION_VERIFICATION.md`
+- `docs/phase-01/M011_SECURITY_LIFECYCLE_VERIFICATION.md`
+- `docs/phase-01/M012_SECURITY_PERMISSION_VERIFICATION.md`
+
+### Current task status
+
+| Task ID / workstream | Current status | Outstanding acceptance |
+|---|---|---|
+| AGZ-P01-DB-001 / M010 | DONE (migration and catalog verification) | Does not close Phase 01; continue drift/recovery and runtime compatibility controls |
+| M011/M012 security schema | DONE (migration and catalog verification) | No live user lifecycle records; runtime integration remains |
+| AGZ-P01-PERM-001 / ABAC | PARTIAL | Evaluator and 18 deterministic cases exist; full legacy route coverage, tenant DENY policy operations and verified policy semantics across every resource remain |
+| Object authorization | PARTIAL | Central helper covers selected routes; all sensitive legacy routes have not been proven migrated |
+| Organization hierarchy | PARTIAL | Branch/department create/list/update/archive/restore exists; complete UI/membership assignment and all lifecycle invariants remain to be verified |
+| Admin RBAC | PARTIAL | Live permission registry is passed to Admin matrix; complete scope management, preview, revoke and portal parity remain |
+| Cross-portal integration | PARTIAL | Super Admin and Corporate use selected identity/hierarchy APIs; AI Workforce consumes tenant context but full registry/hierarchy wiring is incomplete |
+| Session/password recovery | PARTIAL | Session validation/revocation exists; password recovery across portal login flows is missing |
+| Auth provider event correlation | PARTIAL | Secret-protected, deduplicated event ingestion and session revocation handling exist; hosted webhook registration/secrets and provider runtime are unverified |
+| Break-glass | PARTIAL | Request/approval/rejection/activation/revoke/review API and UI actions exist; no real users/requests, scheduled expiry and full operating evidence |
+| Audit reader | PARTIAL | Scoped audit list/export APIs and Admin wiring exist; full tenant/resource redaction and all portal permission wiring remain |
+| API contracts/pagination/idempotency | PARTIAL | Selected endpoints have Pydantic schemas, cursor pagination and idempotency; universal standard response/error envelope and every sensitive command remain |
+| Workforce Phase 01 | PARTIAL | Identity/membership/invitation/hierarchy context wired; operational domain APIs and full operational UI integration remain incomplete |
+| Demo/local data governance | PARTIAL | Workforce demo operational render path is hidden; fixtures/local state remain in source and Corporate/Admin local collections still need production-path audit/removal |
+
+### Engineering check evidence
+
+- GitHub Actions run [44292254340](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44292254340) passed frontend lint/TypeScript, Python compile/import, Ruff/OpenAPI schema, and migration source consistency at commit `fa4ecfcd5b748a6df116299ee2bdecb9b5d21bdf`.
+- Code remediation commit `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8` followed with `[skip ci]`; it has not yet been independently validated by a new CI run.
+- Do not mark tests as passed unless the latest workflow log shows the relevant deterministic test step ran.
+- No UAT, staging, real-world, load/security acceptance or production release testing was run.
+
+**Phase 01 disposition: PARTIAL / IN PROGRESS — NOT DONE.** No Phase 02 implementation is authorized until the user gives a separate instruction after Phase 01 DoD is satisfied.
