@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CORPORATE_ROLE_OPTIONS,
 } from '../lib/corporate-data';
 import { corporatePortalService } from '../services/corporate-service';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
@@ -198,10 +197,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
-    if (!accessToken) {
-      setTenantRoleOptions([]);
-      return;
-    }
+    if (!accessToken) return;
     let active = true;
     void listRoleTemplates(accessToken).then((roles: AgentzyRoleTemplate[]) => {
       if (!active) return;
@@ -315,6 +311,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     await auth.signOut();
     setActiveTenantId('');
     setActiveSection('login');
+    setTenantRoleOptions([]);
     setModal({ type: 'none' });
   }, [auth.signOut]);
 
@@ -412,7 +409,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       const rows = await listTenantMemberships(accessToken, activeTenantId);
       setUsers(rows.map((row) => {
         const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? null) as CorporateRoleKey | null;
-        const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
+        const roleMeta = tenantRoleOptions.find((role) => role.key === roleKey);
         return {
           id: row.id,
           name: row.display_name ?? row.email ?? row.user_id,
