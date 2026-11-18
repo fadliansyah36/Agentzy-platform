@@ -56,3 +56,59 @@ The phase and scope labels below preserve Technical Implementation Blueprint v1.
 M000 is an audit and migration-policy baseline batch, not a fabricated schema bootstrap. The repository evidence and this reconciliation document are the M000 audit artifacts. Formal closure still depends on the remaining Phase 00 acceptance gates: complete dependency/license/SBOM and asset/env inventory, Auth/Data API configuration evidence, approved security disposition for `rls_auto_enable()`, final ownership/route mapping, and Phase 00 sign-off.
 
 No DDL, migration, project setting, privilege or function was changed by this reconciliation.
+
+
+## Superseding live reconciliation — 18 November 2026
+
+This section supersedes the earlier live-baseline statements above where they conflict with the later applied Phase 01 migrations. The earlier empty-schema/empty-history result is retained as historical evidence only.
+
+### Current canonical evidence
+
+- Repository HEAD before this re-audit documentation: `4d3db7b36df411aefc5ad81aaa04e5892d99493c`.
+- Supabase project `Agentzy-db` / `cwhjdnkotuhueeudpgeu` is `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
+- Remote migration history contains three entries: `20261117175948`, `20261117181011`, `20261117182410`.
+- All three source files exist under `supabase/migrations/`; source SHA values at the audited HEAD:
+  - `20261117175948_phase_01_platform_core_identity_tenant.sql` — `fa02e6baea9a66fe97995413f168eda8ad92b913`
+  - `20261117181011_phase_01_system_roles_permissions_auth_profile.sql` — `d21b3d7fc855fc74d0e8ec55f560bc1399a3dec9`
+  - `20261117182410_phase_01_profile_email_projection.sql` — `7cd386788c97bab6d731443a16184172724b9389`
+- Live `public` application schema has nine tables: `profiles`, `tenants`, `organizations`, `memberships`, `roles`, `permissions`, `role_permissions`, `membership_roles`, `audit_logs`. RLS is enabled on 9/9; FORCE RLS is false on all nine.
+- Live catalog has 15 system role templates, 45 permission keys and 134 role-permission links. No Auth users or Storage buckets are present.
+- The third migration's `profiles.email` and `profiles_email_lower_idx` are present in the live catalog.
+
+### Reconciliation decision
+
+| Batch | Status | Source / remote / schema result | Domain owner and next control |
+|---|---|---|---|
+| M000 | NOT APPLICABLE as DDL | Phase 00 audit/policy artifacts exist; no M000 schema migration or remote migration entry | Database Governance; close with evidence and approval, not a fabricated schema bootstrap |
+| M010 | APPLIED | Three Phase 01 source files match three remote migration-history entries; nine live tables and RLS 9/9 | Identity & Tenant; do not rewrite applied migrations; any corrections must be additive |
+| M020 | NOT APPLIED | No source migration, remote history entry or partnership application tables | Partnership Acquisition; implement only in Phase 02 |
+| M030 | NOT APPLIED | No source migration, remote history entry or corporate commercial tables | Corporate & Commercial; implement only in Phase 03 |
+| M040 | NOT APPLIED | No source migration, remote history entry or workforce tables | Human Workforce; implement only in Phase 04 |
+| M050 | NOT APPLIED | No source migration, remote history entry or provider/sales tables | Provider, Product & Sales; implement only in Phase 05 |
+| M060 | NOT APPLIED | No source migration, remote history entry or affiliate tables | Affiliate; implement only in Phase 06 |
+| M070 | NOT APPLIED | No source migration, remote history entry or commission tables | Commission; implement only in Phase 07 |
+| M080 | NOT APPLIED | No source migration, remote history entry or technical operations tables | Technical Operations; implement only in Phase 08 |
+| M090 | NOT APPLIED | No source migration, remote history entry or model/usage tables | AI Platform & Model Governance; implement only in Phase 09 |
+| M100 | NOT APPLIED | No source migration, remote history entry or AI worker registry tables | AI Workforce; implement only in Phase 10 |
+| M110 | NOT APPLIED | No source migration, remote history entry or skill/tool registry tables | Skills & Tools; implement only in Phase 11 |
+| M120 | NOT APPLIED | No source migration, remote history entry or memory tables | Memory & Knowledge Governance; implement only in Phase 12 |
+| M130 | NOT APPLIED | No source migration, remote history entry or durable AI run tables | AI Runtime; implement only in Phase 13 |
+| M140 | NOT APPLIED | No source migration, remote history entry or workflow tables | Workflow; implement only in Phase 14 |
+| M150 | NOT APPLIED | No source migration, remote history entry or evaluation configuration tables | Role Catalogue & Evaluation; implement only in Phase 15 |
+| M160 | NOT APPLIED | No source migration, remote history entry or AI credit ledger tables | AI Credits & Billing; implement only in Phase 16 |
+| M170 | NOT APPLIED | No source migration, remote history entry or analytics/KPI tables | Analytics & KPI; implement only in Phase 17 |
+| M180 | NOT APPLIED | No source migration, remote history entry or integration/outbox tables | Integrations & Notifications; implement only in Phase 18 |
+| M190 | NOT APPLIED | No source migration, remote history entry or governance configuration tables | Governance & Operations; implement only in Phase 19 |
+| M200 | NOT APPLIED | No source migration, remote history entry or cross-domain integrity batch | Cross-domain Integrity; implement only in Phase 20 after live data checks |
+| M210 | NOT APPLIED | No source migration, remote history entry or retention/deletion batch | Data Lifecycle & Finance Close; implement only in Phase 21 |
+| M220 | NOT APPLIED | No source migration, remote history entry or release reconciliation batch | Release Reconciliation; Phase 22 only |
+
+### M010 live security/schema notes
+
+The nine tables have RLS enabled and current policies are SELECT-only for authenticated application access. The grants for `anon`, `authenticated` and `service_role` remain broader than least privilege; global default table/sequence/function privileges are also broad. The live catalog shows no FORCE RLS. These are recorded in `PHASE00_CLOSURE_READINESS_REAUDIT_2026-11-18.md` and are not resolved by the existence of RLS policies.
+
+### API, backward compatibility and recovery
+
+M010 currently has identity/tenant endpoints for `/me`, `/tenants`, tenant organizations, tenant management/directory, membership invitation/list, role catalogue and platform-admin bootstrap. It is still partial against the full Phase 01 API contract. Existing applied SQL files are immutable. Do not roll back by destructive reset. Future corrections must use ordered additive migrations, preserve existing data and role keys, include RLS/grants/constraints/indexes, and provide forward repair/recovery notes. M020–M220 have no applied API/schema contract yet; those contracts belong to their named phases.
+
+No database schema, migration, grant, policy, function or trigger was changed by this reconciliation.
