@@ -14,16 +14,20 @@ import {
 } from '../../components/data-display/CorporateDataDisplay';
 import { CORPORATE_ROLE_OPTIONS } from '../../lib/corporate-data';
 import type { CorporateRoleKey, CorporateTenant, CorporateUserMember } from '../../lib/corporate-types';
-import type { AgentzyOrganization } from '@/apps/web/lib/api-client';
+import type { AgentzyOrganization, AgentzyOrganizationUnit, AgentzyBranch, AgentzyDepartment } from '@/apps/web/lib/api-client';
 
 export function OrganizationUsersView({
   tenant,
   users,
   organizations,
+  organizationUnits,
+  branches,
+  departments,
   canManageOrganization,
   onCreateOrganization,
   onOpenInviteModal,
   onReplaceMembershipRole,
+  onReassignMembership,
   onActivateMembership,
   onSuspendMembership,
   onRevokeMembership,
@@ -32,10 +36,14 @@ export function OrganizationUsersView({
   tenant: CorporateTenant;
   users: CorporateUserMember[];
   organizations: AgentzyOrganization[];
+  organizationUnits: AgentzyOrganizationUnit[];
+  branches: AgentzyBranch[];
+  departments: AgentzyDepartment[];
   canManageOrganization: boolean;
   onCreateOrganization: (payload: { name: string; slug: string; organization_type: 'company' | 'division' | 'department' | 'branch' | 'team'; parent_id?: string | null }) => Promise<void>;
   onOpenInviteModal: () => void;
   onReplaceMembershipRole: (membershipId: string, roleKey: CorporateRoleKey) => Promise<void>;
+  onReassignMembership: (membershipId: string, assignment: { organization_id: string | null; organization_unit_id: string | null; branch_id: string | null; department_id: string | null }) => Promise<void>;
   onActivateMembership: (membershipId: string) => Promise<void>;
   onSuspendMembership: (membershipId: string) => Promise<void>;
   onRevokeMembership: (membershipId: string) => Promise<void>;
@@ -50,6 +58,8 @@ export function OrganizationUsersView({
   const [orgSaving, setOrgSaving] = useState(false);
   const [savingMembershipId, setSavingMembershipId] = useState<string | null>(null);
   const [membershipError, setMembershipError] = useState<string | null>(null);
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, { organization_id: string; organization_unit_id: string; branch_id: string; department_id: string }>>({});
 
   const runMembershipAction = async (membershipId: string, action: () => Promise<void>) => {
     setSavingMembershipId(membershipId);
@@ -257,8 +267,81 @@ export function OrganizationUsersView({
                               onClick={() => void runMembershipAction(u.id, () => onRevokeMembership(u.id))}
                               className="h-8 rounded-lg border border-[#E7C5C8] px-2.5 text-[11px] font-semibold text-[#B23A48] disabled:opacity-50">Cabut</button>
                           )}
+                          {u.status !== 'Dicabut' && (
+                            <button type="button" disabled={savingMembershipId === u.id}
+                              onClick={() => {
+                                setAssignmentDrafts((current) => ({
+                                  ...current,
+                                  [u.id]: current[u.id] ?? {
+                                    organization_id: u.organizationId ?? '',
+                                    organization_unit_id: u.organizationUnitId ?? '',
+                                    branch_id: u.branchId ?? '',
+                                    department_id: u.departmentId ?? '',
+                                  },
+                                }));
+                                setEditingAssignmentId((current) => current === u.id ? null : u.id);
+                              }}
+                              className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#17324D] disabled:opacity-50">Pindah</button>
+                          )}
                         </div>
                       )}
+                      {editingAssignmentId === u.id && canManageOrganization && (() => {
+                        const draft = assignmentDrafts[u.id] ?? {
+                          organization_id: u.organizationId ?? '',
+                          organization_unit_id: u.organizationUnitId ?? '',
+                          branch_id: u.branchId ?? '',
+                          department_id: u.departmentId ?? '',
+                        };
+                        const patch = (values: Partial<typeof draft>) => setAssignmentDrafts((current) => ({
+                          ...current, [u.id]: { ...draft, ...values },
+                        }));
+                        return (
+                          <div className="mt-3 grid w-full min-w-[260px] grid-cols-1 gap-2 text-left sm:grid-cols-2">
+                            <label className="text-[10px] font-semibold text-[#526675]">Organisasi
+                              <select value={draft.organization_id} onChange={(event) => patch({ organization_id: event.target.value, organization_unit_id: '', branch_id: '', department_id: '' })}
+                                className="mt-1 h-8 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px]">
+                                <option value="">Tanpa organisasi</option>
+                                {organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                              </select>
+                            </label>
+                            <label className="text-[10px] font-semibold text-[#526675]">Organization Unit
+                              <select value={draft.organization_unit_id} onChange={(event) => patch({ organization_unit_id: event.target.value, branch_id: '', department_id: '' })}
+                                className="mt-1 h-8 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px]">
+                                <option value="">Tanpa unit</option>
+                                {organizationUnits.filter((item) => item.organization_id === draft.organization_id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                              </select>
+                            </label>
+                            <label className="text-[10px] font-semibold text-[#526675]">Cabang
+                              <select value={draft.branch_id} onChange={(event) => patch({ branch_id: event.target.value, department_id: '' })}
+                                className="mt-1 h-8 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px]">
+                                <option value="">Tanpa cabang</option>
+                                {branches.filter((item) => item.organization_id === draft.organization_id && (!draft.organization_unit_id || item.organization_unit_id === draft.organization_unit_id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                              </select>
+                            </label>
+                            <label className="text-[10px] font-semibold text-[#526675]">Departemen
+                              <select value={draft.department_id} onChange={(event) => patch({ department_id: event.target.value })}
+                                className="mt-1 h-8 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px]">
+                                <option value="">Tanpa departemen</option>
+                                {departments.filter((item) => item.organization_id === draft.organization_id && item.branch_id === draft.branch_id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                              </select>
+                            </label>
+                            <div className="flex justify-end gap-2 sm:col-span-2">
+                              <button type="button" onClick={() => setEditingAssignmentId(null)} className="h-8 rounded-lg border border-[#D8E3E9] px-3 text-[11px] font-semibold text-[#526675]">Batal</button>
+                              <button type="button" disabled={savingMembershipId === u.id}
+                                onClick={() => void runMembershipAction(u.id, async () => {
+                                  await onReassignMembership(u.id, {
+                                    organization_id: draft.organization_id || null,
+                                    organization_unit_id: draft.organization_unit_id || null,
+                                    branch_id: draft.branch_id || null,
+                                    department_id: draft.department_id || null,
+                                  });
+                                  setEditingAssignmentId(null);
+                                })}
+                                className="h-8 rounded-lg bg-[#0284C7] px-3 text-[11px] font-semibold text-white disabled:opacity-50">Simpan Penempatan</button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {savingMembershipId === u.id && <span className="mt-1 block text-[10px] text-[#718391]">Menyimpan…</span>}
                     </td>
                   </tr>
