@@ -171,7 +171,6 @@ export function AdminPortalClient({
         {portal.activeSection === 'rbac' && (
           <RbacMatrixView
             roles={portal.roles}
-            permissionRegistry={portal.permissionRegistry}
             onOpenRoleModal={(role) => portal.setModal({ type: 'role-crud', role })}
             onCyclePermission={portal.cycleRolePermission}
             onDeleteRole={portal.deleteRbacRole}
@@ -431,6 +430,7 @@ export function AdminPortalClient({
             ipAllowlistEnabled={portal.ipAllowlistEnabled}
             sessionTtlMinutes={portal.sessionTtlMinutes}
             breakGlassRequests={portal.breakGlassRequests}
+            currentUserId={portal.currentUserId}
             onOpenBreakGlassModal={() => portal.setModal({ type: 'break-glass-request' })}
             onDecideBreakGlass={portal.decideBreakGlass}
             onOpenSecurityPolicyModal={() => portal.setModal({ type: 'security-policy' })}
@@ -447,6 +447,7 @@ export function AdminPortalClient({
             onOpenAuditDetail={(logId) =>
               portal.setModal({ type: 'audit-detail', logId })
             }
+            onExportAudit={portal.exportAuditLogs}
             onOpenCreateIncident={() => portal.setModal({ type: 'incident-crud' })}
             onResolveIncident={portal.resolveIncident}
             onNotify={portal.showToast}
@@ -482,6 +483,7 @@ export function AdminPortalClient({
         onNavigate={portal.navigateTo}
         onSetModal={portal.setModal}
         tenants={portal.tenants}
+        permissionRegistry={portal.permissionRegistry}
         corporateSchemas={portal.corporateSchemas}
         invoices={portal.invoices}
         auditLogs={portal.auditLogs}
