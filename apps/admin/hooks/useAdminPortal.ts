@@ -27,6 +27,7 @@ import {
   listBreakGlassRequests,
   requestBreakGlass,
   approveBreakGlass,
+  rejectBreakGlass,
   activateBreakGlass,
   revokeBreakGlass,
   reviewBreakGlass,
@@ -1568,7 +1569,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       const current = breakGlassRequests.find((item) => item.id === id);
       try {
         if (action === 'approve') await approveBreakGlass(accessToken, id);
-        if (action === 'reject') await (await import('@/apps/web/lib/api-client')).rejectBreakGlass(accessToken, id);
+        if (action === 'reject') await rejectBreakGlass(accessToken, id);
         if (action === 'activate') await activateBreakGlass(accessToken, id, current?.durationMinutes ?? 30);
         if (action === 'revoke') await revokeBreakGlass(accessToken, id);
         if (action === 'review') {
