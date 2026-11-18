@@ -155,6 +155,15 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   const visibleOrganizations = canReadOrganizations && organizationsTenantId === activeTenantId
     ? organizations
     : [];
+  const visibleOrganizationUnits = canReadOrganizations && organizationsTenantId === activeTenantId
+    ? organizationUnits
+    : [];
+  const visibleBranches = canReadOrganizations && organizationsTenantId === activeTenantId
+    ? branches
+    : [];
+  const visibleDepartments = canReadOrganizations && organizationsTenantId === activeTenantId
+    ? departments
+    : [];
 
   const canManageOrganizations = auth.identity?.memberships.some((membership) =>
     membership.tenant_id === activeTenantId && membership.permissions.includes('corporate.organization.manage')
