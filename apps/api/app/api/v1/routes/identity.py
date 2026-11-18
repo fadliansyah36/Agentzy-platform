@@ -2,10 +2,12 @@ import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 from app.schemas.identity import IdentityRead, MembershipRead
@@ -207,6 +209,19 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
     user_id = UUID(claims["sub"])
     session_id = UUID(claims["session_id"])
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection,
+            actor_user_id=user_id,
+            tenant_id=None,
+            command_key=f"auth.sessions.revoke:{user_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={"scope": "all_sessions"},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 202,
+                content=reservation.replay_body or {},
+            )
         await connection.execute(
             text("""
                 insert into public.revoked_sessions(
@@ -240,4 +255,11 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
                 "request_id": _request_id(request),
             },
         )
-    return {"status": "revoked", "scope": "all_sessions"}
+        response_body = {"status": "revoked", "scope": "all_sessions"}
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=202,
+            response_body=response_body,
+        )
+    return response_body
