@@ -400,6 +400,16 @@ async def _set_policy_status(
                 status_code=reservation.replay_status or 200,
                 content=reservation.replay_body or {},
             )
+        current = await connection.execute(
+            text("select * from public.access_policies where id=:id for update"),
+            {"id": policy_id},
+        )
+        existing = current.mappings().first()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Policy not found")
+        await _authorize_policy_object(
+            session, actor=actor, policy=dict(existing), request_id=_request_id(request)
+        )
         result = await connection.execute(
             text("""
             update public.access_policies
@@ -455,8 +465,18 @@ async def disable_access_policy(
 async def read_access_policy_versions(
     policy_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ):
-    await _require_security_admin(claims, session)
+    actor = await _require_security_admin(claims, session)
     async with engine.connect() as connection:
+        current = await connection.execute(
+            text("select * from public.access_policies where id=:id"),
+            {"id": policy_id},
+        )
+        policy = current.mappings().first()
+        if policy is None:
+            raise HTTPException(status_code=404, detail="Policy not found")
+        await _authorize_policy_object(
+            session, actor=actor, policy=dict(policy), request_id=None
+        )
         result = await connection.execute(
             text("""
             select version,snapshot,changed_by,created_at
