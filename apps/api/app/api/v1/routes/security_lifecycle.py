@@ -21,6 +21,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -705,30 +706,6 @@ async def list_break_glass_requests(
     return {"data": [dict(row) for row in result.mappings().all()], "actor": str(actor)}
 
 
-_SENSITIVE_KEYS = {
-    "access_token",
-    "refresh_token",
-    "token",
-    "secret",
-    "password",
-    "credential",
-    "authorization",
-    "email",
-    "phone",
-    "ip",
-    "ip_address",
-}
-
-
-def _redact(value):
-    if isinstance(value, dict):
-        return {
-            key: ("[REDACTED]" if key.lower() in _SENSITIVE_KEYS else _redact(item))
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact(item) for item in value]
-    return value
 
 
 async def _audit_rows(
@@ -849,7 +826,7 @@ async def _audit_rows(
     safe = [
         {
             **row,
-            "metadata": _redact(row.get("metadata") or {}),
+            "metadata": redact_audit_value(row.get("metadata") or {}),
         }
         for row in rows
     ]
@@ -961,8 +938,16 @@ async def export_audit_logs(
     if platform_export:
         tenant_context = None
     async with engine.connect() as connection:
-        rows, _, _ = await _audit_rows(
+        rows, has_more, _ = await _audit_rows(
             connection, tenant_id, resource_type, None, 5000, None, tenant_context
+        )
+    if has_more:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Audit export melebihi 5.000 baris. Persempit filter tenant atau resource type "
+                "sebelum mengekspor agar tidak terjadi ekspor parsial."
+            ),
         )
     output = io.StringIO()
     writer = csv.DictWriter(
