@@ -142,11 +142,11 @@ export interface PlatformUserRecord {
   roleKey?: string;
   roleName: string;
   department: string;
-  branchScope: string;
-  organizationId: string | null;
-  organizationUnitId: string | null;
-  branchId: string | null;
-  departmentId: string | null;
+  branchScope?: string;
+  organizationId?: string | null;
+  organizationUnitId?: string | null;
+  branchId?: string | null;
+  departmentId?: string | null;
   mfaEnabled: boolean | null;
   status: 'Aktif' | 'Suspended' | 'Pending' | 'Dicabut';
   lastLogin: string | null;
