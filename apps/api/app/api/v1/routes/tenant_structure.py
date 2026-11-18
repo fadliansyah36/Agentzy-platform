@@ -1264,7 +1264,9 @@ async def replace_membership_role(
     actor = UUID(claims["sub"])
     role_key = payload.role_key.strip().lower()
     if role_key.startswith("platform_"):
-        raise HTTPException(status_code=422, detail="Platform role tidak dapat diberikan pada tenant.")
+        raise HTTPException(
+            status_code=422, detail="Platform role tidak dapat diberikan pada tenant."
+        )
     if payload.valid_until is not None and payload.valid_until <= datetime.now(UTC):
         raise HTTPException(status_code=422, detail="Masa berlaku role harus berada di masa depan.")
     elevated_roles = {
@@ -1289,7 +1291,10 @@ async def replace_membership_role(
         if not owner.scalar_one():
             raise HTTPException(
                 status_code=403,
-                detail="Hanya tenant owner atau platform membership admin dapat menetapkan role elevated.",
+                detail=(
+                    "Hanya tenant owner atau platform membership admin "
+                    "dapat menetapkan role elevated."
+                ),
             )
     scope_columns = {
         "organization": "organization_id",
@@ -1310,7 +1315,7 @@ async def replace_membership_role(
             return reservation
         membership_result = await connection.execute(
             text("""
-                select id,user_id,status,organization_id,organization_unit_id,branch_id,department_id
+                select id,user_id,status,organization_id,organization_unit_id,\n                       branch_id,department_id
                 from public.memberships
                 where id=:membership_id and tenant_id=:tenant_id
                 for update
@@ -1343,7 +1348,7 @@ async def replace_membership_role(
         if payload.scope_type != "tenant":
             column = scope_columns[payload.scope_type]
             if target[column] != payload.scope_id:
-                raise HTTPException(status_code=404, detail="Scope tidak tersedia untuk membership.")
+                raise HTTPException(\n                    status_code=404, detail="Scope tidak tersedia untuk membership."\n                )
         current_owner = await connection.execute(
             text("""
                 select exists(
