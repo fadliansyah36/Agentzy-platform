@@ -238,17 +238,11 @@ export const getWorkforceTenantContext = (accessToken: string, tenantId: string)
   );
 
 export const listOrganizationUnits = (accessToken: string, tenantId: string) =>
-  apiRequest<AgentzyOrganizationUnit[]>(`/tenants/${encodeURIComponent(tenantId)}/organization-units`, {
-    method: "GET", accessToken,
-  });
+  fetchAllAgentzyPages<AgentzyOrganizationUnit>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/organization-units`);
 export const listBranches = (accessToken: string, tenantId: string) =>
-  apiRequest<AgentzyBranch[]>(`/tenants/${encodeURIComponent(tenantId)}/branches`, {
-    method: "GET", accessToken,
-  });
+  fetchAllAgentzyPages<AgentzyBranch>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/branches`);
 export const listDepartments = (accessToken: string, tenantId: string) =>
-  apiRequest<AgentzyDepartment[]>(`/tenants/${encodeURIComponent(tenantId)}/departments`, {
-    method: "GET", accessToken,
-  });
+  fetchAllAgentzyPages<AgentzyDepartment>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/departments`);
 
 
 export const updateBranch = (
