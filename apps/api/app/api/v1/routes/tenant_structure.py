@@ -1288,10 +1288,8 @@ async def reassign_membership_hierarchy(
                         str(current["organization_id"]) if current["organization_id"] else None
                     ),
                     "organization_unit_id": (
-                        (
-                            str(current["organization_unit_id"])
-                            if current["organization_unit_id"] else None
-                        )
+                        str(current["organization_unit_id"])
+                        if current["organization_unit_id"] else None
                     ),
                     "branch_id": str(current["branch_id"]) if current["branch_id"] else None,
                     "department_id": (
