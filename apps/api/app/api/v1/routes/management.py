@@ -1055,12 +1055,12 @@ async def list_tenant_memberships(
                 p.email, m.status, m.joined_at, m.created_at,
                 coalesce(
                     array_agg(distinct r.key) filter (where r.key is not null),
-                    '{}'
+                    '{{}}'
                 ) as role_keys,
                 coalesce(
                     array_agg(distinct rp.permission_key)
                       filter (where rp.permission_key is not null),
-                    '{}'
+                    '{{}}'
                 ) as permissions
             from public.memberships m
             left join public.profiles p on p.user_id=m.user_id
