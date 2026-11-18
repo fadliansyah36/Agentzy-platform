@@ -388,3 +388,8 @@ export async function exportAuditLogs(accessToken: string, tenantId?: string): P
   }
   return response.blob();
 }
+
+export const rejectBreakGlass = (accessToken: string, requestId: string) =>
+  apiRequest<AgentzyBreakGlassRequest>(`/security/break-glass/requests/${encodeURIComponent(requestId)}/reject`, {
+    method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  });
