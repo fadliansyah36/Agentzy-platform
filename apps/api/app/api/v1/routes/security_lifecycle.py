@@ -874,7 +874,7 @@ async def list_break_glass_requests(
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ) -> PageResponse:
-    actor = await _require_platform_permission(
+    await _require_platform_permission(
         claims, session, "platform.security.manage", "manage", "break_glass_requests"
     )
     async with engine.begin() as connection:
