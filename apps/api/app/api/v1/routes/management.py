@@ -811,7 +811,12 @@ async def replace_role_permissions(
             session,
             user_id=actor,
             permission="platform.roles.manage",
-            resource={"id": str(role_id), "key": role["key"], "tenant_id": str(role["tenant_id"]) if role["tenant_id"] else None, "scope_type": role["scope_type"]},
+            resource={
+                "id": str(role_id),
+                "key": role["key"],
+                "tenant_id": str(role["tenant_id"]) if role["tenant_id"] else None,
+                "scope_type": role["scope_type"],
+            },
             request_id=_request_id(request),
         )
         if role["scope_type"] == "platform":
@@ -1288,17 +1293,28 @@ async def update_role(
                 content=reservation.replay_body or {},
             )
         target_result = await connection.execute(
-            text("select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"),
+            text(
+                "select id,key,tenant_id,scope_type from public.roles "
+                "where id=:role_id for update"
+            ),
             {"role_id": role_id},
         )
         target_role = target_result.mappings().first()
-        if target_role is None or target_role["tenant_id"] is not None or target_role["scope_type"] != "platform":
+        if (
+            target_role is None
+            or target_role["tenant_id"] is not None
+            or target_role["scope_type"] != "platform"
+        ):
             raise HTTPException(status_code=404, detail="Custom platform role not found.")
         await _authorize_platform_resource(
             session,
             user_id=actor,
             permission="platform.roles.manage",
-            resource={"id": str(role_id), "key": target_role["key"], "scope_type": target_role["scope_type"]},
+            resource={
+                "id": str(role_id),
+                "key": target_role["key"],
+                "scope_type": target_role["scope_type"],
+            },
             request_id=_request_id(request),
         )
         result = await connection.execute(
@@ -1384,7 +1400,12 @@ async def delete_role(
             session,
             user_id=actor,
             permission="platform.roles.manage",
-            resource={"id": str(role_id), "key": role["key"], "scope_type": role["scope_type"], "tenant_id": str(role["tenant_id"]) if role["tenant_id"] else None},
+            resource={
+                "id": str(role_id),
+                "key": role["key"],
+                "scope_type": role["scope_type"],
+                "tenant_id": str(role["tenant_id"]) if role["tenant_id"] else None,
+            },
             request_id=_request_id(request),
         )
         assigned = await connection.execute(
