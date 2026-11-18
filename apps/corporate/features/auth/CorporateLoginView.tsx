@@ -153,7 +153,7 @@ export function CorporateLoginView({
             </div>
 
             <div className="flex justify-end">
-              <Link href="/auth/recovery" className="text-xs font-semibold text-[#0284C7] hover:underline">
+              <Link href="/auth/recovery?returnTo=/corporate" className="text-xs font-semibold text-[#0284C7] hover:underline">
                 Lupa kata sandi?
               </Link>
             </div>
