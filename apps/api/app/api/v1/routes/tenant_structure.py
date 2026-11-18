@@ -1178,6 +1178,7 @@ async def reassign_membership_hierarchy(
                     when 'department' then :department_id
                     else scope_id
                 end,
+                assigned_by=:actor,
                 assigned_at=now()
                 where membership_id=:membership_id
             """),
@@ -1187,6 +1188,7 @@ async def reassign_membership_hierarchy(
                 "branch_id": branch_id,
                 "department_id": department_id,
                 "membership_id": membership_id,
+                "actor": actor,
             },
         )
         response = {
