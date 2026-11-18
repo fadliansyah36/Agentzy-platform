@@ -59,9 +59,13 @@ jobs:
           fi
 
       - name: ESLint
+        id: eslint
+        continue-on-error: true
         run: bun run lint
 
       - name: TypeScript
+        id: typescript
+        continue-on-error: true
         run: bunx tsc --noEmit
 
       - name: Install API and engineering tools
@@ -77,14 +81,20 @@ jobs:
         run: ruff format app
 
       - name: Verify Ruff rules without suppressions
+        id: ruff
+        continue-on-error: true
         working-directory: apps/api
         run: ruff check app
 
       - name: Python compile
+        id: compile
+        continue-on-error: true
         working-directory: apps/api
         run: python -m compileall -q app
 
       - name: Import application and validate OpenAPI generation
+        id: openapi
+        continue-on-error: true
         working-directory: apps/api
         env:
           SUPABASE_URL: https://cwhjdnkotuhueeudpgeu.supabase.co
@@ -101,6 +111,8 @@ jobs:
           PY
 
       - name: Validate migration source filenames and ordering
+        id: migrations
+        continue-on-error: true
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -124,6 +136,7 @@ jobs:
         run: git diff --check
 
       - name: Commit verified engineering-only repairs to main
+        if: steps.eslint.outcome == 'success' && steps.typescript.outcome == 'success' && steps.ruff.outcome == 'success' && steps.compile.outcome == 'success' && steps.openapi.outcome == 'success' && steps.migrations.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -136,3 +149,20 @@ jobs:
           fi
           git commit -m "fix(phase-00): reconcile Bun lock and Ruff findings [skip ci]"
           git push origin HEAD:main
+
+      - name: Fail the workflow if any engineering gate failed
+        if: always()
+        env:
+          ESLINT_OUTCOME: ${{ steps.eslint.outcome }}
+          TYPESCRIPT_OUTCOME: ${{ steps.typescript.outcome }}
+          RUFF_OUTCOME: ${{ steps.ruff.outcome }}
+          COMPILE_OUTCOME: ${{ steps.compile.outcome }}
+          OPENAPI_OUTCOME: ${{ steps.openapi.outcome }}
+          MIGRATIONS_OUTCOME: ${{ steps.migrations.outcome }}
+        run: |
+          for result in "$ESLINT_OUTCOME" "$TYPESCRIPT_OUTCOME" "$RUFF_OUTCOME" "$COMPILE_OUTCOME" "$OPENAPI_OUTCOME" "$MIGRATIONS_OUTCOME"; do
+            if [ "$result" != "success" ]; then
+              echo "Engineering gate failed: $result"
+              exit 1
+            fi
+          done
