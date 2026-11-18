@@ -15,6 +15,9 @@ import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
   createTenant as createTenantApi,
   listPlatformTenants,
+  listOrganizationUnits,
+  listBranches,
+  listDepartments,
   updateTenant as updateTenantApi,
   archiveTenant as archiveTenantApi,
   createAgentzyRole,
@@ -153,7 +156,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Core collections
-  const [tenants, setTenants] = useState<AdminTenantRecord[]>(initial.tenants);
+  const [tenants, setTenants] = useState<AdminTenantRecord[]>([]);
   const [providers, setProviders] = useState<AdminIspProviderRecord[]>(initial.providers);
   const [industries, setIndustries] = useState<MasterIndustryItem[]>(initial.industries);
   const [services, setServices] = useState<MasterServiceItem[]>(initial.services);
@@ -161,8 +164,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [cooperationPolicies, setCooperationPolicies] = useState<CooperationPolicyRecord[]>(
     initial.cooperationPolicies
   );
-  const [orgUnits, setOrgUnits] = useState<OrgUnitRecord[]>(initial.orgUnits);
-  const [users, setUsers] = useState<PlatformUserRecord[]>(initial.users);
+  const [orgUnits, setOrgUnits] = useState<OrgUnitRecord[]>([]);
+  const [users, setUsers] = useState<PlatformUserRecord[]>([]);
   const [roles, setRoles] = useState<RbacRoleRecord[]>(initial.roles);
   const [permissionRegistry, setPermissionRegistry] = useState<AgentzyPermissionDefinition[]>([]);
   const [staffList, setStaffList] = useState<HumanStaffRecord[]>(initial.staff);
@@ -303,6 +306,68 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     });
     return () => { active = false; };
   }, [auth.session?.access_token, auth.identity, auth.aal, showToast]);
+
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    if (
+      !accessToken ||
+      auth.aal !== 'aal2' ||
+      !platformPermissions.includes('platform.tenants.read') ||
+      tenants.length === 0
+    ) return;
+    let active = true;
+    void Promise.all(tenants.map(async (tenant) => {
+      const [unitRows, branchRows, departmentRows] = await Promise.all([
+        listOrganizationUnits(accessToken, tenant.id),
+        listBranches(accessToken, tenant.id),
+        listDepartments(accessToken, tenant.id),
+      ]);
+      const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
+      const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
+      const organizationUnits: OrgUnitRecord[] = [
+        ...unitRows.map((item) => ({
+          id: item.id,
+          tenantId: tenant.id,
+          name: item.name,
+          unitType: 'Cabang / Regional' as const,
+          parentName: item.parent_unit_id ? unitNames.get(item.parent_unit_id) ?? '' : '',
+          headName: '',
+          memberCount: 0,
+          status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+        })),
+        ...branchRows.map((item) => ({
+          id: item.id,
+          tenantId: tenant.id,
+          name: item.name,
+          unitType: 'Cabang / Regional' as const,
+          parentName: item.organization_unit_id ? unitNames.get(item.organization_unit_id) ?? '' : '',
+          headName: '',
+          memberCount: 0,
+          status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+        })),
+        ...departmentRows.map((item) => ({
+          id: item.id,
+          tenantId: tenant.id,
+          name: item.name,
+          unitType: 'Departemen' as const,
+          parentName: item.branch_id
+            ? branchNames.get(item.branch_id) ?? ''
+            : item.parent_department_id
+              ? departmentRows.find((parent) => parent.id === item.parent_department_id)?.name ?? ''
+              : '',
+          headName: '',
+          memberCount: 0,
+          status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+        })),
+      ];
+      return organizationUnits;
+    })).then((rows) => {
+      if (active) setOrgUnits(rows.flat());
+    }).catch((error) => {
+      if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat hierarchy tenant dari FastAPI.');
+    });
+    return () => { active = false; };
+  }, [auth.session?.access_token, auth.aal, platformPermissions, tenants, showToast]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
