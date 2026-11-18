@@ -425,7 +425,6 @@ function AdminModalSwitch(props: AdminModalsProps) {
       <OrgUnitCrudModal
         initial={modal.unit}
         tenants={props.tenants}
-        roles={props.roles}
         onClose={onClose}
         onSubmit={props.onUpsertOrgUnit}
       />
@@ -437,6 +436,7 @@ function AdminModalSwitch(props: AdminModalsProps) {
       <UserCrudModal
         initial={modal.user}
         tenants={props.tenants}
+        roles={props.roles}
         onClose={onClose}
         onSubmit={props.onUpsertUser}
       />
