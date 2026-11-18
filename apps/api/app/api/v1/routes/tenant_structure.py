@@ -961,6 +961,111 @@ async def revoke_membership(
     return response_body
 
 
+
+@router.post(
+    "/{tenant_id}/memberships/{membership_id}/activate",
+    status_code=status.HTTP_200_OK,
+    tags=["Membership"],
+)
+async def activate_membership(
+    tenant_id: UUID,
+    membership_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    context = await _authorize(
+        session, claims, tenant_id, "corporate.organization.manage", "platform.memberships.manage"
+    )
+    actor = UUID(claims["sub"])
+    async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id, f"membership.activate:{membership_id}", {}
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
+        target_result = await connection.execute(
+            text("""
+                select id,organization_id,organization_unit_id,branch_id,department_id,status
+                from public.memberships
+                where id=:membership_id and tenant_id=:tenant_id
+                for update
+            """),
+            {"membership_id": membership_id, "tenant_id": tenant_id},
+        )
+        target = target_result.mappings().first()
+        if target is None:
+            raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=target["organization_id"],
+                organization_unit_id=target["organization_unit_id"],
+                branch_id=target["branch_id"],
+                department_id=target["department_id"],
+            )
+        if target["status"] != "suspended":
+            raise HTTPException(
+                status_code=409, detail="Hanya membership suspended yang dapat diaktifkan kembali."
+            )
+        tenant = await connection.execute(
+            text("select status from public.tenants where id=:tenant_id"),
+            {"tenant_id": tenant_id},
+        )
+        if tenant.scalar_one_or_none() != "active":
+            raise HTTPException(status_code=409, detail="Tenant tidak aktif.")
+        hierarchy = await connection.execute(
+            text("""
+                select
+                  (m.organization_id is null or exists(
+                    select 1 from public.organizations o
+                    where o.id=m.organization_id and o.tenant_id=m.tenant_id and o.status='active'
+                  )) and
+                  (m.organization_unit_id is null or exists(
+                    select 1 from public.organization_units u
+                    where u.id=m.organization_unit_id and u.tenant_id=m.tenant_id
+                      and u.organization_id=m.organization_id and u.status='active'
+                  )) and
+                  (m.branch_id is null or exists(
+                    select 1 from public.branches b
+                    where b.id=m.branch_id and b.tenant_id=m.tenant_id
+                      and b.organization_id=m.organization_id and b.status='active'
+                  )) and
+                  (m.department_id is null or exists(
+                    select 1 from public.departments d
+                    where d.id=m.department_id and d.tenant_id=m.tenant_id
+                      and d.organization_id=m.organization_id and d.branch_id=m.branch_id
+                      and d.status='active'
+                  )) as hierarchy_active
+                from public.memberships m
+                where m.id=:membership_id and m.tenant_id=:tenant_id
+            """),
+            {"membership_id": membership_id, "tenant_id": tenant_id},
+        )
+        if not hierarchy.scalar_one():
+            raise HTTPException(status_code=409, detail="Hierarchy membership tidak aktif.")
+        await connection.execute(
+            text("""
+                update public.memberships
+                set status='active',joined_at=coalesce(joined_at,now()),
+                    ended_at=null,updated_at=now()
+                where id=:membership_id and tenant_id=:tenant_id
+            """),
+            {"membership_id": membership_id, "tenant_id": tenant_id},
+        )
+        response_body = {"id": str(membership_id), "status": "active"}
+        await _audit(
+            connection, request, actor, tenant_id, "membership.activated",
+            "membership", membership_id,
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
+
+
 @router.post(
     "/{tenant_id}/memberships/{membership_id}/roles",
     status_code=status.HTTP_200_OK,
@@ -1127,6 +1232,184 @@ async def assign_membership_role(
             record_id=reservation.record_id,
             response_status=200,
             response_body=response_body,
+        )
+    return response_body
+
+
+
+@router.put(
+    "/{tenant_id}/memberships/{membership_id}/roles",
+    status_code=status.HTTP_200_OK,
+    tags=["Access Control"],
+)
+async def replace_membership_role(
+    tenant_id: UUID,
+    membership_id: UUID,
+    payload: MembershipRoleAssign,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    context = await _authorize(
+        session, claims, tenant_id, "corporate.organization.manage", "platform.memberships.manage"
+    )
+    actor = UUID(claims["sub"])
+    role_key = payload.role_key.strip().lower()
+    if role_key.startswith("platform_"):
+        raise HTTPException(status_code=422, detail="Platform role tidak dapat diberikan pada tenant.")
+    if payload.valid_until is not None and payload.valid_until <= datetime.now(UTC):
+        raise HTTPException(status_code=422, detail="Masa berlaku role harus berada di masa depan.")
+    elevated_roles = {
+        "corporate_owner", "corporate_admin", "corporate_ai_manager", "ai_workforce_admin"
+    }
+    if role_key in elevated_roles and context is not None:
+        owner = await session.execute(
+            text("""
+                select exists(
+                  select 1 from public.memberships m
+                  join public.membership_roles mr on mr.membership_id=m.id
+                  join public.roles r on r.id=mr.role_id
+                  where m.user_id=:actor and m.tenant_id=:tenant_id and m.status='active'
+                    and mr.scope_type='tenant' and r.key='corporate_owner'
+                    and (r.tenant_id is null or r.tenant_id=:tenant_id)
+                    and (mr.valid_from is null or mr.valid_from<=now())
+                    and (mr.valid_until is null or mr.valid_until>now())
+                )
+            """),
+            {"actor": actor, "tenant_id": tenant_id},
+        )
+        if not owner.scalar_one():
+            raise HTTPException(
+                status_code=403,
+                detail="Hanya tenant owner atau platform membership admin dapat menetapkan role elevated.",
+            )
+    scope_columns = {
+        "organization": "organization_id",
+        "organization_unit": "organization_unit_id",
+        "branch": "branch_id",
+        "department": "department_id",
+    }
+    if payload.scope_type == "tenant" and payload.scope_id is not None:
+        raise HTTPException(status_code=422, detail="Tenant scope tidak memerlukan scope_id.")
+    if payload.scope_type != "tenant" and payload.scope_id is None:
+        raise HTTPException(status_code=422, detail="Scope ID wajib diisi untuk role scoped.")
+    async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id,
+            f"membership.role.replace:{membership_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
+        membership_result = await connection.execute(
+            text("""
+                select id,user_id,status,organization_id,organization_unit_id,branch_id,department_id
+                from public.memberships
+                where id=:membership_id and tenant_id=:tenant_id
+                for update
+            """),
+            {"membership_id": membership_id, "tenant_id": tenant_id},
+        )
+        target = membership_result.mappings().first()
+        if target is None:
+            raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        if target["status"] not in ("active", "invited", "suspended"):
+            raise HTTPException(status_code=409, detail="Membership tidak dapat diubah.")
+        if context is not None:
+            authorize_object(
+                context, resource_tenant_id=tenant_id,
+                organization_id=target["organization_id"],
+                organization_unit_id=target["organization_unit_id"],
+                branch_id=target["branch_id"], department_id=target["department_id"],
+            )
+        role_result = await connection.execute(
+            text("""
+                select id,key,tenant_id from public.roles
+                where key=:role_key and (tenant_id is null or tenant_id=:tenant_id)
+                order by tenant_id nulls first limit 1
+            """),
+            {"role_key": role_key, "tenant_id": tenant_id},
+        )
+        role = role_result.mappings().first()
+        if role is None:
+            raise HTTPException(status_code=404, detail="Role tidak ditemukan.")
+        if payload.scope_type != "tenant":
+            column = scope_columns[payload.scope_type]
+            if target[column] != payload.scope_id:
+                raise HTTPException(status_code=404, detail="Scope tidak tersedia untuk membership.")
+        current_owner = await connection.execute(
+            text("""
+                select exists(
+                  select 1 from public.membership_roles mr
+                  join public.roles r on r.id=mr.role_id
+                  where mr.membership_id=:membership_id and r.key='corporate_owner'
+                    and (mr.valid_from is null or mr.valid_from<=now())
+                    and (mr.valid_until is null or mr.valid_until>now())
+                )
+            """),
+            {"membership_id": membership_id},
+        )
+        if current_owner.scalar_one() and role_key != "corporate_owner":
+            other_owner = await connection.execute(
+                text("""
+                    select exists(
+                      select 1 from public.memberships m
+                      join public.membership_roles mr on mr.membership_id=m.id
+                      join public.roles r on r.id=mr.role_id
+                      where m.tenant_id=:tenant_id and m.id<>:membership_id
+                        and m.status='active' and r.key='corporate_owner'
+                        and (mr.valid_from is null or mr.valid_from<=now())
+                        and (mr.valid_until is null or mr.valid_until>now())
+                    )
+                """),
+                {"tenant_id": tenant_id, "membership_id": membership_id},
+            )
+            if not other_owner.scalar_one():
+                raise HTTPException(
+                    status_code=409, detail="Tenant harus memiliki minimal satu owner aktif."
+                )
+        previous = await connection.execute(
+            text("""
+                select coalesce(array_agg(r.key order by r.key), '{}') as role_keys
+                from public.membership_roles mr join public.roles r on r.id=mr.role_id
+                where mr.membership_id=:membership_id
+            """),
+            {"membership_id": membership_id},
+        )
+        previous_role_keys = previous.scalar_one()
+        await connection.execute(
+            text("delete from public.membership_roles where membership_id=:membership_id"),
+            {"membership_id": membership_id},
+        )
+        await connection.execute(
+            text("""
+                insert into public.membership_roles(
+                  membership_id,role_id,assigned_by,scope_type,scope_id,valid_from,valid_until
+                ) values (
+                  :membership_id,:role_id,:actor,:scope_type,:scope_id,now(),:valid_until
+                )
+            """),
+            {
+                "membership_id": membership_id, "role_id": role["id"], "actor": actor,
+                "scope_type": payload.scope_type, "scope_id": payload.scope_id,
+                "valid_until": payload.valid_until,
+            },
+        )
+        response_body = {
+            "membership_id": str(membership_id), "role_key": role_key,
+            "previous_role_keys": previous_role_keys,
+            "scope_type": payload.scope_type,
+            "scope_id": str(payload.scope_id) if payload.scope_id else None,
+            "valid_until": payload.valid_until.isoformat() if payload.valid_until else None,
+        }
+        await _audit(
+            connection, request, actor, tenant_id, "membership.role.replaced",
+            "membership", membership_id,
+            {"previous_role_keys": previous_role_keys, "role_key": role_key,
+             "scope_type": payload.scope_type},
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
         )
     return response_body
 
