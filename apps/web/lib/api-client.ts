@@ -299,3 +299,84 @@ export const deleteAgentzyRole = (accessToken: string, roleId: string) =>
   apiRequest<{ id: string; status: string }>(`/roles/${encodeURIComponent(roleId)}`, {
     method: "DELETE", accessToken,
   });
+
+
+export type AgentzyBreakGlassRequest = {
+  id: string;
+  requester_user_id: string;
+  approver_user_id: string | null;
+  reason: string;
+  requested_scope: { permission_keys: string[]; tenant_ids: string[]; duration_minutes?: number };
+  status: 'requested' | 'approved' | 'active' | 'expired' | 'revoked' | 'rejected' | 'reviewed';
+  requested_at: string;
+  approved_at: string | null;
+  activated_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  reviewed_at: string | null;
+};
+const createIdempotencyKey = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `agentzy-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+export const listBreakGlassRequests = (accessToken: string) =>
+  apiRequest<{ data: AgentzyBreakGlassRequest[] }>('/security/break-glass/requests', {
+    method: 'GET', accessToken,
+  });
+export const requestBreakGlass = (
+  accessToken: string,
+  payload: { reason: string; permission_keys: string[]; tenant_ids: string[]; duration_minutes: number },
+) => apiRequest<AgentzyBreakGlassRequest>('/security/break-glass/requests', {
+  method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  body: JSON.stringify(payload),
+});
+export const approveBreakGlass = (accessToken: string, requestId: string) =>
+  apiRequest<AgentzyBreakGlassRequest>(`/security/break-glass/requests/${encodeURIComponent(requestId)}/approve`, {
+    method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  });
+export const activateBreakGlass = (accessToken: string, requestId: string, durationMinutes: number) =>
+  apiRequest<AgentzyBreakGlassRequest>(`/security/break-glass/requests/${encodeURIComponent(requestId)}/activate`, {
+    method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify({ duration_minutes: durationMinutes }),
+  });
+export const revokeBreakGlass = (accessToken: string, requestId: string) =>
+  apiRequest<AgentzyBreakGlassRequest>(`/security/break-glass/requests/${encodeURIComponent(requestId)}/revoke`, {
+    method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  });
+export const reviewBreakGlass = (accessToken: string, requestId: string, notes: string) =>
+  apiRequest<AgentzyBreakGlassRequest>(`/security/break-glass/requests/${encodeURIComponent(requestId)}/review`, {
+    method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify({ notes }),
+  });
+
+export type AgentzyAuditLog = {
+  id: string;
+  tenant_id: string | null;
+  actor_user_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  request_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+export const listAuditLogs = (
+  accessToken: string,
+  params: { tenant_id?: string; limit?: number; cursor?: string; resource_type?: string } = {},
+) => {
+  const query = new URLSearchParams();
+  if (params.tenant_id) query.set('tenant_id', params.tenant_id);
+  if (params.limit) query.set('limit', String(params.limit));
+  if (params.cursor) query.set('cursor', params.cursor);
+  if (params.resource_type) query.set('resource_type', params.resource_type);
+  return apiRequest<{ data: AgentzyAuditLog[]; meta: { has_more: boolean; next_cursor: string | null; request_id: string | null } }>(
+    `/security/audit?${query.toString()}`, { method: 'GET', accessToken },
+  );
+};
+export const exportAuditLogs = (accessToken: string, tenantId?: string) => {
+  const query = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
+  return apiRequest<Blob>(`/security/audit/export${query}`, {
+    method: 'GET', accessToken, headers: { Accept: 'text/csv' },
+  });
+};
