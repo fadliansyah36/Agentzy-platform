@@ -1,0 +1,126 @@
+name: Phase 00 Engineering Remediation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/phase-00-engineering-remediation.yml"
+      - "apps/api/**"
+      - "package.json"
+      - "bun.lock"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase-00-engineering-remediation-main
+  cancel-in-progress: false
+
+jobs:
+  repair-and-verify:
+    name: Repair lockfile and Ruff formatting, then verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Regenerate lockfile from declared package manifest
+        run: bun install
+
+      - name: Install API and engineering tools
+        working-directory: apps/api
+        run: python -m pip install -e ".[dev]"
+
+      - name: Apply only Ruff safe fixes
+        working-directory: apps/api
+        run: ruff check --fix app
+
+      - name: Format Python source with configured Ruff formatter
+        working-directory: apps/api
+        run: ruff format app
+
+      - name: Verify Ruff rules without suppressions
+        working-directory: apps/api
+        run: ruff check app
+
+      - name: Python compile
+        working-directory: apps/api
+        run: python -m compileall -q app
+
+      - name: Import application and validate OpenAPI generation
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: https://cwhjdnkotuhueeudpgeu.supabase.co
+          DATABASE_URL: postgresql+asyncpg://check:check@127.0.0.1:5432/agentzy_check
+        run: |
+          python - <<'PY'
+          import json
+          from app.main import app
+          schema = app.openapi()
+          assert schema.get("openapi")
+          assert schema.get("paths")
+          json.dumps(schema)
+          print(f"OpenAPI {schema['openapi']}: {len(schema['paths'])} paths")
+          PY
+
+      - name: Verify regenerated lockfile is frozen
+        run: bun install --frozen-lockfile
+
+      - name: ESLint
+        run: bun run lint
+
+      - name: TypeScript
+        run: bunx tsc --noEmit
+
+      - name: Validate migration source filenames and ordering
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          files = sorted(Path("supabase/migrations").glob("*.sql"))
+          pattern = re.compile(r"^([0-9]{14})_[a-z0-9_]+\.sql$")
+          versions = []
+          for file in files:
+              match = pattern.match(file.name)
+              if not match:
+                  raise SystemExit(f"Invalid migration filename: {file}")
+              versions.append(match.group(1))
+          if len(versions) != len(set(versions)):
+              raise SystemExit("Duplicate migration version detected")
+          if versions != sorted(versions):
+              raise SystemExit("Migration source files are not ordered by version")
+          print(f"Validated {len(files)} ordered migration source files")
+          PY
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - name: Commit verified engineering-only repairs to main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bun.lock apps/api/app
+          if git diff --cached --quiet; then
+            echo "No lockfile or Python formatting changes to commit."
+            exit 0
+          fi
+          git commit -m "fix(phase-00): reconcile Bun lock and Ruff findings [skip ci]"
+          git push origin HEAD:main
