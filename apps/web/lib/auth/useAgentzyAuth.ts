@@ -29,9 +29,12 @@ async function loadContext(client: SupabaseClient, session: Session): Promise<Au
 }
 
 export function useAgentzyAuth() {
+  const [client] = useState(() => getSupabaseBrowserClient());
   const [snapshot, setSnapshot] = useState<AuthSnapshot>({ session: null, identity: null, tenants: [], aal: null });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => Boolean(client));
+  const [error, setError] = useState<string | null>(() =>
+    client ? null : 'Konfigurasi Supabase belum tersedia. Atur NEXT_PUBLIC_SUPABASE_URL dan publishable/anon key.'
+  );
 
   const hydrate = useCallback(async (client: SupabaseClient, session: Session | null) => {
     if (!session) {
@@ -53,12 +56,7 @@ export function useAgentzyAuth() {
   }, []);
 
   useEffect(() => {
-    const client = getSupabaseBrowserClient();
-    if (!client) {
-      setError('Konfigurasi Supabase belum tersedia. Atur NEXT_PUBLIC_SUPABASE_URL dan publishable/anon key.');
-      setLoading(false);
-      return;
-    }
+    if (!client) return;
     let alive = true;
     void client.auth.getSession().then(({ data, error: sessionError }) => {
       if (!alive) return;
@@ -72,7 +70,7 @@ export function useAgentzyAuth() {
       alive = false;
       subscription.unsubscribe();
     };
-  }, [hydrate]);
+  }, [client, hydrate]);
 
   const signIn = useCallback(async (email: string, password: string, requireMfa = false, mfaCode?: string) => {
     const client = getSupabaseBrowserClient();
