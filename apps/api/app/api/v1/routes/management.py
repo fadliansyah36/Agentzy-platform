@@ -51,6 +51,14 @@ class RoleCreate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     scope_type: str = Field(pattern="^(platform|tenant)$")
 
+    @model_validator(mode="after")
+    def validate_scope_key(self):
+        if self.scope_type == "platform" and not self.key.startswith("platform_"):
+            raise ValueError("Platform role keys must use the platform_ prefix")
+        if self.scope_type == "tenant" and self.key.startswith("platform_"):
+            raise ValueError("Tenant role keys cannot use the platform_ prefix")
+        return self
+
 
 class RolePatch(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
