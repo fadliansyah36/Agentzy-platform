@@ -13,7 +13,10 @@ class AbacEvaluatorTests(TestCase):
     def setUp(self):
         self.now = datetime(2026, 11, 18, 7, 0, tzinfo=UTC)
         self.tenant = "tenant-a"
-        self.resource = {"id": "r-1", "tenant_id": self.tenant, "type": "work_order", "status": "open"}
+        self.resource = {
+            "id": "r-1", "tenant_id": self.tenant,
+            "type": "work_order", "status": "open",
+        }
         self.subject = {"id": "u-1", "roles": ["technician"], "department_id": "d-1"}
 
     def policy(self, **overrides):
