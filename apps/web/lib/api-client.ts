@@ -310,7 +310,7 @@ export const createBranch = (
   payload: { organization_id: string; organization_unit_id?: string | null; name: string; code: string },
 ) => apiRequest<AgentzyBranch>(
   `/tenants/${encodeURIComponent(tenantId)}/branches`,
-  { method: "POST", accessToken, body: JSON.stringify(payload) },
+  { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
 
 export const createDepartment = (
@@ -319,7 +319,7 @@ export const createDepartment = (
   payload: { organization_id: string; branch_id?: string | null; parent_department_id?: string | null; name: string; code: string },
 ) => apiRequest<AgentzyDepartment>(
   `/tenants/${encodeURIComponent(tenantId)}/departments`,
-  { method: "POST", accessToken, body: JSON.stringify(payload) },
+  { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
 
 export type AgentzyInvitation = {
