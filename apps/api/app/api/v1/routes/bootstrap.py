@@ -92,30 +92,51 @@ async def bootstrap_platform_admin(
                 insert into public.memberships(tenant_id,user_id,status,joined_at)
                 values (:tenant_id,:user_id,'active',now())
                 on conflict (tenant_id,user_id) do update
-                  set status='active', joined_at=coalesce(public.memberships.joined_at,now()), updated_at=now()
+                  set status='active',
+                      joined_at=coalesce(public.memberships.joined_at,now()),
+                      updated_at=now()
                 returning id
             """), {"tenant_id": tenant_id, "user_id": user_id})
             membership_id = membership_result.scalar_one()
             await connection.execute(text("""
                 insert into public.membership_roles(membership_id,role_id,assigned_by)
-                select :membership_id,id,null from public.roles where key='platform_super_admin' and tenant_id is null
+                select :membership_id, id, null
+                from public.roles
+                where key='platform_super_admin'
+                  and tenant_id is null
                 on conflict do nothing
             """), {"membership_id": membership_id})
             await connection.execute(text("""
-                insert into public.audit_logs(tenant_id,actor_user_id,action,resource_type,resource_id,request_id,ip_address,metadata)
-                values (:tenant_id,:actor,'platform.bootstrap_admin.invited','membership',:membership_id,:request_id,:ip,jsonb_build_object('email',:email))
+                insert into public.audit_logs(
+                    tenant_id, actor_user_id, action, resource_type,
+                    resource_id, request_id, ip_address, metadata
+                )
+                values (
+                    :tenant_id, :actor, 'platform.bootstrap_admin.invited',
+                    'membership', :membership_id, :request_id, :ip,
+                    jsonb_build_object('email', :email)
+                )
             """), {
                 "tenant_id": tenant_id, "actor": user_id, "membership_id": str(membership_id),
                 "request_id": request.headers.get("x-request-id"),
                 "ip": request.client.host if request.client else None, "email": payload.email,
             })
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="Undangan terkirim, tetapi provisioning membership gagal. Perlu rekonsiliasi sebelum mengulang bootstrap.") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Undangan terkirim, tetapi provisioning membership gagal. "
+                "Perlu rekonsiliasi sebelum mengulang bootstrap."
+            ),
+        ) from exc
 
     return {
         "status": "invited",
         "email": payload.email,
         "user_id": str(user_id),
         "tenant_id": str(tenant_id),
-        "message": "Undangan administrator dikirim. Selesaikan verifikasi email, atur password, lalu daftarkan MFA TOTP sebelum login ke Super Admin.",
+        "message": (
+            "Undangan administrator dikirim. Selesaikan verifikasi email, "
+            "atur password, lalu daftarkan MFA TOTP sebelum login ke Super Admin."
+        ),
     }

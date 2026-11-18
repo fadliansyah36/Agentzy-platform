@@ -15,8 +15,14 @@ session_dependency = Depends(user_session)
 async def read_identity(claims: dict = claims_dependency, session: AsyncSession = session_dependency) -> IdentityRead:
     result = await session.execute(text("""
         select m.id, m.tenant_id, t.name as tenant_name, m.organization_id, m.status,
-               coalesce(array_agg(distinct r.key) filter (where r.key is not null), '{}') as role_keys,
-               coalesce(array_agg(distinct rp.permission_key) filter (where rp.permission_key is not null), '{}') as permissions
+               coalesce(
+                   array_agg(distinct r.key) filter (where r.key is not null),
+                   '{}'
+               ) as role_keys,
+               coalesce(
+                   array_agg(distinct rp.permission_key) filter (where rp.permission_key is not null),
+                   '{}'
+               ) as permissions
         from public.memberships m
         join public.tenants t on t.id = m.tenant_id
         left join public.membership_roles mr on mr.membership_id = m.id

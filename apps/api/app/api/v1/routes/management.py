@@ -67,7 +67,10 @@ async def _has_tenant_role(session: AsyncSession, user_id: UUID, tenant_id: UUID
           select 1 from public.memberships m
           join public.membership_roles mr on mr.membership_id=m.id
           join public.roles r on r.id=mr.role_id
-          where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active' and r.key=:role_key
+          where m.user_id=:user_id
+            and m.tenant_id=:tenant_id
+            and m.status='active'
+            and r.key=:role_key
         )
     """), {"user_id": user_id, "tenant_id": tenant_id, "role_key": role_key})
     return bool(result.scalar_one())
@@ -107,8 +110,14 @@ async def create_tenant(
         """), {"name": payload.name, "slug": payload.slug, "tenant_type": payload.tenant_type, "actor": user_id})
         row = dict(result.mappings().one())
         await connection.execute(text("""
-            insert into public.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,ip_address,metadata)
-            values(:actor,'tenant.created','tenant',:resource_id,:request_id,:ip, jsonb_build_object('slug',:slug))
+            insert into public.audit_logs(
+                actor_user_id, action, resource_type, resource_id,
+                request_id, ip_address, metadata
+            )
+            values(
+                :actor, 'tenant.created', 'tenant', :resource_id,
+                :request_id, :ip, jsonb_build_object('slug', :slug)
+            )
         """), {"actor": user_id, "resource_id": str(row["id"]), "request_id": request.headers.get("x-request-id"),
                "ip": request.client.host if request.client else None, "slug": payload.slug})
     return row
@@ -134,7 +143,10 @@ async def create_organization(
     if payload.parent_id:
         async with engine.connect() as connection:
             parent = await connection.execute(text("""
-                select exists(select 1 from public.organizations where id=:parent_id and tenant_id=:tenant_id)
+                select exists(
+                    select 1 from public.organizations
+                    where id=:parent_id and tenant_id=:tenant_id
+                )
             """), {"parent_id": payload.parent_id, "tenant_id": tenant_id})
             if not parent.scalar_one():
                 raise HTTPException(status_code=422, detail="Parent organization harus berada pada tenant yang sama.")
@@ -147,8 +159,14 @@ async def create_organization(
                "slug": payload.slug, "organization_type": payload.organization_type})
         row = dict(result.mappings().one())
         await connection.execute(text("""
-            insert into public.audit_logs(tenant_id,actor_user_id,action,resource_type,resource_id,request_id,ip_address)
-            values(:tenant_id,:actor,'organization.created','organization',:resource_id,:request_id,:ip)
+            insert into public.audit_logs(
+                tenant_id, actor_user_id, action, resource_type,
+                resource_id, request_id, ip_address
+            )
+            values(
+                :tenant_id, :actor, 'organization.created', 'organization',
+                :resource_id, :request_id, :ip
+            )
         """), {"tenant_id": tenant_id, "actor": user_id, "resource_id": str(row["id"]),
                "request_id": request.headers.get("x-request-id"), "ip": request.client.host if request.client else None})
     return row
@@ -176,7 +194,13 @@ async def invite_tenant_member(
         if is_platform_manager:
             _require_aal2(claims)
         if not is_owner and not is_platform_manager:
-            raise HTTPException(status_code=403, detail="Only the tenant owner or platform membership administrator may assign this role.")
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Only the tenant owner or platform membership administrator "
+                    "may assign this role."
+                ),
+            )
     if role_key.startswith("platform_"):
         raise HTTPException(status_code=422, detail="Platform roles cannot be assigned inside a tenant.")
     role_result = await session.execute(text("""
@@ -191,12 +215,22 @@ async def invite_tenant_member(
     if not service_key:
         raise HTTPException(status_code=503, detail="Supabase Auth invitation belum dikonfigurasi.")
     invite_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/invite"
-    headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}", "Content-Type": "application/json"}
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+    }
+    redirect_surface = (
+        "ai-workforce"
+        if role_key.startswith("ai_") or role_key == "corporate_ai_manager"
+        else "corporate"
+    )
+    redirect_to = f"{settings.app_base_url.rstrip('/')}/{redirect_surface}"
     try:
         async with httpx.AsyncClient(timeout=25) as client:
             response = await client.post(
                 invite_url,
-                params={"redirect_to": f"{settings.app_base_url.rstrip('/')}/{'ai-workforce' if role_key.startswith('ai_') or role_key == 'corporate_ai_manager' else 'corporate'}"},
+                params={"redirect_to": redirect_to},
                 headers=headers,
                 json={"email": payload.email.strip().lower(), "data": {"full_name": payload.full_name.strip()}},
             )
@@ -223,7 +257,10 @@ async def invite_tenant_member(
             on conflict(membership_id,role_id) do nothing
         """), {"membership_id": membership["id"], "role_id": role_id, "actor": user_id})
         await connection.execute(text("""
-            insert into public.audit_logs(tenant_id,actor_user_id,action,resource_type,resource_id,request_id,ip_address,metadata)
+            insert into public.audit_logs(
+                tenant_id, actor_user_id, action, resource_type,
+                resource_id, request_id, ip_address, metadata
+            )
             values(:tenant_id,:actor,'membership.invited','membership',:resource_id,:request_id,:ip,
                    jsonb_build_object('email',:email,'role_key',:role_key))
         """), {"tenant_id": tenant_id, "actor": user_id, "resource_id": str(membership["id"]),
@@ -257,7 +294,11 @@ async def list_role_templates(
     role_filter = "" if allowed else "and r.key not like 'platform_%'"
     result = await session.execute(text(f"""
         select r.id,r.key,r.name,r.description,r.is_system,
-               coalesce(array_agg(rp.permission_key) filter (where rp.permission_key is not null),'{{}}') as permissions
+               coalesce(
+                   array_agg(rp.permission_key)
+                       filter (where rp.permission_key is not null),
+                   '{{}}'
+               ) as permissions
         from public.roles r left join public.role_permissions rp on rp.role_id=r.id
         where r.tenant_id is null {role_filter}
         group by r.id order by r.key
@@ -280,8 +321,13 @@ async def list_tenant_memberships(
         raise HTTPException(status_code=403, detail="Missing tenant membership read permission.")
     async with engine.connect() as connection:
         result = await connection.execute(text("""
-            select m.id,m.tenant_id,m.user_id,p.display_name,p.email,m.status,m.joined_at,m.created_at,
-                   coalesce(array_agg(distinct r.key) filter (where r.key is not null),'{}') as role_keys
+            select
+                m.id, m.tenant_id, m.user_id, p.display_name,
+                p.email, m.status, m.joined_at, m.created_at,
+                coalesce(
+                    array_agg(distinct r.key) filter (where r.key is not null),
+                    '{}'
+                ) as role_keys
             from public.memberships m
             left join public.profiles p on p.user_id=m.user_id
             left join public.membership_roles mr on mr.membership_id=m.id
@@ -346,8 +392,14 @@ async def update_tenant(
         if row is None:
             raise HTTPException(status_code=404, detail="Tenant tidak ditemukan.")
         await connection.execute(text("""
-            insert into public.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,ip_address,metadata)
-            values(:actor,'tenant.updated','tenant',:resource_id,:request_id,:ip,cast(:metadata as jsonb))
+            insert into public.audit_logs(
+                actor_user_id, action, resource_type, resource_id,
+                request_id, ip_address, metadata
+            )
+            values(
+                :actor, 'tenant.updated', 'tenant', :resource_id,
+                :request_id, :ip, cast(:metadata as jsonb)
+            )
         """), {"actor": user_id, "resource_id": str(tenant_id), "request_id": request.headers.get("x-request-id"),
                "ip": request.client.host if request.client else None, "metadata": json.dumps(values, default=str)})
     return dict(row)
@@ -373,8 +425,14 @@ async def archive_tenant(
         if row is None:
             raise HTTPException(status_code=404, detail="Tenant tidak ditemukan.")
         await connection.execute(text("""
-            insert into public.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,ip_address)
-            values(:actor,'tenant.archived','tenant',:resource_id,:request_id,:ip)
+            insert into public.audit_logs(
+                actor_user_id, action, resource_type, resource_id,
+                request_id, ip_address
+            )
+            values(
+                :actor, 'tenant.archived', 'tenant', :resource_id,
+                :request_id, :ip
+            )
         """), {"actor": user_id, "resource_id": str(tenant_id), "request_id": request.headers.get("x-request-id"),
                "ip": request.client.host if request.client else None})
     return dict(row)
