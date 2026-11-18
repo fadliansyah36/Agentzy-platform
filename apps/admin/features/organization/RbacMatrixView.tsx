@@ -189,7 +189,7 @@ export function RbacMatrixView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAF2F6]">
-                {RBAC_RESOURCE_KEYS.map((res) => (
+                {resourceRows.map((res) => (
                   <tr key={res.key} className="hover:bg-[#F8FBFD]">
                     <td className="px-4 py-3">
                       <p className="font-bold text-[#17324D]">{res.label}</p>
