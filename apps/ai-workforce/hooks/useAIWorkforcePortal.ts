@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
+import {
+  getWorkforceTenantContext,
+  type AgentzyWorkforceTenantContext,
+} from '@/apps/web/lib/api-client';
 
 import type {
   AIWMTenant,
@@ -88,9 +92,6 @@ export function useAIWorkforcePortal(
 
   // Human <-> AI binding data remains empty until its FastAPI domain contract is available.
   const [humanAiBindings] = useState<HumanAIBindingRecord[]>([]);
-  const activeMembership = auth.identity?.memberships.find(
-    (membership) => membership.tenant_id === activeTenantId
-  );
   const managerRole = useMemo<AgentzyManagerRole>(() => {
     if (activeMembership?.permissions.includes('platform.security.manage')) return 'Admin Agentzy';
     if (
@@ -138,6 +139,35 @@ export function useAIWorkforcePortal(
     () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
     [tenantOptions, activeTenantId]
   );
+  const activeMembership = auth.identity?.memberships.find(
+    (membership) => membership.tenant_id === activeTenantId
+  );
+  const [workforceTenantContext, setWorkforceTenantContext] =
+    useState<AgentzyWorkforceTenantContext | null>(null);
+  const [workforceContextError, setWorkforceContextError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) {
+      setWorkforceTenantContext(null);
+      setWorkforceContextError(null);
+      return;
+    }
+    let active = true;
+    setWorkforceTenantContext(null);
+    setWorkforceContextError(null);
+    void getWorkforceTenantContext(accessToken, activeTenantId)
+      .then((context) => {
+        if (active) setWorkforceTenantContext(context);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setWorkforceContextError(
+          error instanceof Error ? error.message : 'Gagal memuat scope organisasi AI Workforce.'
+        );
+      });
+    return () => { active = false; };
+  }, [auth.session?.access_token, activeTenantId]);
 
   const selectedWorker = useMemo(
     () => aiWorkers.find((w) => w.id === selectedWorkerId) ?? aiWorkers[0],
