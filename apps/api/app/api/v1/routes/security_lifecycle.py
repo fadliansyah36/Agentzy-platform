@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from starlette.responses import Response
 
 from app.core.authorization import authorize_action, authorize_platform_action
 from app.core.config import get_settings
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -180,6 +182,17 @@ async def request_break_glass(
     if len(set(payload.permission_keys)) != len(payload.permission_keys):
         raise HTTPException(status_code=422, detail="Duplicate permission keys are not allowed.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key="security.break_glass.request",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
         permissions = await connection.execute(
             text("""
                 select key from public.permissions
@@ -211,6 +224,10 @@ async def request_break_glass(
         await _audit(connection, request, actor, "break_glass.requested",
                      "break_glass_request", result["id"],
                      metadata={"permission_keys": payload.permission_keys})
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=result,
+        )
     return result
 
 
@@ -225,6 +242,16 @@ async def approve_break_glass(
         claims, session, "platform.security.break_glass.approve", "approve", str(request_id)
     )
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"security.break_glass.approve:{request_id}",
+            idempotency_key=request.headers.get("idempotency-key"), payload={},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         current = await connection.execute(
             text("select * from public.break_glass_requests where id=:id for update"),
             {"id": request_id},
@@ -249,6 +276,10 @@ async def approve_break_glass(
         await _audit(connection, request, actor, "break_glass.approved",
                      "break_glass_request", request_id,
                      metadata={"requester_user_id": str(row["requester_user_id"])})
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=result,
+        )
     return result
 
 
@@ -264,6 +295,17 @@ async def activate_break_glass(
         claims, session, "platform.security.break_glass.activate", "activate", str(request_id)
     )
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"security.break_glass.activate:{request_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         current = await connection.execute(
             text("select * from public.break_glass_requests where id=:id for update"),
             {"id": request_id},
@@ -289,6 +331,10 @@ async def activate_break_glass(
         await _audit(connection, request, actor, "break_glass.activated",
                      "break_glass_request", request_id,
                      metadata={"expires_at": result["expires_at"], "scope": row["requested_scope"]})
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=result,
+        )
     return result
 
 
@@ -303,6 +349,16 @@ async def revoke_break_glass(
         claims, session, "platform.security.break_glass.revoke", "revoke", str(request_id)
     )
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"security.break_glass.revoke:{request_id}",
+            idempotency_key=request.headers.get("idempotency-key"), payload={},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         current = await connection.execute(
             text("select * from public.break_glass_requests where id=:id for update"),
             {"id": request_id},
@@ -325,6 +381,10 @@ async def revoke_break_glass(
         result = dict(updated.mappings().one())
         await _audit(connection, request, actor, "break_glass.revoked",
                      "break_glass_request", request_id)
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=result,
+        )
     return result
 
 
@@ -340,6 +400,17 @@ async def review_break_glass(
         claims, session, "platform.security.break_glass.review", "review", str(request_id)
     )
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"security.break_glass.review:{request_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         current = await connection.execute(
             text("select * from public.break_glass_requests where id=:id for update"),
             {"id": request_id},
@@ -362,6 +433,10 @@ async def review_break_glass(
         result = dict(updated.mappings().one())
         await _audit(connection, request, actor, "break_glass.reviewed",
                      "break_glass_request", request_id)
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=result,
+        )
     return result
 
 
