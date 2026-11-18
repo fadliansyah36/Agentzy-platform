@@ -57,7 +57,7 @@ The previous sections are historical implementation snapshots. The following liv
 ### Current repository state
 
 - Current branch: `main`.
-- Code head before this evidence-doc update: `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8`.
+- Code head before this evidence-doc update: `5755d5bd87246d4240fe488624d1c7a07a853d82`.
 - The latest implementation commits include hierarchy lifecycle/validation fixes (`e4a7168`, `bf7e79e`, `ce54787`, `c73d3a3`), identity idempotency, security lifecycle, Admin security UI and API-client wiring, and Ruff/lockfile remediation (`2e2c028`).
 - The live repository includes `apps/api/app/core/abac.py`, `apps/api/app/api/v1/routes/access_policies.py`, and `apps/api/app/api/v1/routes/security_lifecycle.py`.
 
@@ -104,7 +104,7 @@ Current live catalog checks:
 ### Engineering checks
 
 - GitHub Actions run [44292254340](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44292254340) passed frontend lint/TypeScript, Python compile/import, Ruff and OpenAPI schema checks, and migration source consistency at commit `fa4ecfcd5b748a6df116299ee2bdecb9b5d21bdf`.
-- A subsequent code-only Ruff/lockfile remediation commit `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8` was created with `[skip ci]`; it has not yet received a fresh CI run. Do not treat the earlier pass as evidence for that later commit.
+- Password recovery continuation commits: `b2839380` (portal return path), `01e8df30`, `8d8cf6a2`, `ac13a68f` (login links), `6689b769` (replace Workforce fake recovery modal), `7d6f9be2` (recovery callback validation), `b0f6476b` and `5755d5bd` (lint-safe callback state). The latest run [44293340500](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44293340500) passed at `b0f6476b`; commit `5755d5bd` is later and still requires its own CI result.
 - Deterministic ABAC tests cover allow, deny, precedence, no-match, missing attributes, invalid operator/structure, expiry, disabled policy, cross-tenant resource, nested logic, conflicts, invalid version/effect/time, and missing-attribute NOT semantics. The latest CI job includes test discovery only if the workflow executes its focused test step; verify the workflow log before claiming test execution.
 - No UAT, staging, load/security acceptance, real-world identity test, or production release testing was performed.
 
