@@ -252,6 +252,7 @@ export function CorporatePortalClient({
       <CorporateModals
         modal={portal.modal}
         tenant={portal.activeTenant}
+        tenantRoleOptions={portal.tenantRoleOptions}
         aiWorkers={portal.aiWorkers}
         aiCreditsBalance={portal.aiCreditsBalance}
         monthlyBudgetLimit={portal.monthlyBudgetLimit}
