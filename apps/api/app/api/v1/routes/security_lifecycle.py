@@ -134,10 +134,10 @@ async def ingest_auth_provider_event(
             text("""
                 insert into public.auth_provider_events(
                   provider,provider_event_id,event_type,user_id,session_id,tenant_id,
-                  request_id,occurred_at,processing_status,payload_digest,metadata
+                  request_id,occurred_at,processing_status,processed_at,payload_digest,metadata
                 ) values (
                   'supabase',:event_id,:event_type,:user_id,:session_id,:tenant_id,
-                  :request_id,:occurred_at,'processed',:payload_digest,'{}'::jsonb
+                  :request_id,:occurred_at,'processed',now(),:payload_digest,'{}'::jsonb
                 )
                 on conflict(provider,provider_event_id) do nothing
                 returning id
@@ -231,13 +231,14 @@ async def request_break_glass(
         row = await connection.execute(
             text("""
                 insert into public.break_glass_requests(
-                  requester_user_id,reason,requested_scope,status,request_id
+                  tenant_id,requester_user_id,reason,requested_scope,status,request_id
                 ) values (
-                  :actor,:reason,cast(:scope as jsonb),'requested',:request_id
-                ) returning id,requester_user_id,reason,requested_scope,status,requested_at
+                  :tenant_id,:actor,:reason,cast(:scope as jsonb),'requested',:request_id
+                ) returning id,tenant_id,requester_user_id,reason,requested_scope,status,requested_at
             """),
             {
                 "actor": actor, "reason": payload.reason.strip(),
+                "tenant_id": payload.tenant_ids[0] if len(payload.tenant_ids) == 1 else None,
                 "scope": json.dumps({
                     "permission_keys": payload.permission_keys,
                     "tenant_ids": [str(item) for item in payload.tenant_ids],
