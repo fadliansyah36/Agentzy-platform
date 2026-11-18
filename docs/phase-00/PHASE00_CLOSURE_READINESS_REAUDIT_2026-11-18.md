@@ -183,7 +183,7 @@ The recursive Git tree is complete (`truncated=false`). The current frontend use
 | AI Workforce | `app/ai-workforce/*`, `apps/ai-workforce/` feature modules and service/hook | Auth and shell exist; worker/model/skill/tool/memory/knowledge/workflow/run/approval domains do not have complete FastAPI route coverage in the inspected router. |
 | Human Workforce | `app/workforce/page.tsx` and shared workforce components | No dedicated workforce API router was found in the inspected API route set. |
 
-Current source structure counts: 14 Next.js page/layout/route files under `app/`; 3 concrete Next.js API route handlers; 89 TS/TSX/JS/JSX feature files under `apps/admin`, `apps/corporate`, `apps/ai-workforce`; 3 portal service modules; 4 shared/portal hooks; 16 top-level `lib` and `apps/web/lib` entries (including nested auth/supabase modules). The FastAPI backend directory contains 90 tracked files; the API v1 router currently includes four route modules: `identity`, `tenants`, `management`, `bootstrap`.
+Current source structure counts: 14 Next.js page/layout/route files under `app/` (11 page/layout files plus 3 concrete Next.js API route handlers); 89 TS/TSX/JS/JSX feature files under `apps/admin`, `apps/corporate`, `apps/ai-workforce`; 3 portal service modules; 4 shared/portal hooks; 16 top-level `lib` and `apps/web/lib` entries (including nested auth/supabase modules). The FastAPI backend directory contains 20 tracked files; the API v1 router currently includes four route modules: `identity`, `tenants`, `management`, `bootstrap`.
 
 This is a structural inventory, **not** a claim that every screen, button, form, menu action, modal, hook callback or service method has been inspected. P00-AC-02 and P00-AC-04 therefore remain PARTIAL.
 
@@ -261,7 +261,7 @@ For M020–M220, absence of source SQL, remote history and public application ta
 
 ### 7.3 M010 current schema notes
 
-The nine current public tables are listed in §3.4. Catalog evidence confirms primary keys, foreign keys, checks, unique constraints and indexes from the three applied migrations. The third migration adds nullable `profiles.email` and a partial lower-case email index. The profile synchronization trigger `on_auth_user_created` is AFTER INSERT OR UPDATE on `auth.users`; `handle_new_auth_user()` is SECURITY DEFINER with a fixed search path and EXECUTE revoked from PUBLIC/anon/authenticated. This helper is distinct from the still-exposed `rls_auto_enable()` event-trigger helper.
+The nine current public tables are listed in §3.3. Catalog evidence confirms primary keys, foreign keys, checks, unique constraints and indexes from the three applied migrations. The third migration adds nullable `profiles.email` and a partial lower-case email index. The profile synchronization trigger `on_auth_user_created` is AFTER INSERT OR UPDATE on `auth.users`; `handle_new_auth_user()` is SECURITY DEFINER with a fixed search path and EXECUTE revoked from PUBLIC/anon/authenticated. This helper is distinct from the still-exposed `rls_auto_enable()` event-trigger helper.
 
 The existing M010 source/history/schema reconciliation is **APPLIED**, but Phase 01 acceptance is not complete: composite tenant-consistency constraints, complete membership lifecycle, branch/department resources, object-level ABAC, session revocation, and privileged DB role boundaries remain gaps.
 
