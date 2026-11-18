@@ -430,6 +430,8 @@ export function AdminPortalClient({
             ipAllowlistEnabled={portal.ipAllowlistEnabled}
             sessionTtlMinutes={portal.sessionTtlMinutes}
             breakGlassRequests={portal.breakGlassRequests}
+            securityAlerts={portal.securityAlerts}
+            onAcknowledgeSecurityAlert={portal.acknowledgeSecurityAlert}
             currentUserId={portal.currentUserId}
             onOpenBreakGlassModal={() => portal.setModal({ type: 'break-glass-request' })}
             onDecideBreakGlass={portal.decideBreakGlass}
