@@ -13,7 +13,7 @@ import {
   CorporateSegmentedTabs,
 } from '../../components/data-display/CorporateDataDisplay';
 import { CORPORATE_ROLE_OPTIONS } from '../../lib/corporate-data';
-import type { CorporateTenant, CorporateUserMember } from '../../lib/corporate-types';
+import type { CorporateRoleKey, CorporateTenant, CorporateUserMember } from '../../lib/corporate-types';
 import type { AgentzyOrganization } from '@/apps/web/lib/api-client';
 
 export function OrganizationUsersView({
@@ -23,6 +23,10 @@ export function OrganizationUsersView({
   canManageOrganization,
   onCreateOrganization,
   onOpenInviteModal,
+  onReplaceMembershipRole,
+  onActivateMembership,
+  onSuspendMembership,
+  onRevokeMembership,
   onBack,
 }: {
   tenant: CorporateTenant;
@@ -31,6 +35,10 @@ export function OrganizationUsersView({
   canManageOrganization: boolean;
   onCreateOrganization: (payload: { name: string; slug: string; organization_type: 'company' | 'division' | 'department' | 'branch' | 'team'; parent_id?: string | null }) => Promise<void>;
   onOpenInviteModal: () => void;
+  onReplaceMembershipRole: (membershipId: string, roleKey: CorporateRoleKey) => Promise<void>;
+  onActivateMembership: (membershipId: string) => Promise<void>;
+  onSuspendMembership: (membershipId: string) => Promise<void>;
+  onRevokeMembership: (membershipId: string) => Promise<void>;
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<'organisasi' | 'pengguna' | 'role'>('organisasi');
@@ -40,6 +48,16 @@ export function OrganizationUsersView({
   const [orgParentId, setOrgParentId] = useState('');
   const [orgError, setOrgError] = useState<string | null>(null);
   const [orgSaving, setOrgSaving] = useState(false);
+  const [savingMembershipId, setSavingMembershipId] = useState<string | null>(null);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
+
+  const runMembershipAction = async (membershipId: string, action: () => Promise<void>) => {
+    setSavingMembershipId(membershipId);
+    setMembershipError(null);
+    try { await action(); }
+    catch (error) { setMembershipError(error instanceof Error ? error.message : 'Perubahan membership gagal.'); }
+    finally { setSavingMembershipId(null); }
+  };
 
   const submitOrganization = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -182,11 +200,13 @@ export function OrganizationUsersView({
                   <th className="py-3 px-4">Role RBAC</th>
                   <th className="py-3 px-4">Cakupan Wilayah</th>
                   <th className="py-3 px-4">MFA</th>
-                  <th className="py-3 pl-4 text-right">Status</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 pl-4 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAF2F6]">
-                {users.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-xs text-[#718391]">Belum ada membership pada tenant ini.</td></tr>}
+                {membershipError && <tr><td colSpan={6} className="py-2 text-xs text-[#B23A48]">{membershipError}</td></tr>}
+                {users.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-xs text-[#718391]">Belum ada membership pada tenant ini.</td></tr>}
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-[#F5F8FA]">
                     <td className="py-3.5 pr-4">
@@ -205,14 +225,41 @@ export function OrganizationUsersView({
                     <td className="py-3.5 px-4 text-xs font-semibold text-[#247A55]">
                       {u.mfaEnabled === null ? 'Belum diketahui' : u.mfaEnabled ? 'Aktif' : 'Belum'}
                     </td>
-                    <td className="py-3.5 pl-4 text-right text-xs font-bold">
-                      <span
-                        className={
-                          u.status === 'Aktif' ? 'text-[#247A55]' : 'text-[#A96816]'
-                        }
-                      >
+                    <td className="py-3.5 px-4 text-xs font-bold">
+                      <span className={u.status === 'Aktif' ? 'text-[#247A55]' : u.status === 'Dicabut' ? 'text-[#B23A48]' : 'text-[#A96816]'}>
                         {u.status}
                       </span>
+                    </td>
+                    <td className="py-3.5 pl-4 text-right">
+                      {canManageOrganization && (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <select
+                            aria-label={`Ganti role ${u.name}`}
+                            value={u.roleKey}
+                            disabled={savingMembershipId === u.id || u.status === 'Dicabut'}
+                            onChange={(event) => void runMembershipAction(u.id, () => onReplaceMembershipRole(u.id, event.target.value as CorporateRoleKey))}
+                            className="h-8 max-w-[170px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D] disabled:opacity-50"
+                          >
+                            {CORPORATE_ROLE_OPTIONS.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
+                          </select>
+                          {u.status === 'Ditangguhkan' && (
+                            <button type="button" disabled={savingMembershipId === u.id}
+                              onClick={() => void runMembershipAction(u.id, () => onActivateMembership(u.id))}
+                              className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#247A55] disabled:opacity-50">Aktifkan</button>
+                          )}
+                          {u.status === 'Aktif' && (
+                            <button type="button" disabled={savingMembershipId === u.id}
+                              onClick={() => void runMembershipAction(u.id, () => onSuspendMembership(u.id))}
+                              className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#A96816] disabled:opacity-50">Tangguhkan</button>
+                          )}
+                          {u.status !== 'Dicabut' && (
+                            <button type="button" disabled={savingMembershipId === u.id}
+                              onClick={() => void runMembershipAction(u.id, () => onRevokeMembership(u.id))}
+                              className="h-8 rounded-lg border border-[#E7C5C8] px-2.5 text-[11px] font-semibold text-[#B23A48] disabled:opacity-50">Cabut</button>
+                          )}
+                        </div>
+                      )}
+                      {savingMembershipId === u.id && <span className="mt-1 block text-[10px] text-[#718391]">Menyimpan…</span>}
                     </td>
                   </tr>
                 ))}
