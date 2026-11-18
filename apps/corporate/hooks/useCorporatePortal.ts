@@ -200,14 +200,14 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     void listTenantMemberships(accessToken, activeTenantId).then((rows) => {
       if (!active) return;
       setUsers(rows.map((row) => {
-        const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? 'corporate_auditor') as CorporateRoleKey;
+        const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? null) as CorporateRoleKey | null;
         const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
         return {
           id: row.id,
           name: row.display_name ?? row.email ?? row.user_id,
           email: row.email ?? '',
           roleKey,
-          roleLabel: roleMeta?.label ?? roleKey,
+          roleLabel: roleMeta?.label ?? roleKey ?? 'Belum ada role',
           department: row.department_id
             ? departments.find((item) => item.id === row.department_id)?.name ?? '—'
             : '',
@@ -381,14 +381,14 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       });
       const rows = await listTenantMemberships(accessToken, activeTenantId);
       setUsers(rows.map((row) => {
-        const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? 'corporate_auditor') as CorporateRoleKey;
+        const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? null) as CorporateRoleKey | null;
         const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
         return {
           id: row.id,
           name: row.display_name ?? row.email ?? row.user_id,
           email: row.email ?? '',
           roleKey,
-          roleLabel: roleMeta?.label ?? roleKey,
+          roleLabel: roleMeta?.label ?? roleKey ?? 'Belum ada role',
           department: row.department_id
             ? departments.find((item) => item.id === row.department_id)?.name ?? '—'
             : '',
