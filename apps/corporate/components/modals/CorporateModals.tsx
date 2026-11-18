@@ -20,7 +20,6 @@ import {
 import { TechnicianNavigationMap } from '@/components/maps/TechnicianNavigationMap';
 import {
   COMMISSION_CALCULATION_SAMPLES,
-  CORPORATE_ROLE_OPTIONS,
   INITIAL_AUDIT_LOGS,
   INITIAL_INTEGRATIONS,
   formatIDR,
@@ -85,6 +84,7 @@ function ModalContainer({
 export function CorporateModals({
   modal,
   tenant,
+  tenantRoleOptions,
   aiWorkers,
   aiCreditsBalance,
   monthlyBudgetLimit,
@@ -108,6 +108,7 @@ export function CorporateModals({
 }: {
   modal: CorporateModalState;
   tenant: CorporateTenant;
+  tenantRoleOptions: Array<{ key: CorporateRoleKey; label: string; permissionsSummary: string }>;
   aiWorkers: AIWorkerRecord[];
   aiCreditsBalance: number;
   monthlyBudgetLimit: number;
@@ -150,7 +151,7 @@ export function CorporateModals({
   const [reportFormat, setReportFormat] = useState<'CSV' | 'XLSX' | 'PDF'>('CSV');
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<CorporateRoleKey>('corporate_operations_manager');
+  const [inviteRole, setInviteRole] = useState<string>('');
   const [inviteDept, setInviteDept] = useState('Operasional Teknis');
   const [inviteBranch, setInviteBranch] = useState('Regional Jabodetabek');
   const [selectedMapWoId, setSelectedMapWoId] = useState<string>(
@@ -944,11 +945,11 @@ export function CorporateModals({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!inviteName.trim() || !inviteEmail.trim()) return;
+            if (!inviteName.trim() || !inviteEmail.trim() || !tenantRoleOptions.some((role) => role.key === inviteRole)) return;
             onInviteUser({
               name: inviteName.trim(),
               email: inviteEmail.trim(),
-              roleKey: inviteRole,
+              roleKey: inviteRole as CorporateRoleKey,
               department: inviteDept,
               branchScope: inviteBranch,
             });
@@ -988,16 +989,18 @@ export function CorporateModals({
               Role RBAC
             </label>
             <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as CorporateRoleKey)}
+              required
+              value={inviteRole || tenantRoleOptions[0]?.key || ''}
+              onChange={(e) => setInviteRole(e.target.value)}
               className="h-10 w-full rounded-[10px] border border-[#D8E3E9] px-3 font-medium"
             >
-              {CORPORATE_ROLE_OPTIONS.map((r) => (
+              {tenantRoleOptions.map((r) => (
                 <option key={r.key} value={r.key}>
                   {r.label}
                 </option>
               ))}
             </select>
+            {tenantRoleOptions.length === 0 && <p className="mt-1 text-[11px] text-[#B23A48]">Role registry belum tersedia dari FastAPI. Undangan dinonaktifkan.</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
