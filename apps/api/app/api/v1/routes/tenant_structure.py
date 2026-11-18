@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_action, authorize_object
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.pagination import PageMeta, PageResponse, decode_time_id_cursor, encode_time_id_cursor
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -382,14 +383,23 @@ async def update_organization(
     return updated
 
 
-@router.get("/{tenant_id}/organization-units", tags=["Organization"])
+@router.get("/{tenant_id}/organization-units", tags=["Organization"], response_model=PageResponse)
 async def list_organization_units(
-    tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
-):
+    tenant_id: UUID,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+) -> PageResponse:
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
-    query = text("""
+    cursor_clause = ""
+    if cursor:
+        created_at, row_id = decode_time_id_cursor(cursor)
+        cursor_clause = "and (created_at,id) < (:cursor_created_at,:cursor_id)"
+    query = text(f"""
         select id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status,
                created_at,updated_at
         from public.organization_units
@@ -480,14 +490,23 @@ async def create_organization_unit(
     return row
 
 
-@router.get("/{tenant_id}/branches", tags=["Organization"])
+@router.get("/{tenant_id}/branches", tags=["Organization"], response_model=PageResponse)
 async def list_branches(
-    tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
-):
+    tenant_id: UUID,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+) -> PageResponse:
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
-    query = text("""
+    cursor_clause = ""
+    if cursor:
+        created_at, row_id = decode_time_id_cursor(cursor)
+        cursor_clause = "and (created_at,id) < (:cursor_created_at,:cursor_id)"
+    query = text(f"""
         select id,tenant_id,organization_id,organization_unit_id,name,code,status,
                created_at,updated_at
         from public.branches where tenant_id=:tenant_id and status='active'
@@ -590,14 +609,23 @@ async def create_branch(
     return row
 
 
-@router.get("/{tenant_id}/departments", tags=["Organization"])
+@router.get("/{tenant_id}/departments", tags=["Organization"], response_model=PageResponse)
 async def list_departments(
-    tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
-):
+    tenant_id: UUID,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+) -> PageResponse:
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
-    query = text("""
+    cursor_clause = ""
+    if cursor:
+        created_at, row_id = decode_time_id_cursor(cursor)
+        cursor_clause = "and (created_at,id) < (:cursor_created_at,:cursor_id)"
+    query = text(f"""
         select id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,
                created_at,updated_at
         from public.departments where tenant_id=:tenant_id and status='active'
