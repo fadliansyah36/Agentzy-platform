@@ -130,7 +130,7 @@ async def _audit(
             "action": action,
             "resource_type": resource_type,
             "resource_id": str(resource_id),
-            "request_id": request.headers.get("x-request-id"),
+            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
             "metadata": json.dumps(metadata or {}, default=str),
         },
     )
@@ -198,12 +198,12 @@ async def ingest_auth_provider_event(
                 "user_id": payload.user_id,
                 "session_id": payload.session_id,
                 "tenant_id": payload.tenant_id,
-                "request_id": payload.request_id or request.headers.get("x-request-id"),
+                "request_id": payload.request_id or getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
                 "occurred_at": payload.occurred_at,
                 "payload_digest": payload.payload_digest,
                 "metadata": json.dumps({
-                    "correlation_id": request.headers.get("x-correlation-id"),
-                    "trace_id": request.headers.get("x-trace-id"),
+                    "correlation_id": getattr(request.state, "correlation_id", None) or request.headers.get("x-correlation-id"),
+                    "trace_id": getattr(request.state, "trace_id", None) or request.headers.get("x-trace-id"),
                 }),
             },
         )
@@ -244,7 +244,7 @@ async def ingest_auth_provider_event(
                         "user_id": session["user_id"],
                         "expires_at": session["not_after"],
                         "reason": f"auth_provider_event:{payload.event_type}",
-                        "request_id": payload.request_id or request.headers.get("x-request-id"),
+                        "request_id": payload.request_id or getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
                     },
                 )
 
@@ -269,7 +269,7 @@ async def ingest_auth_provider_event(
                         "session_id": auth_session["id"],
                         "user_id": payload.user_id,
                         "expires_at": auth_session["not_after"],
-                        "request_id": payload.request_id or request.headers.get("x-request-id"),
+                        "request_id": payload.request_id or getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
                     },
                 )
 
@@ -377,7 +377,7 @@ async def request_break_glass(
                         "duration_minutes": payload.duration_minutes,
                     }
                 ),
-                "request_id": request.headers.get("x-request-id"),
+                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
             },
         )
         result = dict(row.mappings().one())
@@ -875,7 +875,7 @@ async def read_audit_logs(
             resource_type="corporate.audit",
             action="read",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-            request_id=request.headers.get("x-request-id"),
+            request_id=getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
         )
     if platform_read:
         tenant_context = None
@@ -899,7 +899,7 @@ async def read_audit_logs(
         "meta": {
             "has_more": has_more,
             "next_cursor": next_cursor,
-            "request_id": request.headers.get("x-request-id"),
+            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
         },
     }
 
@@ -938,7 +938,7 @@ async def export_audit_logs(
             resource_type="corporate.audit",
             action="export",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-            request_id=request.headers.get("x-request-id"),
+            request_id=getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
         )
     if platform_export:
         tenant_context = None
