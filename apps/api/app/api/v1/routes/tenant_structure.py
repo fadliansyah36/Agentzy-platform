@@ -364,12 +364,18 @@ async def list_organization_units(
         where tenant_id=:tenant_id and status='active'
           and (:organization_id is null or organization_id=:organization_id)
           and (:organization_unit_id is null or id=:organization_unit_id)
+          and (:branch_id is null or id in (
+            select organization_unit_id from public.branches
+            where tenant_id=:tenant_id and id=:branch_id
+              and organization_unit_id is not null
+          ))
         order by name
     """)
     params = {
         "tenant_id": tenant_id,
         "organization_id": context.organization_id if context else None,
         "organization_unit_id": context.organization_unit_id if context else None,
+        "branch_id": context.branch_id if context else None,
     }
     if context is None:
         async with engine.connect() as connection:
