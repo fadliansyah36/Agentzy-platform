@@ -355,7 +355,7 @@ This section is the latest addendum to the audit above.
 
 PostgreSQL 17 stable `EventTriggerInvoke` source uses `fmgr_info` and `FunctionCallInvoke` to call the registered event-trigger function, without a per-event end-user EXECUTE ACL check. This supports revoking EXECUTE from PUBLIC/anon/authenticated/service_role while retaining the postgres-owned event trigger. The SQL proposal is additive and fail-closed, but was **not applied** because the Supabase CLI required by the migration workflow is unavailable in the execution environment and no verified backup/PITR recovery point or isolated managed-build validation is available.
 
-Latest live Security Advisor observation at 2026-11-18T02:34:49Z still shows both:
+Latest live Security Advisor observation at 2026-11-18T02:36:44Z still shows both:
 - `anon_security_definer_function_executable` WARN for `public.rls_auto_enable()`
 - `authenticated_security_definer_function_executable` WARN for `public.rls_auto_enable()`
 
