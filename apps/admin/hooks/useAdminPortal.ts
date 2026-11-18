@@ -124,7 +124,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [staffList, setStaffList] = useState<HumanStaffRecord[]>(initial.staff);
   const [aiWorkers, setAiWorkers] = useState<AdminAIWorkerRecord[]>(initial.aiWorkers);
   const [selectedAiWorkerId, setSelectedAiWorkerId] = useState<string>(
-    initial.aiWorkers[0]?.id ?? ''
+    ''
   );
 
   // AI Platform & Runtime
