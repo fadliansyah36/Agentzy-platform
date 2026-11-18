@@ -450,10 +450,11 @@ const createIdempotencyKey = () =>
     ? crypto.randomUUID()
     : `agentzy-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export const listBreakGlassRequests = (accessToken: string) =>
-  apiRequest<{ data: AgentzyBreakGlassRequest[] }>('/security/break-glass/requests', {
-    method: 'GET', accessToken,
-  });
+export const listBreakGlassRequests = async (accessToken: string) => ({
+  data: await fetchAllAgentzyPages<AgentzyBreakGlassRequest>(
+    accessToken, '/security/break-glass/requests',
+  ),
+});
 export const requestBreakGlass = (
   accessToken: string,
   payload: { reason: string; permission_keys: string[]; tenant_ids: string[]; duration_minutes: number },
