@@ -139,11 +139,11 @@ export interface CorporateUserMember {
   roleKey: CorporateRoleKey;
   roleLabel: string;
   department: string;
-  branchScope: string;
-  organizationId: string | null;
-  organizationUnitId: string | null;
-  branchId: string | null;
-  departmentId: string | null;
+  branchScope?: string;
+  organizationId?: string | null;
+  organizationUnitId?: string | null;
+  branchId?: string | null;
+  departmentId?: string | null;
   status: 'Aktif' | 'Menunggu Aktivasi' | 'Ditangguhkan' | 'Dicabut';
   mfaEnabled: boolean | null;
   lastActive: string;
