@@ -176,7 +176,9 @@ async def create_tenant(
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=user_id, tenant_id=None,
+            connection,
+            actor_user_id=user_id,
+            tenant_id=None,
             command_key="tenant.create",
             idempotency_key=request.headers.get("idempotency-key"),
             payload=payload.model_dump(mode="json"),
@@ -246,8 +248,10 @@ async def create_tenant(
             },
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=201, response_body=row,
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=row,
         )
     return row
 
@@ -295,7 +299,9 @@ async def create_organization(
                 )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=user_id, tenant_id=tenant_id,
+            connection,
+            actor_user_id=user_id,
+            tenant_id=tenant_id,
             command_key=f"organization.create:{tenant_id}",
             idempotency_key=request.headers.get("idempotency-key"),
             payload=payload.model_dump(mode="json"),
@@ -340,8 +346,10 @@ async def create_organization(
             },
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=201, response_body=row,
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=row,
         )
     return row
 
@@ -877,7 +885,6 @@ async def archive_tenant(
     return dict(row)
 
 
-
 @router.post("/roles", status_code=status.HTTP_201_CREATED, tags=["Access Control"])
 async def create_role(
     payload: RoleCreate,
@@ -915,7 +922,8 @@ async def create_role(
                 )
             """),
             {
-                "actor": actor, "resource_id": str(row["id"]),
+                "actor": actor,
+                "resource_id": str(row["id"]),
                 "request_id": request.headers.get("x-request-id"),
                 "metadata": json.dumps({"key": row["key"], "scope_type": row["scope_type"]}),
             },
@@ -971,7 +979,8 @@ async def update_role(
                 )
             """),
             {
-                "actor": actor, "resource_id": str(role_id),
+                "actor": actor,
+                "resource_id": str(role_id),
                 "request_id": request.headers.get("x-request-id"),
                 "metadata": json.dumps({"fields": sorted(values)}),
             },
@@ -1024,7 +1033,8 @@ async def delete_role(
                 )
             """),
             {
-                "actor": actor, "resource_id": str(role_id),
+                "actor": actor,
+                "resource_id": str(role_id),
                 "request_id": request.headers.get("x-request-id"),
                 "metadata": json.dumps({"key": role["key"]}),
             },

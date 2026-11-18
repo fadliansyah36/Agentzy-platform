@@ -1,4 +1,5 @@
 """Database-backed idempotency reservations for sensitive FastAPI commands."""
+
 from __future__ import annotations
 
 import hashlib
@@ -61,8 +62,12 @@ async def reserve_idempotency(
             returning id
         """),
         {
-            "actor": actor_user_id, "tenant_id": tenant_id, "command": command_key,
-            "key": idempotency_key, "fingerprint": fingerprint, "expires": expires,
+            "actor": actor_user_id,
+            "tenant_id": tenant_id,
+            "command": command_key,
+            "key": idempotency_key,
+            "fingerprint": fingerprint,
+            "expires": expires,
         },
     )
     record_id = inserted.scalar_one_or_none()
@@ -79,8 +84,10 @@ async def reserve_idempotency(
             for update
         """),
         {
-            "actor": actor_user_id, "tenant_id": tenant_id,
-            "command": command_key, "key": idempotency_key,
+            "actor": actor_user_id,
+            "tenant_id": tenant_id,
+            "command": command_key,
+            "key": idempotency_key,
         },
     )
     existing = existing_result.mappings().first()

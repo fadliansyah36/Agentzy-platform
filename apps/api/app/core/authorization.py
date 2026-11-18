@@ -155,10 +155,12 @@ async def authorize_tenant(
                         "tenant_id": tenant_id,
                         "actor": user_id,
                         "resource_id": str(tenant_id),
-                        "metadata": json.dumps({
-                            "break_glass_id": str(break_glass_id),
-                            "permission_key": platform_permission,
-                        }),
+                        "metadata": json.dumps(
+                            {
+                                "break_glass_id": str(break_glass_id),
+                                "permission_key": platform_permission,
+                            }
+                        ),
                     },
                 )
                 return None
@@ -328,7 +330,8 @@ async def authorize_action(
                     "actor": user_id,
                     "audit_action": (
                         "authorization.break_glass.used"
-                        if break_glass_id else "authorization.abac.evaluated"
+                        if break_glass_id
+                        else "authorization.abac.evaluated"
                     ),
                     "resource_type": resource_type,
                     "resource_id": str(resource.get("id", "")) or None,
@@ -435,7 +438,8 @@ async def authorize_platform_action(
                     "actor": user_id,
                     "audit_action": (
                         "authorization.break_glass.used"
-                        if break_glass_id else "authorization.platform_abac.evaluated"
+                        if break_glass_id
+                        else "authorization.platform_abac.evaluated"
                     ),
                     "resource_type": resource_type,
                     "resource_id": str(resource.get("id", "")) or None,

@@ -29,9 +29,16 @@ class AuthProviderEventIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     provider_event_id: str = Field(min_length=8, max_length=200)
     event_type: Literal[
-        "user.created", "user.updated", "user.deleted", "user.banned",
-        "user.unbanned", "session.created", "session.revoked",
-        "password.recovery.requested", "password.updated", "user.signed_in",
+        "user.created",
+        "user.updated",
+        "user.deleted",
+        "user.banned",
+        "user.unbanned",
+        "session.created",
+        "session.revoked",
+        "password.recovery.requested",
+        "password.updated",
+        "user.signed_in",
         "user.signed_out",
     ]
     user_id: UUID | None = None
@@ -94,9 +101,16 @@ async def _require_platform_permission(
     return actor
 
 
-async def _audit(connection, request: Request, actor: UUID | None, action: str,
-                 resource_type: str, resource_id: UUID | str,
-                 tenant_id: UUID | None = None, metadata: dict | None = None):
+async def _audit(
+    connection,
+    request: Request,
+    actor: UUID | None,
+    action: str,
+    resource_type: str,
+    resource_id: UUID | str,
+    tenant_id: UUID | None = None,
+    metadata: dict | None = None,
+):
     await connection.execute(
         text("""
             insert into public.audit_logs(
@@ -107,8 +121,11 @@ async def _audit(connection, request: Request, actor: UUID | None, action: str,
             )
         """),
         {
-            "tenant_id": tenant_id, "actor": actor, "action": action,
-            "resource_type": resource_type, "resource_id": str(resource_id),
+            "tenant_id": tenant_id,
+            "actor": actor,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": str(resource_id),
             "request_id": request.headers.get("x-request-id"),
             "metadata": json.dumps(metadata or {}, default=str),
         },
@@ -165,8 +182,12 @@ async def ingest_auth_provider_event(
             row = existing.mappings().first()
             return {"status": "duplicate", "event_id": str(row["id"]) if row else None}
         await _audit(
-            connection, request, None,
-            "auth.provider_event.processed", "auth_provider_event", event_id,
+            connection,
+            request,
+            None,
+            "auth.provider_event.processed",
+            "auth_provider_event",
+            event_id,
             payload.tenant_id,
             {"provider": "supabase", "event_type": payload.event_type},
         )
@@ -187,7 +208,9 @@ async def request_break_glass(
         raise HTTPException(status_code=422, detail="Duplicate permission keys are not allowed.")
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=actor, tenant_id=None,
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
             command_key="security.break_glass.request",
             idempotency_key=request.headers.get("idempotency-key"),
             payload=payload.model_dump(mode="json"),
@@ -238,23 +261,34 @@ async def request_break_glass(
                   requested_at
             """),
             {
-                "actor": actor, "reason": payload.reason.strip(),
+                "actor": actor,
+                "reason": payload.reason.strip(),
                 "tenant_id": payload.tenant_ids[0] if len(payload.tenant_ids) == 1 else None,
-                "scope": json.dumps({
-                    "permission_keys": payload.permission_keys,
-                    "tenant_ids": [str(item) for item in payload.tenant_ids],
-                    "duration_minutes": payload.duration_minutes,
-                }),
+                "scope": json.dumps(
+                    {
+                        "permission_keys": payload.permission_keys,
+                        "tenant_ids": [str(item) for item in payload.tenant_ids],
+                        "duration_minutes": payload.duration_minutes,
+                    }
+                ),
                 "request_id": request.headers.get("x-request-id"),
             },
         )
         result = dict(row.mappings().one())
-        await _audit(connection, request, actor, "break_glass.requested",
-                     "break_glass_request", result["id"],
-                     metadata={"permission_keys": payload.permission_keys})
+        await _audit(
+            connection,
+            request,
+            actor,
+            "break_glass.requested",
+            "break_glass_request",
+            result["id"],
+            metadata={"permission_keys": payload.permission_keys},
+        )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=201, response_body=result,
+            connection,
+            record_id=reservation.record_id,
+            response_status=201,
+            response_body=result,
         )
     return result
 
@@ -271,9 +305,12 @@ async def approve_break_glass(
     )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=actor, tenant_id=None,
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
             command_key=f"security.break_glass.approve:{request_id}",
-            idempotency_key=request.headers.get("idempotency-key"), payload={},
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={},
         )
         if reservation.replay:
             return JSONResponse(
@@ -307,12 +344,20 @@ async def approve_break_glass(
             {"actor": actor, "id": request_id},
         )
         result = dict(updated.mappings().one())
-        await _audit(connection, request, actor, "break_glass.approved",
-                     "break_glass_request", request_id,
-                     metadata={"requester_user_id": str(row["requester_user_id"])})
+        await _audit(
+            connection,
+            request,
+            actor,
+            "break_glass.approved",
+            "break_glass_request",
+            request_id,
+            metadata={"requester_user_id": str(row["requester_user_id"])},
+        )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=result,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=result,
         )
     return result
 
@@ -330,7 +375,9 @@ async def activate_break_glass(
     )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=actor, tenant_id=None,
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
             command_key=f"security.break_glass.activate:{request_id}",
             idempotency_key=request.headers.get("idempotency-key"),
             payload=payload.model_dump(mode="json"),
@@ -369,12 +416,20 @@ async def activate_break_glass(
             {"actor": actor, "duration": duration, "id": request_id},
         )
         result = dict(updated.mappings().one())
-        await _audit(connection, request, actor, "break_glass.activated",
-                     "break_glass_request", request_id,
-                     metadata={"expires_at": result["expires_at"], "scope": row["requested_scope"]})
+        await _audit(
+            connection,
+            request,
+            actor,
+            "break_glass.activated",
+            "break_glass_request",
+            request_id,
+            metadata={"expires_at": result["expires_at"], "scope": row["requested_scope"]},
+        )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=result,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=result,
         )
     return result
 
@@ -391,9 +446,12 @@ async def revoke_break_glass(
     )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=actor, tenant_id=None,
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
             command_key=f"security.break_glass.revoke:{request_id}",
-            idempotency_key=request.headers.get("idempotency-key"), payload={},
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={},
         )
         if reservation.replay:
             return JSONResponse(
@@ -426,11 +484,14 @@ async def revoke_break_glass(
             {"actor": actor, "id": request_id},
         )
         result = dict(updated.mappings().one())
-        await _audit(connection, request, actor, "break_glass.revoked",
-                     "break_glass_request", request_id)
+        await _audit(
+            connection, request, actor, "break_glass.revoked", "break_glass_request", request_id
+        )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=result,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=result,
         )
     return result
 
@@ -448,7 +509,9 @@ async def review_break_glass(
     )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=actor, tenant_id=None,
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
             command_key=f"security.break_glass.review:{request_id}",
             idempotency_key=request.headers.get("idempotency-key"),
             payload=payload.model_dump(mode="json"),
@@ -484,11 +547,14 @@ async def review_break_glass(
             {"notes": payload.notes, "id": request_id},
         )
         result = dict(updated.mappings().one())
-        await _audit(connection, request, actor, "break_glass.reviewed",
-                     "break_glass_request", request_id)
+        await _audit(
+            connection, request, actor, "break_glass.reviewed", "break_glass_request", request_id
+        )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=result,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=result,
         )
     return result
 
@@ -524,8 +590,17 @@ async def list_break_glass_requests(
 
 
 _SENSITIVE_KEYS = {
-    "access_token", "refresh_token", "token", "secret", "password",
-    "credential", "authorization", "email", "phone", "ip", "ip_address",
+    "access_token",
+    "refresh_token",
+    "token",
+    "secret",
+    "password",
+    "credential",
+    "authorization",
+    "email",
+    "phone",
+    "ip",
+    "ip_address",
 }
 
 
@@ -540,9 +615,14 @@ def _redact(value):
     return value
 
 
-async def _audit_rows(connection, tenant_id: UUID | None, resource_type: str | None,
-                      actor_user_id: UUID | None, limit: int,
-                      cursor: str | None):
+async def _audit_rows(
+    connection,
+    tenant_id: UUID | None,
+    resource_type: str | None,
+    actor_user_id: UUID | None,
+    limit: int,
+    cursor: str | None,
+):
     params = {"limit": limit + 1}
     filters = []
     if tenant_id is not None:
@@ -559,23 +639,28 @@ async def _audit_rows(connection, tenant_id: UUID | None, resource_type: str | N
         filters.append("(created_at,id) < (:created_at,:cursor_id)")
         params.update({"created_at": created_at, "cursor_id": row_id})
     where = "where " + " and ".join(filters) if filters else ""
-    result = await connection.execute(text(f"""
+    result = await connection.execute(
+        text(f"""
         select id,tenant_id,actor_user_id,action,resource_type,resource_id,request_id,
                metadata,created_at
         from public.audit_logs {where}
         order by created_at desc,id desc limit :limit
-    """), params)
+    """),
+        params,
+    )
     rows = [dict(row) for row in result.mappings().all()]
     has_more = len(rows) > limit
     rows = rows[:limit]
     next_cursor = (
-        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"])
-        if has_more and rows else None
+        _encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else None
     )
-    safe = [{
-        **row,
-        "metadata": _redact(row.get("metadata") or {}),
-    } for row in rows]
+    safe = [
+        {
+            **row,
+            "metadata": _redact(row.get("metadata") or {}),
+        }
+        for row in rows
+    ]
     return safe, has_more, next_cursor
 
 
@@ -607,9 +692,14 @@ async def read_audit_logs(
                 detail="Tenant-scoped audit access requires tenant_id.",
             )
         await authorize_action(
-            session, user_id=actor, tenant_id=tenant_id,
-            permission_key="corporate.audit.read", platform_permission="",
-            aal=None, resource_type="corporate.audit", action="read",
+            session,
+            user_id=actor,
+            tenant_id=tenant_id,
+            permission_key="corporate.audit.read",
+            platform_permission="",
+            aal=None,
+            resource_type="corporate.audit",
+            action="read",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
             request_id=request.headers.get("x-request-id"),
         )
@@ -618,13 +708,23 @@ async def read_audit_logs(
             connection, tenant_id, resource_type, actor_user_id, limit, cursor
         )
     async with engine.begin() as connection:
-        await _audit(connection, request, actor, "audit.logs.read",
-                     "audit_log_collection", tenant_id,
-                     tenant_id, {"limit": limit, "resource_type": resource_type})
+        await _audit(
+            connection,
+            request,
+            actor,
+            "audit.logs.read",
+            "audit_log_collection",
+            tenant_id,
+            tenant_id,
+            {"limit": limit, "resource_type": resource_type},
+        )
     return {
         "data": rows,
-        "meta": {"has_more": has_more, "next_cursor": next_cursor,
-                 "request_id": request.headers.get("x-request-id")},
+        "meta": {
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "request_id": request.headers.get("x-request-id"),
+        },
     }
 
 
@@ -653,9 +753,14 @@ async def export_audit_logs(
                 detail="Tenant-scoped audit export requires tenant_id.",
             )
         await authorize_action(
-            session, user_id=actor, tenant_id=tenant_id,
-            permission_key="corporate.audit.export", platform_permission="",
-            aal=None, resource_type="corporate.audit", action="export",
+            session,
+            user_id=actor,
+            tenant_id=tenant_id,
+            permission_key="corporate.audit.export",
+            platform_permission="",
+            aal=None,
+            resource_type="corporate.audit",
+            action="export",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
             request_id=request.headers.get("x-request-id"),
         )
@@ -664,16 +769,32 @@ async def export_audit_logs(
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
-        fieldnames=["id", "tenant_id", "actor_user_id", "action", "resource_type",
-                    "resource_id", "request_id", "created_at", "metadata"],
+        fieldnames=[
+            "id",
+            "tenant_id",
+            "actor_user_id",
+            "action",
+            "resource_type",
+            "resource_id",
+            "request_id",
+            "created_at",
+            "metadata",
+        ],
     )
     writer.writeheader()
     for row in rows:
         writer.writerow({**row, "metadata": json.dumps(row["metadata"], default=str)})
     async with engine.begin() as connection:
-        await _audit(connection, request, actor, "audit.logs.exported",
-                     "audit_log_export", str(tenant_id or "platform"),
-                     tenant_id, {"rows": len(rows), "resource_type": resource_type})
+        await _audit(
+            connection,
+            request,
+            actor,
+            "audit.logs.exported",
+            "audit_log_export",
+            str(tenant_id or "platform"),
+            tenant_id,
+            {"rows": len(rows), "resource_type": resource_type},
+        )
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
@@ -693,9 +814,12 @@ async def reject_break_glass(
     )
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
-            connection, actor_user_id=actor, tenant_id=None,
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
             command_key=f"security.break_glass.reject:{request_id}",
-            idempotency_key=request.headers.get("idempotency-key"), payload={},
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={},
         )
         if reservation.replay:
             return JSONResponse(
@@ -728,10 +852,13 @@ async def reject_break_glass(
             {"actor": actor, "id": request_id},
         )
         result = dict(updated.mappings().one())
-        await _audit(connection, request, actor, "break_glass.rejected",
-                     "break_glass_request", request_id)
+        await _audit(
+            connection, request, actor, "break_glass.rejected", "break_glass_request", request_id
+        )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=result,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=result,
         )
     return result
