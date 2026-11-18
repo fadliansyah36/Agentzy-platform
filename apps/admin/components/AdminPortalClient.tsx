@@ -73,6 +73,7 @@ export function AdminPortalClient({
         activeSection={portal.activeSection}
         adminRole={portal.adminRole}
         adminEmail={portal.adminEmail}
+        permissions={portal.platformPermissions}
         pendingApprovalsCount={pendingApprovalsCount}
         openIncidentsCount={openIncidentsCount}
         activeBreakGlassCount={activeBreakGlassCount}
