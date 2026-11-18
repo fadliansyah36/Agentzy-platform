@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+import json
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -124,7 +125,7 @@ async def authorize_tenant(
     if aal == "aal2" and platform_permission:
         from app.db.session import engine
 
-        async with engine.connect() as connection:
+        async with engine.begin() as connection:
             emergency = await connection.execute(
                 text("""
                     select id from public.break_glass_requests
@@ -140,7 +141,27 @@ async def authorize_tenant(
                     "tenant_id": str(tenant_id),
                 },
             )
-            if emergency.scalar_one_or_none() is not None:
+            break_glass_id = emergency.scalar_one_or_none()
+            if break_glass_id is not None:
+                await connection.execute(
+                    text("""
+                        insert into public.audit_logs(
+                          tenant_id,actor_user_id,action,resource_type,resource_id,metadata
+                        ) values (
+                          :tenant_id,:actor,'authorization.break_glass.used',
+                          'tenant',:resource_id,cast(:metadata as jsonb)
+                        )
+                    """),
+                    {
+                        "tenant_id": tenant_id,
+                        "actor": user_id,
+                        "resource_id": str(tenant_id),
+                        "metadata": json.dumps({
+                            "break_glass_id": str(break_glass_id),
+                            "permission_key": platform_permission,
+                        }),
+                    },
+                )
                 return None
     raise HTTPException(status_code=403, detail="Akses tidak diizinkan.")
 
