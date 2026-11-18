@@ -245,11 +245,12 @@ export function OrganizationUsersView({
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           <select
                             aria-label={`Ganti role ${u.name}`}
-                            value={u.roleKey}
+                            value={u.roleKey ?? ''}
                             disabled={savingMembershipId === u.id || u.status === 'Dicabut'}
                             onChange={(event) => void runMembershipAction(u.id, () => onReplaceMembershipRole(u.id, event.target.value as CorporateRoleKey))}
                             className="h-8 max-w-[170px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D] disabled:opacity-50"
                           >
+                            <option value="" disabled>Belum ada role</option>
                             {CORPORATE_ROLE_OPTIONS.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
                           </select>
                           {u.status === 'Ditangguhkan' && (
