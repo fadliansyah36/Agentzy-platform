@@ -710,3 +710,53 @@ Reports:
 - No UAT, staging, real-world, load/security acceptance or production release testing was run.
 
 **Phase 01 disposition: PARTIAL / IN PROGRESS — NOT DONE.** No Phase 02 implementation is authorized until the user gives a separate instruction after Phase 01 DoD is satisfied.
+
+## 20. Phase 01 implementation continuation — 2026-11-18
+
+This section records implementation work committed after the latest Phase 01 live reconciliation. It supplements the existing task rows; it does not close any task or phase.
+
+### Delivered code changes
+
+| Area | Implementation delta | Evidence |
+|---|---|---|
+| Shared identity/session | Corrected six-digit MFA TOTP validation and added version-guarded async auth-context hydration to prevent stale session responses from overwriting a newer identity state. | `c617ab44` |
+| Super Admin RBAC production path | Removed the initial demo-role collection and removed the hardcoded `platform_admin` display fallback. Role/permission registry continues to load from FastAPI. | `c617ab44` |
+| Corporate membership production path | Membership directory state now starts empty and is populated from the FastAPI membership endpoint; no initial demo member fallback is rendered. | `c617ab44` |
+| Platform object authorization | Added resource-aware platform ABAC evaluation for tenant update/archive and role update/permission replacement/delete. | `c617ab44`, `d1dee64d` |
+| Membership role validity | Corporate-owner role checks now honor `valid_from`, `valid_until`, and role tenant scope. | `a76d21e8` |
+| Deterministic authorization checks | Added tests for organization-unit and department scope denial. | `d6094d2f` |
+
+### Database and migration reconciliation
+
+- Canonical Supabase project: `cwhjdnkotuhueeudpgeu`.
+- Current migration history: six applied migrations, including M010 `20261118062335`, M011 `20261118062647`, and M012 `20261118065058`.
+- Current public application table inventory: 18 tables; RLS enabled on 18/18.
+- No new Phase 01 schema delta was identified by this code continuation. No new migration or direct DDL was applied, and no applied migration was modified.
+- Security Advisor returned six INFO findings for server-only tables with RLS enabled and no client policies: `access_policies`, `access_policy_versions`, `auth_provider_events`, `break_glass_requests`, `idempotency_records`, and `revoked_sessions`. Record these as INFO findings, not as a clean Advisor result.
+
+### Commit ledger
+
+- `c617ab44df0a01bf6b8fe7bd962526af01a3016e` — resource-aware platform ABAC, auth-hook race/MFA correction, removal of initial role/member demo fallbacks.
+- `a76d21e82817e060cdf75efbe9092a4ee798a4d7` — role validity-window and tenant-scope enforcement.
+- `d6094d2f99d3a4d7a69c89b9c89c9cf5191ef5ec` — deterministic hierarchy object-scope tests.
+- `d1dee64d05fed5d69ff894093b7cba54a0ae670c` — Ruff formatting corrections.
+- Documentation continuation commits: `a1fce87b1f34a98ed5442268f55666025c54e2a9`, `0d696ce5c2ad724a42a9a9ddb02d44afbd2e2b26`, `1a8353b64dc11211c82c1b34713d63ff16043679`.
+
+### Engineering-check disposition
+
+- Run [44299601346](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44299601346) failed only at Ruff due to five line-length findings introduced by the resource-aware helper changes; compile, frontend lint/TypeScript and migration consistency passed.
+- Ruff formatting was corrected in `d1dee64d`.
+- Run [44299830418](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44299830418) was in progress when this backlog delta was authored. Its final result must be checked before declaring the engineering checks passed.
+- No staging, UAT, real-world identity testing, load/security acceptance or production deployment was run.
+
+### Remaining Phase 01 work — still OPEN / PARTIAL
+
+1. Complete endpoint-by-endpoint RBAC/ABAC/object-scope coverage for every sensitive management operation and nested repository call.
+2. Complete hosted Supabase Auth provider, redirect, SMTP, password/MFA/session and webhook configuration evidence; no live Auth users were available to prove end-to-end lifecycle.
+3. Complete hierarchy and membership action parity across Super Admin, Corporate/ISP, Human Workforce and AI Workforce portals.
+4. Complete audit-reader redaction, tenant-scoped export, security alerting and provider-native event correlation evidence.
+5. Complete universal API response/error contract, pagination, request correlation and idempotency for all sensitive commands.
+6. Close the remaining role/membership scope administration and cross-portal permission integration gaps.
+7. Record final successful minimum engineering checks on the final implementation commit.
+
+**Phase 01 remains IN PROGRESS / PARTIAL — NOT DONE.** Phase 02 remains NOT STARTED. Do not begin Phase 02 from this continuation.
