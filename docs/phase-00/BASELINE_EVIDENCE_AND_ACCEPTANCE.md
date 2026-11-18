@@ -174,3 +174,20 @@ Latest connector-confirmed evidence supersedes the earlier repository tree count
 ### Non-actions
 
 No Supabase migration, DDL, grant, policy, function, trigger, project setting, seed, or business data was changed. No application code was changed during this continuation. No staging, UAT, real-world, load, security-acceptance, or production deployment test was run. Phase 01 has not started.
+
+## 11. Superseding live-state re-audit — 18 November 2026
+
+This section supersedes earlier live-state statements in §§2, 5–8 and prior continuation snapshots where they conflict with later verified repository and Supabase evidence. Earlier observations remain historical, not current.
+
+- Latest pre-audit main HEAD: `4d3db7b36df411aefc5ad81aaa04e5892d99493c`; recursive tree has 1,350 entries (1,233 files, 117 directories), `truncated=false`.
+- Existing portal structure is preserved. Current tree has 11 page/layout route files and 3 concrete Next.js API route handlers; the API backend has 20 tracked files and four API route modules; 89 portal feature TS/TSX/JS/JSX files and three portal service modules were counted.
+- Supabase project `Agentzy-db` is `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
+- Remote migration history contains three Phase 01 migrations: `20261117175948`, `20261117181011`, `20261117182410`. The three corresponding SQL files exist in `supabase/migrations/`.
+- Live public schema has nine Agentzy tables (`profiles`, `tenants`, `organizations`, `memberships`, `roles`, `permissions`, `role_permissions`, `membership_roles`, `audit_logs`); RLS is enabled on 9/9, FORCE RLS on 0/9. There are 15 system role templates, 45 permission keys and 134 role-permission links. Auth users: 0. Storage buckets: 0.
+- Live `rls_auto_enable()` remains SECURITY DEFINER, owner `postgres`, fixed `pg_catalog` search_path, with PUBLIC/anon/authenticated/service_role EXECUTE. The `ensure_rls` event trigger is enabled for CREATE TABLE/CREATE TABLE AS/SELECT INTO. Its exception handler swallows failures after logging. Security Advisor still reports two WARNs. No production ACL/function/trigger change was applied.
+- `anon` and `authenticated` have broad table privileges across all nine tables; global default privileges are broad for tables/sequences/functions. RLS policies remain SELECT-only for authenticated application access. The broad grants are not least-privilege and must be addressed through a separately reviewed migration after event-trigger privilege semantics are verified.
+- Repository `supabase/config.toml` declares local-only Auth values (localhost redirects, signup disabled, confirmations enabled, JWT expiry 3600) and API schemas `public` / `graphql_public`; these are not proof of hosted Auth/Data API settings. Live Auth provider, SMTP, redirect allowlist, password/MFA/session policy and exposed-schema settings remain UNVERIFIED. No application Storage bucket exists.
+- Package/license review reconciles 1,037/1,037 coordinates; 966 attribution-check, 26 LGPL/MPL, 5 manual-expression and 40 missing-license-file findings remain. 31 raster assets have metadata/hash inventory, but provenance/rights and full use mapping remain incomplete.
+- Phase 00 gate status remains: AC-01 PARTIAL; AC-02 PARTIAL; AC-03 PARTIAL; AC-04 PARTIAL; AC-05 PARTIAL/BLOCKED; AC-06 BLOCKED; AC-07 COMPLETE; AC-08 PARTIAL; AC-09 PARTIAL; AC-10 BLOCKED/NOT APPROVED.
+
+Detailed current evidence, least-privilege proposal, API ownership matrix, full M000–M220 reconciliation, final DoD and Phase 01 readiness checklist are recorded in `PHASE00_CLOSURE_READINESS_REAUDIT_2026-11-18.md`. This superseding evidence does not close Phase 00 or authorize further Phase 01 coding.
