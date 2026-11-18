@@ -1,0 +1,101 @@
+name: Phase 00 Minimum Engineering Checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "apps/**"
+      - "components/**"
+      - "hooks/**"
+      - "supabase/migrations/**"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
+      - ".github/workflows/phase-00-engineering-checks.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase-00-engineering-checks-main
+  cancel-in-progress: false
+
+jobs:
+  frontend:
+    name: Frontend lint and TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install frozen dependency graph
+        run: bun install --frozen-lockfile
+      - name: ESLint
+        run: bun run lint
+      - name: TypeScript
+        run: bunx tsc --noEmit
+
+  backend:
+    name: FastAPI compile, import, Ruff and OpenAPI schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install API and engineering tools
+        run: python -m pip install -e ".[dev]"
+      - name: Python compile
+        run: python -m compileall -q app
+      - name: Ruff static checks
+        run: ruff check app
+      - name: Import application and validate OpenAPI generation
+        env:
+          SUPABASE_URL: https://cwhjdnkotuhueeudpgeu.supabase.co
+          DATABASE_URL: postgresql+asyncpg://check:check@127.0.0.1:5432/agentzy_check
+        run: |
+          python - <<'PY'
+          import json
+          from app.main import app
+          schema = app.openapi()
+          assert schema.get("openapi")
+          assert schema.get("paths")
+          json.dumps(schema)
+          print(f"OpenAPI {schema['openapi']}: {len(schema['paths'])} paths")
+          PY
+
+  migration-source:
+    name: Migration source consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate migration file names and version uniqueness
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          files = sorted(Path("supabase/migrations").glob("*.sql"))
+          pattern = re.compile(r"^([0-9]{14})_[a-z0-9_]+\.sql$")
+          versions = []
+          for file in files:
+              match = pattern.match(file.name)
+              if not match:
+                  raise SystemExit(f"Invalid migration filename: {file}")
+              versions.append(match.group(1))
+          if len(versions) != len(set(versions)):
+              raise SystemExit("Duplicate migration version detected")
+          if versions != sorted(versions):
+              raise SystemExit("Migration source files are not ordered by version")
+          print(f"Validated {len(files)} ordered migration source files")
+          PY
