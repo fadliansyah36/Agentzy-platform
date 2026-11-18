@@ -57,7 +57,7 @@ export function SecurityCenterView({
     <div className="space-y-5">
       <AdminPageHeader
         title="Security Center (MFA, Break-Glass & Integrasi Akses)"
-        subtitle="Autentikasi 2FA platform, sesi aktif, persetujuan darurat 2-tahap Break-Glass Access, kebijakan IP allowlist, dan feature flags."
+        subtitle="Status hosted Auth hanya ditampilkan jika ada bukti provider; feed audit/security, Break-Glass Access, dan kebijakan akses dikelola melalui backend."
         onBack={onBack}
         actions={
           <div className="flex flex-wrap items-center gap-2">
