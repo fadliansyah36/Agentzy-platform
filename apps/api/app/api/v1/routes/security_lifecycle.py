@@ -60,7 +60,6 @@ class AuthProviderEventIn(BaseModel):
     payload_digest: str | None = Field(default=None, min_length=32, max_length=128)
 
 
-
 class SecurityAlertRead(BaseModel):
     id: UUID
     tenant_id: UUID | None
@@ -207,12 +206,13 @@ async def _expire_break_glass(connection, request: Request) -> int:
     return len(rows)
 
 
-
 @router.get("/alerts", response_model=SecurityAlertPage)
 async def list_security_alerts(
     request: Request,
     tenant_id: UUID | None = None,
-    status_filter: Literal["open", "acknowledged", "resolved"] | None = Query(default=None, alias="status"),
+    status_filter: Literal["open", "acknowledged", "resolved"] | None = Query(
+        default=None, alias="status"
+    ),
     severity: Literal["critical", "high", "medium", "low"] | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = None,
@@ -888,8 +888,6 @@ async def list_break_glass_requests(
             """)
         )
     return {"data": [dict(row) for row in result.mappings().all()], "actor": str(actor)}
-
-
 
 
 async def _audit_rows(

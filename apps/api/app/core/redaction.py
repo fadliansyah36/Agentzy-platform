@@ -5,18 +5,58 @@ from collections.abc import Mapping
 from typing import Any
 
 _REDACTED = "[REDACTED]"
-_SENSITIVE_KEYS = frozenset({
-    "accesstoken", "refreshtoken", "idtoken", "token", "secret", "clientsecret",
-    "password", "passwd", "credential", "credentials", "authorization",
-    "proxyauthorization", "cookie", "setcookie", "apikey", "privatekey",
-    "email", "emailaddress", "phone", "phonenumber", "mobile", "ip",
-    "ipaddress", "useragent", "sessiontoken", "webhooksecret", "nik",
-    "npwp", "passport", "bankaccount", "accountnumber", "dateofbirth",
-})
+_SENSITIVE_KEYS = frozenset(
+    {
+        "accesstoken",
+        "refreshtoken",
+        "idtoken",
+        "token",
+        "secret",
+        "clientsecret",
+        "password",
+        "passwd",
+        "credential",
+        "credentials",
+        "authorization",
+        "proxyauthorization",
+        "cookie",
+        "setcookie",
+        "apikey",
+        "privatekey",
+        "email",
+        "emailaddress",
+        "phone",
+        "phonenumber",
+        "mobile",
+        "ip",
+        "ipaddress",
+        "useragent",
+        "sessiontoken",
+        "webhooksecret",
+        "nik",
+        "npwp",
+        "passport",
+        "bankaccount",
+        "accountnumber",
+        "dateofbirth",
+    }
+)
 _SENSITIVE_SUFFIXES = (
-    "accesstoken", "refreshtoken", "idtoken", "clientsecret", "webhooksecret",
-    "password", "credential", "authorization", "cookie", "apikey", "privatekey",
-    "emailaddress", "phonenumber", "ipaddress", "sessiontoken",
+    "accesstoken",
+    "refreshtoken",
+    "idtoken",
+    "clientsecret",
+    "webhooksecret",
+    "password",
+    "credential",
+    "authorization",
+    "cookie",
+    "apikey",
+    "privatekey",
+    "emailaddress",
+    "phonenumber",
+    "ipaddress",
+    "sessiontoken",
 )
 _BEARER = re.compile(r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]{12,}")
 _JWT = re.compile(r"\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{8,}\\b")
