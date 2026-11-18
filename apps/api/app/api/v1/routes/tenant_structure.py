@@ -276,7 +276,7 @@ async def update_organization(
                     with recursive ancestors(id,parent_id) as (
                       select id,parent_id from public.organizations
                       where id=:parent_id and tenant_id=:tenant_id and status='active'
-                      union all
+                      union
                       select o.id,o.parent_id from public.organizations o
                       join ancestors a on o.id=a.parent_id
                       where o.tenant_id=:tenant_id
