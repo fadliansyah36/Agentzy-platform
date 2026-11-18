@@ -195,7 +195,7 @@ async def _audit(
             "action": action,
             "resource_type": resource_type,
             "resource_id": str(resource_id),
-            "request_id": request.headers.get("x-request-id"),
+            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "metadata": json.dumps(metadata or {}),
@@ -1072,7 +1072,7 @@ async def read_workforce_tenant_context(
                 resource_type=resource_type,
                 action=action,
                 resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-                request_id=request.headers.get("x-request-id"),
+                request_id=getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
             )
             break
         except HTTPException as exc:
