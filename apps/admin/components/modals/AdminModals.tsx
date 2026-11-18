@@ -158,8 +158,8 @@ export interface AdminModalsProps {
   corporateSchemas: CorporateCompensationSchema[];
   invoices: PlatformInvoiceRecord[];
   auditLogs: AuditLogRecord[];
-  ipAllowlistEnabled: boolean;
-  sessionTtlMinutes: number;
+  ipAllowlistEnabled: boolean | null;
+  sessionTtlMinutes: number | null;
 
   onUpsertTenant: (p: Omit<AdminTenantRecord, 'id' | 'createdAt'> & { id?: string }) => void;
   onUpsertProvider: (p: Omit<AdminIspProviderRecord, 'id'> & { id?: string }) => void;
@@ -4399,11 +4399,28 @@ function SecurityPolicyModal({
   onClose,
   onSubmit,
 }: {
-  ipAllowlist: boolean;
-  ttlMinutes: number;
+  ipAllowlist: boolean | null;
+  ttlMinutes: number | null;
   onClose: () => void;
   onSubmit: (ipAllow: boolean, ttlMinutes: number) => void;
 }) {
+  if (ipAllowlist === null || ttlMinutes === null) {
+    return (
+      <ModalFrame
+        title="Kebijakan Keamanan Platform"
+        subtitle="Konfigurasi hosted Supabase Auth belum tersedia untuk dibaca atau diubah melalui connector."
+        onClose={onClose}
+      >
+        <div className="space-y-3 text-xs text-[#526675]">
+          <p>Status IP allowlist dan session TTL tidak ditampilkan sebagai nilai default karena belum ada bukti konfigurasi aktual.</p>
+          <p>Pengaturan harus diverifikasi dan diubah melalui Supabase Dashboard atau Management API yang berwenang. Tidak ada perubahan konfigurasi yang dilakukan dari modal ini.</p>
+          <div className="flex justify-end">
+            <button type="button" onClick={onClose} className="h-9 rounded-lg border border-[#D8E3E9] px-4 text-xs font-semibold text-[#17324D]">Tutup</button>
+          </div>
+        </div>
+      </ModalFrame>
+    );
+  }
   const [ipAllow, setIpAllow] = useState(ipAllowlist);
   const [ttl, setTtl] = useState(ttlMinutes);
 
