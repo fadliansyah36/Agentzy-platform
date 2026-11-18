@@ -920,6 +920,7 @@ export function useAIWorkforcePortal(
     authError: auth.error,
     activeTenantId,
     activeTenant,
+    activeMembership,
     tenantOptions,
     aiWorkers,
     selectedWorker,
