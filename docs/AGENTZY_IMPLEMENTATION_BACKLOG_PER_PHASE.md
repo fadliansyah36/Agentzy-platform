@@ -541,3 +541,28 @@ Evidence is recorded in `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.
 - Static build/type/lint and Python compile/import checks remain NOT RUN. No staging, UAT, real-world, load, security-acceptance or production-release testing was run.
 
 **Phase guard:** Phase 00 remains IN PROGRESS and unsigned. The already-applied identity foundation migrations are existing implementation state and do not waive Phase 00 exit acceptance. Do not start additional Phase 01 domain scope until Phase 00 readiness is signed off. Do not claim Phase 01 complete.
+
+
+## 16. Phase 01 pre-implementation readiness review — 2026-11-18
+
+Read-only findings are recorded in `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.md`, §10 (commit `19a8aa6ad06434d4c16043f14df3887f9f0b1ba1`). This is an audit of existing Phase 01 foundation code and live schema; it does not authorize starting additional Phase 01 tasks ahead of Phase 00 sign-off.
+
+### Existing foundation (not a Phase 01 completion claim)
+
+- Three remote migrations exist and match the three committed Phase 01 migration files.
+- Nine application tables have RLS enabled; 15 system role templates, 45 permission keys and 134 role-permission grants exist.
+- FastAPI routes currently cover `/me`, tenant list/directory/CRUD, organization list/create, membership invite/list, role catalogue and first-admin bootstrap.
+- Browser Auth currently covers password sign-in, Google OAuth, sign-out, session restoration and MFA assurance flow.
+
+### Confirmed acceptance gaps
+
+- Auth registration/invite acceptance, email verification callback/resend, password recovery/update and profile update are missing.
+- Server-side revoked-session validation via JWT `session_id` / `auth.sessions` is missing.
+- Tenant settings, organization update/archive, dedicated branch/department API operations, membership acceptance/update/suspend/revoke, role assignment lifecycle, permission catalogue/access evaluation, audit-log and security-event APIs are missing.
+- ABAC and organization/branch/department object scoping are not consistently enforced; database composite constraints do not prevent cross-tenant parent/org/role relationships.
+- Privileged database operations use a separate database-engine connection after API-level authorization checks; the database privilege boundary requires a reviewed least-privilege repository role.
+- Remote SQL evidence shows `anon` and `authenticated` have all table privileges on all nine Phase 01 tables, and global `public` default table/sequence ACLs grant all privileges to `anon`, `authenticated` and `service_role` for postgres/supabase_admin-created objects. RLS is enabled but does not replace least-privilege grants. Do not modify production ACL/default privileges until the Phase 00 `rls_auto_enable()` event-trigger privilege review is resolved and approved.
+- Existing portal integration is selective; it is not verified across every screen/action. Audit/security event coverage and cursor pagination are incomplete.
+- API runtime, secrets, production Auth configuration, bootstrap/TOTP and minimum static engineering checks remain outstanding.
+
+**Current Phase 01 disposition: PARTIAL / BLOCKED — not DONE.** The Phase 00 execution guard remains in force: no Phase 01 task may be marked IN PROGRESS until Phase 00 mandatory gates are signed off. No code/schema/configuration was changed during this read-only review; only this evidence record was added. No staging/UAT/real-world/load/security-acceptance/release test was run.
