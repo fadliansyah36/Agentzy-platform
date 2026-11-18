@@ -16,6 +16,10 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter()
+
+
+def _request_id(request: Request) -> str | None:
+    return _request_id(request)
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
@@ -242,7 +246,7 @@ async def create_tenant(
             {
                 "actor": user_id,
                 "resource_id": str(row["id"]),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "ip": request.client.host if request.client else None,
                 "slug": payload.slug,
             },
@@ -366,7 +370,7 @@ async def create_organization(
                 "tenant_id": tenant_id,
                 "actor": user_id,
                 "resource_id": str(row["id"]),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "ip": request.client.host if request.client else None,
             },
         )
@@ -693,7 +697,7 @@ async def invite_tenant_member(
                 "tenant_id": tenant_id,
                 "actor": user_id,
                 "resource_id": str(membership["id"]),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "ip": request.client.host if request.client else None,
                 "email": payload.email.strip().lower(),
                 "role_key": role_key,
@@ -813,7 +817,7 @@ async def replace_role_permissions(
                 "tenant_id": role["tenant_id"],
                 "actor": actor,
                 "resource_id": str(role_id),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "metadata": json.dumps({"permission_keys": permission_keys}),
             },
         )
@@ -1029,7 +1033,7 @@ async def update_tenant(
             {
                 "actor": user_id,
                 "resource_id": str(tenant_id),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "ip": request.client.host if request.client else None,
                 "metadata": json.dumps(values, default=str),
             },
@@ -1089,7 +1093,7 @@ async def archive_tenant(
             {
                 "actor": user_id,
                 "resource_id": str(tenant_id),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "ip": request.client.host if request.client else None,
             },
         )
@@ -1151,7 +1155,7 @@ async def create_role(
             {
                 "actor": actor,
                 "resource_id": str(row["id"]),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "metadata": json.dumps({"key": row["key"], "scope_type": row["scope_type"]}),
             },
         )
@@ -1223,7 +1227,7 @@ async def update_role(
             {
                 "actor": actor,
                 "resource_id": str(role_id),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "metadata": json.dumps({"fields": sorted(values)}),
             },
         )
@@ -1292,7 +1296,7 @@ async def delete_role(
             {
                 "actor": actor,
                 "resource_id": str(role_id),
-                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+                "request_id": _request_id(request),
                 "metadata": json.dumps({"key": role["key"]}),
             },
         )
