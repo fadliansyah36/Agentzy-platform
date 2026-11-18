@@ -254,9 +254,10 @@ export function OrganizationUsersView({
                   />
                 </div>
                 <div className="space-y-2 border-t border-[#EAF2F6] pt-2.5">
-                  <select value={u.roleKey} disabled={u.status === 'Dicabut'}
+                  <select value={u.roleKey ?? ''} disabled={u.status === 'Dicabut'}
                     onChange={(event) => void onReplaceMembershipRole(u.id, u.tenantId, event.target.value)}
                     className="h-9 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-xs text-[#17324D]">
+                    <option value="" disabled>Belum ada role</option>
                     {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
                   </select>
                   <div className="flex justify-end gap-1.5">
@@ -316,10 +317,11 @@ export function OrganizationUsersView({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-1.5">
-                          <select value={u.roleKey} disabled={u.status === 'Dicabut'}
+                          <select value={u.roleKey ?? ''} disabled={u.status === 'Dicabut'}
                             onChange={(event) => void onReplaceMembershipRole(u.id, u.tenantId, event.target.value)}
                             className="h-8 max-w-[180px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D]">
-                            {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
+                            <option value="" disabled>Belum ada role</option>
+                    {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
                           </select>
                           <div className="flex justify-end gap-1.5">
                             {u.status === 'Suspended' && <button type="button" onClick={() => void onActivateMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#247A55]">Aktifkan</button>}
