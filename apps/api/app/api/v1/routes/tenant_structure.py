@@ -181,11 +181,14 @@ async def update_organization(
                         where tenant_id=:tenant_id and organization_id=:organization_id
                           and status='active')
                       or exists(select 1 from public.branches
-                        where tenant_id=:tenant_id and organization_id=:organization_id\n                          and status='active')
+                        where tenant_id=:tenant_id and organization_id=:organization_id
+                          and status='active')
                       or exists(select 1 from public.departments
-                        where tenant_id=:tenant_id and organization_id=:organization_id\n                          and status='active')
+                        where tenant_id=:tenant_id and organization_id=:organization_id
+                          and status='active')
                       or exists(select 1 from public.memberships
-                        where tenant_id=:tenant_id and organization_id=:organization_id\n                          and status='active')
+                        where tenant_id=:tenant_id and organization_id=:organization_id
+                          and status='active')
                 """),
                 {"tenant_id": tenant_id, "organization_id": organization_id},
             )
@@ -399,9 +402,11 @@ async def create_department(
         result = await connection.execute(
             text("""
                 insert into public.departments(
-                  tenant_id,organization_id,branch_id,parent_department_id,\n                  name,code,created_by,updated_by
+                  tenant_id,organization_id,branch_id,parent_department_id,
+                  name,code,created_by,updated_by
                 ) values (
-                  :tenant_id,:organization_id,:branch_id,:parent_department_id,\n                  :name,:code,:actor,:actor
+                  :tenant_id,:organization_id,:branch_id,:parent_department_id,
+                  :name,:code,:actor,:actor
                 )
                 returning id,tenant_id,organization_id,branch_id,parent_department_id,
                           name,code,status,
@@ -753,7 +758,9 @@ class BranchUpdate(BaseModel):
 
 class DepartmentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
-    code: str | None = Field(\n        default=None, min_length=2, max_length=40, pattern="^[A-Z0-9][A-Z0-9_-]*$"\n    )
+    code: str | None = Field(
+        default=None, min_length=2, max_length=40, pattern="^[A-Z0-9][A-Z0-9_-]*$"
+    )
     branch_id: UUID | None = None
     parent_department_id: UUID | None = None
     status: str | None = Field(default=None, pattern="^(active|inactive|archived)$")
@@ -823,7 +830,9 @@ async def update_branch(
             if dependencies.scalar_one():
                 raise HTTPException(
                     status_code=409,
-                    detail=(\n                        "Archive active departments and memberships before archiving this branch."\n                    ),
+                    detail=(
+                        "Archive active departments and memberships before archiving this branch."
+                    ),
                 )
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
@@ -944,7 +953,9 @@ async def update_department(
             if dependencies.scalar_one():
                 raise HTTPException(
                     status_code=409,
-                    detail=(\n                        "Archive child departments and memberships before archiving this department."\n                    ),
+                    detail=(
+                        "Archive child departments and memberships before archiving this department."
+                    ),
                 )
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
