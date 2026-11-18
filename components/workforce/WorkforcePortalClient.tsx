@@ -194,13 +194,15 @@ export function WorkforcePortalClient() {
   };
 
   const allowedWorkforceRoles = useMemo<WorkforceRoleMode[]>(() => {
-    const keys = new Set(auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? []);
+    const permissions = new Set(
+      auth.identity?.memberships.flatMap((membership) => membership.permissions) ?? []
+    );
     const roles: WorkforceRoleMode[] = [];
-    if (['sales_manager', 'sales_supervisor', 'sales_official'].some((key) => keys.has(key))) {
+    if (permissions.has('corporate.sales.read') || permissions.has('sales.leads.read')) {
       roles.push('sales');
     }
-    if (keys.has('affiliate_worker')) roles.push('affiliate');
-    if (['technician', 'field_quality_inspector'].some((key) => keys.has(key))) {
+    if (permissions.has('affiliate.profile.read')) roles.push('affiliate');
+    if (permissions.has('workforce.assignments.read') || permissions.has('workforce.profile.read')) {
       roles.push('technician');
     }
     return roles;
@@ -215,9 +217,9 @@ export function WorkforcePortalClient() {
       .then((result) => {
         if (!active) return;
         setPendingInvitations(result.invitations.filter((invitation) =>
-          invitation.role_keys.some((key) =>
-            ['sales_manager', 'sales_supervisor', 'sales_official', 'affiliate_worker',
-              'technician', 'field_quality_inspector'].includes(key)
+          invitation.permission_keys.some((permission) =>
+            ['corporate.sales.read', 'sales.leads.read', 'affiliate.profile.read',
+              'workforce.assignments.read', 'workforce.profile.read'].includes(permission)
           )
         ));
       })
@@ -244,23 +246,23 @@ export function WorkforcePortalClient() {
       if (!context.session || !context.identity) {
         throw new Error('Identity atau sesi autentikasi tidak tersedia.');
       }
-      const keys = new Set(
-        context.identity.memberships.flatMap((membership) => membership.role_keys)
+      const permissions = new Set(
+        context.identity.memberships.flatMap((membership) => membership.permissions)
       );
       const nextRole: WorkforceRoleMode | null =
-        ['sales_manager', 'sales_supervisor', 'sales_official'].some((key) => keys.has(key))
+        permissions.has('corporate.sales.read') || permissions.has('sales.leads.read')
           ? 'sales'
-          : keys.has('affiliate_worker')
+          : permissions.has('affiliate.profile.read')
             ? 'affiliate'
-            : ['technician', 'field_quality_inspector'].some((key) => keys.has(key))
+            : permissions.has('workforce.assignments.read') || permissions.has('workforce.profile.read')
               ? 'technician'
               : null;
       if (!nextRole) {
         const invitationResult = await getMyInvitations(context.session.access_token);
         const workforceInvitations = invitationResult.invitations.filter((invitation) =>
-          invitation.role_keys.some((key) =>
-            ['sales_manager', 'sales_supervisor', 'sales_official', 'affiliate_worker',
-              'technician', 'field_quality_inspector'].includes(key)
+          invitation.permission_keys.some((permission) =>
+            ['corporate.sales.read', 'sales.leads.read', 'affiliate.profile.read',
+              'workforce.assignments.read', 'workforce.profile.read'].includes(permission)
           )
         );
         setPendingInvitations(workforceInvitations);
@@ -698,11 +700,12 @@ export function WorkforcePortalClient() {
   }
 
   if (auth.session && auth.identity && allowedWorkforceRoles.length > 0) {
+    const workforcePermissionKeys = new Set([
+      'corporate.sales.read', 'sales.leads.read', 'affiliate.profile.read',
+      'workforce.assignments.read', 'workforce.profile.read',
+    ]);
     const membershipRows = auth.identity.memberships.filter((membership) =>
-      membership.role_keys.some((key) =>
-        ['sales_manager', 'sales_supervisor', 'sales_official', 'affiliate_worker',
-          'technician', 'field_quality_inspector'].includes(key)
-      )
+      membership.permissions.some((permission) => workforcePermissionKeys.has(permission))
     );
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--az-surface-canvas)] px-4 py-8">
