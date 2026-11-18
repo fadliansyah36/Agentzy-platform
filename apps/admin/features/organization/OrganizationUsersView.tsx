@@ -12,6 +12,7 @@ import type {
   AdminTenantRecord,
   OrgUnitRecord,
   PlatformUserRecord,
+  RbacRoleRecord,
 } from '../../lib/admin-types';
 
 export function OrganizationUsersView({
@@ -21,12 +22,20 @@ export function OrganizationUsersView({
   onOpenOrgUnitModal,
   onDeleteOrgUnit,
   onOpenUserModal,
+  roles,
+  onReplaceMembershipRole,
+  onActivateMembership,
+  onSuspendMembership,
   onDeleteUser,
   onBack,
 }: {
   tenants: AdminTenantRecord[];
   orgUnits: OrgUnitRecord[];
   users: PlatformUserRecord[];
+  roles: RbacRoleRecord[];
+  onReplaceMembershipRole: (membershipId: string, tenantId: string, roleKey: string) => Promise<void>;
+  onActivateMembership: (membershipId: string, tenantId: string) => Promise<void>;
+  onSuspendMembership: (membershipId: string, tenantId: string) => Promise<void>;
   onOpenOrgUnitModal: (unit?: OrgUnitRecord) => void;
   onDeleteOrgUnit: (id: string) => void;
   onOpenUserModal: (user?: PlatformUserRecord) => void;
@@ -35,8 +44,9 @@ export function OrganizationUsersView({
 }) {
   const [tab, setTab] = useState<'organisasi' | 'pengguna'>('organisasi');
   const [selectedTenantId, setSelectedTenantId] = useState<string>(
-    tenants[0]?.id ?? 'ten-isp-nusantara'
+    tenants[0]?.id ?? ''
   );
+  const tenantRoles = roles.filter((role) => role.scopeType === 'Tenant');
 
   const visibleUnits = useMemo(
     () => orgUnits.filter((u) => u.tenantId === selectedTenantId),
@@ -243,25 +253,17 @@ export function OrganizationUsersView({
                     label={u.mfaEnabled === true ? 'MFA Aktif' : u.mfaEnabled === false ? 'Belum MFA' : 'Status MFA belum diverifikasi'}
                   />
                 </div>
-                <div className="flex justify-end gap-1.5 border-t border-[#EAF2F6] pt-2.5">
-                  <button
-                    type="button"
-                    onClick={() => onOpenUserModal(u)}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#D8E3E9] px-3 text-xs font-semibold text-[#0284C7]"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span>Edit</span>
-                  </button>
-                  {onDeleteUser && (
-                    <button
-                      type="button"
-                      onClick={() => onDeleteUser(u.id)}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D8E3E9] text-[#B23A48]"
-                      aria-label={`Hapus ${u.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                <div className="space-y-2 border-t border-[#EAF2F6] pt-2.5">
+                  <select value={u.roleKey} disabled={u.status === 'Dicabut'}
+                    onChange={(event) => void onReplaceMembershipRole(u.id, u.tenantId, event.target.value)}
+                    className="h-9 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-xs text-[#17324D]">
+                    {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
+                  </select>
+                  <div className="flex justify-end gap-1.5">
+                    {u.status === 'Suspended' && <button type="button" onClick={() => void onActivateMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-3 text-xs font-semibold text-[#247A55]">Aktifkan</button>}
+                    {u.status === 'Aktif' && <button type="button" onClick={() => void onSuspendMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-3 text-xs font-semibold text-[#A96816]">Tangguhkan</button>}
+                    {u.status !== 'Dicabut' && onDeleteUser && <button type="button" onClick={() => onDeleteUser(u.id)} className="h-8 rounded-lg border border-[#E7C5C8] px-3 text-xs font-semibold text-[#B23A48]">Cabut</button>}
+                  </div>
                 </div>
               </div>
             ))}
@@ -313,25 +315,17 @@ export function OrganizationUsersView({
                         />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => onOpenUserModal(u)}
-                            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D8E3E9] px-2.5 text-xs font-semibold text-[#0284C7] hover:bg-[#E6F4F9]"
-                          >
-                            <Pencil className="h-3 w-3" />
-                            <span>Edit</span>
-                          </button>
-                          {onDeleteUser && (
-                            <button
-                              type="button"
-                              onClick={() => onDeleteUser(u.id)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] text-[#B23A48] hover:bg-[#B23A48]/10"
-                              aria-label={`Hapus ${u.name}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                        <div className="flex flex-col items-end gap-1.5">
+                          <select value={u.roleKey} disabled={u.status === 'Dicabut'}
+                            onChange={(event) => void onReplaceMembershipRole(u.id, u.tenantId, event.target.value)}
+                            className="h-8 max-w-[180px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D]">
+                            {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
+                          </select>
+                          <div className="flex justify-end gap-1.5">
+                            {u.status === 'Suspended' && <button type="button" onClick={() => void onActivateMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#247A55]">Aktifkan</button>}
+                            {u.status === 'Aktif' && <button type="button" onClick={() => void onSuspendMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#A96816]">Tangguhkan</button>}
+                            {u.status !== 'Dicabut' && onDeleteUser && <button type="button" onClick={() => onDeleteUser(u.id)} className="h-8 rounded-lg border border-[#E7C5C8] px-2.5 text-[11px] font-semibold text-[#B23A48]">Cabut</button>}
+                          </div>
                         </div>
                       </td>
                     </tr>
