@@ -2,11 +2,13 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_action, authorize_object
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -139,6 +141,30 @@ async def _authorize(
         resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
     )
     return context
+
+
+async def _reserve_command(
+    connection,
+    request: Request,
+    actor: UUID,
+    tenant_id: UUID,
+    command_key: str,
+    payload: dict,
+):
+    reservation = await reserve_idempotency(
+        connection,
+        actor_user_id=actor,
+        tenant_id=tenant_id,
+        command_key=command_key,
+        idempotency_key=request.headers.get("idempotency-key"),
+        payload=payload,
+    )
+    if reservation.replay:
+        return JSONResponse(
+            status_code=reservation.replay_status or 200,
+            content=reservation.replay_body or {},
+        )
+    return reservation
 
 
 async def _audit(
