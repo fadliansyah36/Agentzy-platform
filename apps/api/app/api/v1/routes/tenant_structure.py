@@ -1060,6 +1060,11 @@ async def read_workforce_tenant_context(
     candidates = (
         ("workforce.profile.read", "workforce.profile", "read"),
         ("workforce.assignments.read", "workforce.assignments", "read"),
+        ("corporate.sales.read", "corporate.sales", "read"),
+        ("sales.leads.read", "sales.leads", "read"),
+        ("affiliate.profile.read", "affiliate.profile", "read"),
+        ("technical.work_orders.read", "technical.work_orders", "read"),
+        ("support.cases.read", "support.cases", "read"),
         ("ai.workers.read", "ai.workers", "read"),
         ("corporate.organization.read", "corporate.organization", "read"),
     )
@@ -1111,6 +1116,11 @@ async def read_workforce_tenant_context(
                 where tenant_id=:tenant_id and status='active'
                   and (:organization_id is null or organization_id=:organization_id)
                   and (:organization_unit_id is null or id=:organization_unit_id)
+                  and (:branch_id is null or id in (
+                    select organization_unit_id from public.branches
+                    where tenant_id=:tenant_id and id=:branch_id
+                      and organization_unit_id is not null
+                  ))
                 order by name
             """),
             params,
