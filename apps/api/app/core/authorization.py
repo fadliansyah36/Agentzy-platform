@@ -188,7 +188,9 @@ async def authorize_action(
                       and expires_at > now()
                       and (
                         requested_scope->'permission_keys' @> jsonb_build_array(:permission_key)
-                        or requested_scope->'permission_keys' @> jsonb_build_array(:platform_permission)
+                        or requested_scope->'permission_keys' @> jsonb_build_array(
+                            :platform_permission
+                        )
                       )
                       and requested_scope->'tenant_ids' @> jsonb_build_array(:tenant_id)
                     order by activated_at desc limit 1
