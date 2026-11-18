@@ -12,7 +12,16 @@ import {
 } from '@/lib/corporate-compensation';
 import { adminPortalService } from '../services/admin-service';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { createTenant as createTenantApi, listPlatformTenants, updateTenant as updateTenantApi, archiveTenant as archiveTenantApi } from '@/apps/web/lib/api-client';
+import {
+  createTenant as createTenantApi,
+  listPlatformTenants,
+  updateTenant as updateTenantApi,
+  archiveTenant as archiveTenantApi,
+  listRoleTemplates,
+  listPermissionRegistry,
+  replaceRolePermissions,
+  type AgentzyPermissionDefinition,
+} from '@/apps/web/lib/api-client';
 import type {
   AdminAIWorkerRecord,
   AdminCreditLedgerItem,
@@ -102,19 +111,22 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     return `${prefix}-${idCounter.current}`;
   };
 
-  const assignedRoles = useMemo(
-    () => auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? [],
+  const platformMemberships = useMemo(
+    () => auth.identity?.memberships.filter((membership) =>
+      membership.permissions.some((permission) => permission.startsWith('platform.'))
+    ) ?? [],
     [auth.identity]
   );
   const verifiedRole = useMemo(
-    () => (['platform_super_admin', 'platform_security_admin', 'platform_finance_admin', 'platform_operations_admin'] as SuperAdminRoleKey[])
-      .find((candidate) => assignedRoles.includes(candidate)),
-    [assignedRoles]
+    () => platformMemberships.flatMap((membership) => membership.role_keys)
+      .find((roleKey) => roleKey.startsWith('platform_')) ?? null,
+    [platformMemberships]
   );
+  const hasPlatformAccess = platformMemberships.length > 0;
   const isAuthenticated = Boolean(
-    !auth.loading && auth.session && auth.identity && verifiedRole && auth.aal === 'aal2'
+    !auth.loading && auth.session && auth.identity && hasPlatformAccess && auth.aal === 'aal2'
   );
-  const adminRole = verifiedRole ?? 'platform_super_admin';
+  const adminRole = verifiedRole ?? 'platform_admin';
   const adminEmail = auth.identity?.email ?? auth.session?.user.email ?? '';
   const [requestedActiveSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const activeSection = !auth.loading && !isAuthenticated
@@ -137,6 +149,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [orgUnits, setOrgUnits] = useState<OrgUnitRecord[]>(initial.orgUnits);
   const [users, setUsers] = useState<PlatformUserRecord[]>(initial.users);
   const [roles, setRoles] = useState<RbacRoleRecord[]>(initial.roles);
+  const [permissionRegistry, setPermissionRegistry] = useState<AgentzyPermissionDefinition[]>([]);
   const [staffList, setStaffList] = useState<HumanStaffRecord[]>(initial.staff);
   const [aiWorkers, setAiWorkers] = useState<AdminAIWorkerRecord[]>(initial.aiWorkers);
   const [selectedAiWorkerId, setSelectedAiWorkerId] = useState<string>(
@@ -255,10 +268,10 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   }, []);
 
   useEffect(() => {
-    if (!auth.loading && auth.session && auth.identity && !verifiedRole) {
+    if (!auth.loading && auth.session && auth.identity && !hasPlatformAccess) {
       void auth.signOut();
     }
-  }, [auth.loading, auth.session, auth.identity, verifiedRole, auth.signOut]);
+  }, [auth.loading, auth.session, auth.identity, hasPlatformAccess, auth.signOut]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
@@ -293,16 +306,63 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     return () => { active = false; };
   }, [auth.session?.access_token, auth.identity, auth.aal, showToast]);
 
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    const canManageRoles = platformMemberships.some((membership) =>
+      membership.permissions.includes('platform.roles.read')
+    );
+    if (!accessToken || auth.aal !== 'aal2' || !canManageRoles) return;
+    let active = true;
+    void Promise.all([listRoleTemplates(accessToken), listPermissionRegistry(accessToken)])
+      .then(([roleRows, permissionRows]) => {
+        if (!active) return;
+        setPermissionRegistry(permissionRows);
+        const byResource = new Map<string, AgentzyPermissionDefinition[]>();
+        for (const permission of permissionRows) {
+          const resource = permission.resource ?? permission.domain;
+          byResource.set(resource, [...(byResource.get(resource) ?? []), permission]);
+        }
+        setRoles(roleRows.map((role) => {
+          const granted = new Set(role.permissions);
+          const levels: RbacRoleRecord['permissions'] = {};
+          for (const [resource, definitions] of byResource) {
+            const selected = definitions.filter((item) => granted.has(item.key));
+            if (selected.length === 0) levels[resource] = '---';
+            else if (selected.length === definitions.length) levels[resource] = 'F';
+            else if (selected.every((item) => ['create', 'update', 'manage', 'write'].includes(item.action))) levels[resource] = 'C/U';
+            else if (selected.every((item) => ['read', 'list', 'view'].includes(item.action))) levels[resource] = 'R';
+            else if (selected.every((item) => ['approve', 'review'].includes(item.action))) levels[resource] = 'A';
+            else levels[resource] = 'S';
+          }
+          return {
+            id: role.id,
+            key: role.key,
+            name: role.name,
+            scopeType: role.scope_type === 'platform' ? 'Platform' : 'Tenant',
+            description: role.description ?? '',
+            userCount: 0,
+            isSystemRole: role.is_system,
+            permissionKeys: role.permissions,
+            permissions: levels,
+          };
+        }));
+      })
+      .catch((error) => {
+        if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat RBAC registry.');
+      });
+    return () => { active = false; };
+  }, [auth.session?.access_token, auth.aal, platformMemberships, showToast]);
+
   const handleLogin = useCallback(
     async (email: string, password: string, mfaCode: string) => {
       const context = await auth.signIn(email, password, true, mfaCode);
       if (context.aal !== 'aal2') throw new Error('MFA TOTP wajib diaktifkan. Gunakan menu Setup MFA TOTP sebelum masuk Super Admin.');
-      const assignedRoles = context.identity.memberships.flatMap((membership) => membership.role_keys);
-      const verifiedRole = (['platform_super_admin','platform_security_admin','platform_finance_admin','platform_operations_admin'] as SuperAdminRoleKey[])
-        .find((candidate) => assignedRoles.includes(candidate));
-      if (!verifiedRole) {
+      const hasPlatformPermission = context.identity.memberships.some((membership) =>
+        membership.permissions.some((permission) => permission.startsWith('platform.'))
+      );
+      if (!hasPlatformPermission || context.aal !== 'aal2') {
         await auth.signOut();
-        throw new Error('Akun ini tidak memiliki role Super Admin platform yang sah.');
+        throw new Error('Akun ini tidak memiliki permission platform aktif dengan MFA.');
       }
       setActiveSection('overview');
       showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
@@ -645,25 +705,47 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
 
   const cycleRolePermission = useCallback(
-    (roleId: string, resourceKey: string) => {
+    async (roleId: string, resourceKey: string) => {
+      const accessToken = auth.session?.access_token;
+      const role = roles.find((item) => item.id === roleId);
+      if (!accessToken || !role || !auth.aal || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk memperbarui permission role.');
+        return;
+      }
       const levels: Array<'F' | 'C/U' | 'A' | 'R' | 'S' | '---'> = ['F', 'C/U', 'A', 'R', 'S', '---'];
-      setRoles((prev) =>
-        prev.map((r) => {
-          if (r.id !== roleId) return r;
-          const current = r.permissions[resourceKey] ?? '---';
-          const next = levels[(levels.indexOf(current) + 1) % levels.length];
-          return {
-            ...r,
-            permissions: {
-              ...r.permissions,
-              [resourceKey]: next,
-            },
-          };
-        })
+      const current = role.permissions[resourceKey] ?? '---';
+      const next = levels[(levels.indexOf(current) + 1) % levels.length];
+      const definitions = permissionRegistry.filter((item) =>
+        (item.resource ?? item.domain) === resourceKey
       );
-      showToast('Permission matrix RBAC diperbarui.');
+      const selected = definitions.filter((item) => (role.permissionKeys ?? []).includes(item.key));
+      const selectedKeys = new Set(selected.map((item) => item.key));
+      const targetKeys = definitions.filter((item) => {
+        if (next === 'F') return true;
+        if (next === 'C/U') return ['create', 'update', 'manage', 'write'].includes(item.action);
+        if (next === 'A') return ['approve', 'review'].includes(item.action);
+        if (next === 'R' || next === 'S') return ['read', 'list', 'view'].includes(item.action);
+        return false;
+      }).map((item) => item.key);
+      const nextKeys = [
+        ...(role.permissionKeys ?? []).filter((key) =>
+          !definitions.some((item) => item.key === key)
+        ),
+        ...targetKeys,
+      ];
+      try {
+        const saved = await replaceRolePermissions(accessToken, roleId, nextKeys);
+        setRoles((prev) => prev.map((item) => item.id === roleId ? {
+          ...item,
+          permissionKeys: saved.permission_keys,
+          permissions: { ...item.permissions, [resourceKey]: next },
+        } : item));
+        showToast('Permission role berhasil disimpan melalui FastAPI.');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Gagal menyimpan permission role.');
+      }
     },
-    [showToast]
+    [auth.session?.access_token, auth.aal, roles, permissionRegistry, showToast]
   );
 
   // Human Workforce CRUD & Verify
@@ -1490,6 +1572,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     upsertPlatformUser,
     deletePlatformUser,
     roles,
+    permissionRegistry,
     upsertRbacRole,
     deleteRbacRole,
     cycleRolePermission,
