@@ -783,16 +783,20 @@ async def list_permission_registry(
     _require_aal2(claims)
     if not await _has_platform_permission(session, actor, "platform.roles.read"):
         raise HTTPException(status_code=403, detail="Missing platform.roles.read permission.")
-    cursor_key = decode_key_cursor(cursor) if cursor else None
+    cursor_clause = ""
+    params = {"limit": limit + 1}
+    if cursor:
+        cursor_clause = "where key > :cursor_key"
+        params["cursor_key"] = decode_key_cursor(cursor)
     result = await session.execute(
-        text("""
+        text(f"""
             select key,domain,action,description,resource,risk_level
             from public.permissions
-            where (:cursor_key is null or key > :cursor_key)
+            {cursor_clause}
             order by key
             limit :limit
         """),
-        {"cursor_key": cursor_key, "limit": limit + 1},
+        params,
     )
     rows = [dict(row) for row in result.mappings().all()]
     has_more = len(rows) > limit
@@ -1033,7 +1037,7 @@ async def list_tenant_memberships(
         params.update({"cursor_created_at": created_at, "cursor_id": membership_id})
     async with engine.connect() as connection:
         result = await connection.execute(
-            text("""
+            text(f"""
             select
                 m.id, m.tenant_id, m.user_id, m.organization_id, m.organization_unit_id,
                 m.branch_id, m.department_id, p.display_name,
