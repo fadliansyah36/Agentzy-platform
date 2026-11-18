@@ -472,7 +472,8 @@ export const listSecurityAlerts = (accessToken: string, filters: {
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined) query.set(key, String(value));
   }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const encoded = query.toString();
+  const suffix = encoded ? `?${encoded}` : '';
   return apiRequest<{ data: AgentzySecurityAlert[]; meta: { has_more: boolean; next_cursor: string | null; request_id: string | null } }>(
     `/security/alerts${suffix}`, { method: 'GET', accessToken },
   );
