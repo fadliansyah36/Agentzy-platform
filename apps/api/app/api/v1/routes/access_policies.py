@@ -294,6 +294,10 @@ async def create_access_policy(
             row["id"],
             {"policy_key": row["policy_key"], "version": row["version"]},
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=AccessPolicyRead(**row).model_dump(mode="json"),
+        )
     return AccessPolicyRead(**row)
 
 
@@ -357,6 +361,10 @@ async def update_access_policy(
             row["id"],
             {"policy_key": row["policy_key"], "version": row["version"]},
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=AccessPolicyRead(**row).model_dump(mode="json"),
+        )
     return AccessPolicyRead(**row)
 
 
@@ -365,6 +373,17 @@ async def _set_policy_status(
 ):
     actor = await _require_security_admin(claims, session)
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"access_policy.status:{policy_id}:{new_status}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={"status": new_status},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text("""
             update public.access_policies
@@ -386,6 +405,10 @@ async def _set_policy_status(
             f"access_policy.{new_status}",
             row["id"],
             {"policy_key": row["policy_key"], "version": row["version"]},
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=AccessPolicyRead(**row).model_dump(mode="json"),
         )
     return AccessPolicyRead(**row)
 
