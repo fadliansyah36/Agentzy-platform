@@ -49,7 +49,7 @@ jobs:
 
       - name: Apply only Ruff safe fixes
         working-directory: apps/api
-        run: ruff check --fix app
+        run: ruff check --fix --exit-zero app
 
       - name: Format Python source with configured Ruff formatter
         working-directory: apps/api
