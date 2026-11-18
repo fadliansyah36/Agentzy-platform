@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.authorization import authorize_action, authorize_platform_action
+from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
@@ -267,15 +267,40 @@ async def create_organization(
     session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_tenant_permission(
-        session, user_id, tenant_id, ("corporate.organization.manage",)
-    )
-    if not allowed:
+    context = None
+    try:
+        context, _ = await authorize_action(
+            session,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            permission_key="corporate.organization.manage",
+            platform_permission="",
+            aal=None,
+            resource_type="corporate.organization",
+            action="manage",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
         _require_aal2(claims)
-        allowed = await _has_platform_permission(session, user_id, "platform.tenants.manage")
-    if not allowed:
+        await authorize_platform_action(
+            session,
+            user_id=user_id,
+            permission_key="platform.tenants.manage",
+            resource_type="platform.tenants",
+            action="manage",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
+    if context is not None and any((
+        context.organization_id,
+        context.organization_unit_id,
+        context.branch_id,
+        context.department_id,
+    )):
         raise HTTPException(
-            status_code=403, detail="Missing tenant organization management permission."
+            status_code=403,
+            detail="Creating tenant organizations requires tenant-wide scope.",
         )
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload.slug):
         raise HTTPException(
@@ -367,15 +392,39 @@ async def invite_tenant_member(
     session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_tenant_permission(
-        session, user_id, tenant_id, ("corporate.organization.manage",)
-    )
-    if not allowed:
+    context = None
+    try:
+        context, _ = await authorize_action(
+            session,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            permission_key="corporate.organization.manage",
+            platform_permission="",
+            aal=None,
+            resource_type="corporate.organization",
+            action="manage",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
         _require_aal2(claims)
-        allowed = await _has_platform_permission(session, user_id, "platform.memberships.manage")
-    if not allowed:
-        raise HTTPException(
-            status_code=403, detail="Missing tenant membership management permission."
+        await authorize_platform_action(
+            session,
+            user_id=user_id,
+            permission_key="platform.memberships.manage",
+            resource_type="platform.memberships",
+            action="manage",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
+    if context is not None:
+        authorize_object(
+            context,
+            resource_tenant_id=tenant_id,
+            organization_id=payload.organization_id,
+            organization_unit_id=payload.organization_unit_id,
+            branch_id=payload.branch_id,
+            department_id=payload.department_id,
         )
     role_key = payload.role_key.strip().lower()
     if role_key in (
