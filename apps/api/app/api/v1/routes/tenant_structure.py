@@ -614,7 +614,10 @@ async def create_department(
                 },
             )
             if branch.scalar_one_or_none() is None:
-                raise HTTPException(status_code=404, detail="Active branch not found in this organization.")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Active branch not found in this organization.",
+                )
         if payload.parent_department_id is not None:
             parent = await connection.execute(
                 text("""
@@ -1168,7 +1171,10 @@ async def read_workforce_tenant_context(
         department_id=context.department_id if context else None,
         role_keys=sorted(context.role_keys) if context else ["platform"],
         permissions=sorted(context.permissions) if context else ["platform.tenants.read"],
-        organizations=[HierarchyOrganizationRead(**dict(row)) for row in organizations.mappings().all()],
+        organizations=[
+            HierarchyOrganizationRead(**dict(row))
+            for row in organizations.mappings().all()
+        ],
         organization_units=[HierarchyUnitRead(**dict(row)) for row in units.mappings().all()],
         branches=[HierarchyBranchRead(**dict(row)) for row in branches.mappings().all()],
         departments=[HierarchyDepartmentRead(**dict(row)) for row in departments.mappings().all()],
