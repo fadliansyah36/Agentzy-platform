@@ -997,6 +997,9 @@ async def assign_membership_role(
                   where m.user_id=:actor and m.tenant_id=:tenant_id
                     and m.status='active' and mr.scope_type='tenant'
                     and r.key='corporate_owner'
+                    and (r.tenant_id is null or r.tenant_id=:tenant_id)
+                    and (mr.valid_from is null or mr.valid_from<=now())
+                    and (mr.valid_until is null or mr.valid_until>now())
                 )
             """),
             {"actor": UUID(claims["sub"]), "tenant_id": tenant_id},
@@ -1005,11 +1008,14 @@ async def assign_membership_role(
             text("""
                 select exists (
                   select 1 from public.memberships m
+                  join public.tenants t on t.id=m.tenant_id and t.status='active'
                   join public.membership_roles mr on mr.membership_id=m.id
-                  join public.roles r on r.id=mr.role_id
+                  join public.roles r on r.id=mr.role_id and r.tenant_id is null
                   join public.role_permissions rp on rp.role_id=r.id
                   where m.user_id=:actor and m.status='active'
                     and mr.scope_type='platform'
+                    and (mr.valid_from is null or mr.valid_from<=now())
+                    and (mr.valid_until is null or mr.valid_until>now())
                     and rp.permission_key='platform.memberships.manage'
                 )
             """),
