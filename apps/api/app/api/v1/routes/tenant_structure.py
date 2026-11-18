@@ -244,6 +244,12 @@ async def update_organization(
     if values.get("slug") and not values["slug"].islower():
         raise HTTPException(status_code=422, detail="Slug organisasi harus huruf kecil.")
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, UUID(claims["sub"]), tenant_id,
+            f"organization.update:{organization_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         current = await connection.execute(
             text("""
                 select id,tenant_id,parent_id from public.organizations
@@ -303,6 +309,10 @@ async def update_organization(
             "organization",
             organization_id,
             values,
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=updated,
         )
     return updated
 
@@ -581,6 +591,12 @@ async def accept_membership(
 ):
     user_id = UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, user_id, tenant_id,
+            f"membership.accept:{membership_id}", {},
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         result = await connection.execute(
             text("""
                 select m.id,m.status,m.invitation_expires_at,t.status as tenant_status,
@@ -622,6 +638,10 @@ async def accept_membership(
             "membership",
             membership_id,
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=accepted,
+        )
     return accepted
 
 
@@ -642,6 +662,12 @@ async def suspend_membership(
     )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id,
+            f"membership.suspend:{membership_id}", {},
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         target_result = await connection.execute(
             text("""
                 select organization_id,organization_unit_id,branch_id,department_id
@@ -681,7 +707,12 @@ async def suspend_membership(
             "membership",
             membership_id,
         )
-    return {"id": str(membership_id), "status": "suspended"}
+        response_body = {"id": str(membership_id), "status": "suspended"}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
 
 
 @router.post(
@@ -701,6 +732,12 @@ async def revoke_membership(
     )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id,
+            f"membership.revoke:{membership_id}", {},
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         target_result = await connection.execute(
             text("""
                 select organization_id,organization_unit_id,branch_id,department_id
@@ -737,7 +774,12 @@ async def revoke_membership(
         await _audit(
             connection, request, actor, tenant_id, "membership.revoked", "membership", membership_id
         )
-    return {"id": str(membership_id), "status": "revoked"}
+        response_body = {"id": str(membership_id), "status": "revoked"}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
 
 
 @router.post(
