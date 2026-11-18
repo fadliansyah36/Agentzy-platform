@@ -220,7 +220,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           departmentId: row.department_id,
           status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
           mfaEnabled: null,
-          lastActive: 'Belum ada aktivitas',
+          lastActive: null,
         };
       }));
     }).catch((error) => {
@@ -401,7 +401,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           departmentId: row.department_id,
           status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
           mfaEnabled: null,
-          lastActive: 'Undangan dikirim',
+          lastActive: null,
         };
       }));
       setModal({ type: 'none' });
@@ -415,11 +415,11 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
     const rows = await listTenantMemberships(accessToken, activeTenantId);
     setUsers(rows.map((row) => {
-      const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? 'corporate_auditor') as CorporateRoleKey;
+      const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? null) as CorporateRoleKey | null;
       const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
       return {
         id: row.id, name: row.display_name ?? row.email ?? row.user_id,
-        email: row.email ?? '', roleKey, roleLabel: roleMeta?.label ?? roleKey,
+        email: row.email ?? '', roleKey, roleLabel: roleMeta?.label ?? roleKey ?? 'Belum ada role',
         department: row.department_id ? departments.find((item) => item.id === row.department_id)?.name ?? '—' : '',
         branchScope: row.branch_id ? branches.find((item) => item.id === row.branch_id)?.name ?? '—' : '',
         organizationId: row.organization_id, organizationUnitId: row.organization_unit_id,
