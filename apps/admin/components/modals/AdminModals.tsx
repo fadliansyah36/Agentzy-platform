@@ -4404,6 +4404,8 @@ function SecurityPolicyModal({
   onClose: () => void;
   onSubmit: (ipAllow: boolean, ttlMinutes: number) => void;
 }) {
+  const [ipAllow, setIpAllow] = useState(ipAllowlist ?? false);
+  const [ttl, setTtl] = useState(ttlMinutes ?? 120);
   if (ipAllowlist === null || ttlMinutes === null) {
     return (
       <ModalFrame
@@ -4421,8 +4423,6 @@ function SecurityPolicyModal({
       </ModalFrame>
     );
   }
-  const [ipAllow, setIpAllow] = useState(ipAllowlist);
-  const [ttl, setTtl] = useState(ttlMinutes);
 
   return (
     <ModalFrame
