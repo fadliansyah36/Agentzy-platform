@@ -35,7 +35,7 @@ async def read_identity(
     user_id = UUID(claims["sub"])
     result = await session.execute(
         text("""
-            select m.id, m.tenant_id, t.name as tenant_name, m.organization_id, m.status,
+            select m.id, m.tenant_id, t.name as tenant_name, m.organization_id,\n                   m.organization_unit_id,m.branch_id,m.department_id,m.status,
                    coalesce(
                      array_agg(distinct r.key) filter (where r.key is not null), '{}'
                    ) as role_keys,
@@ -57,7 +57,7 @@ async def read_identity(
               and (r.tenant_id is null or r.tenant_id=m.tenant_id)
             left join public.role_permissions rp on rp.role_id=r.id
             where m.user_id=:user_id and m.status='active'
-            group by m.id,m.tenant_id,t.name,m.organization_id,m.status
+            group by m.id,m.tenant_id,t.name,m.organization_id,m.organization_unit_id,\n                     m.branch_id,m.department_id,m.status
             order by t.name
         """),
         {"user_id": user_id},
@@ -157,7 +157,7 @@ async def read_my_permissions(
               and (r.tenant_id is null or r.tenant_id=m.tenant_id)
             left join public.role_permissions rp on rp.role_id=r.id
             where m.user_id=:user_id and m.status='active'
-            group by m.id,m.tenant_id,t.name,m.organization_id,m.status
+            group by m.id,m.tenant_id,t.name,m.organization_id,m.organization_unit_id,\n                     m.branch_id,m.department_id,m.status
             order by t.name
         """),
         {"user_id": user_id},
