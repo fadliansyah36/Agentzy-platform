@@ -130,12 +130,23 @@ export const createTenant = (accessToken: string, payload: CreateTenantInput) =>
   });
 
 export const createOrganization = (accessToken: string, tenantId: string, payload: CreateOrganizationInput) =>
-  apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
+  apiRequest<AgentzyOrganization>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
     method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
   });
 
+export type AgentzyMembershipInvitationResult = {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  status: 'invited';
+  created_at: string;
+  email: string;
+  role_key: string;
+  invitation_status: 'sent';
+};
+
 export const inviteTenantMember = (accessToken: string, tenantId: string, payload: InviteTenantMemberInput) =>
-  apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/memberships/invite`, {
+  apiRequest<AgentzyMembershipInvitationResult>(`/tenants/${encodeURIComponent(tenantId)}/memberships/invite`, {
     method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
   });
 
@@ -361,12 +372,19 @@ export const replaceMembershipRole = (
   { method: "PUT", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
 
+export type AgentzyMembershipRoleAssignment = {
+  membership_id: string;
+  role_key: string;
+  scope_type: string;
+  scope_id: string | null;
+};
+
 export const assignMembershipRole = (
   accessToken: string,
   tenantId: string,
   membershipId: string,
   payload: { role_key: string; scope_type?: string; scope_id?: string | null; valid_until?: string | null },
-) => apiRequest<Record<string, unknown>>(
+) => apiRequest<AgentzyMembershipRoleAssignment>(
   `/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/roles`,
   { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
