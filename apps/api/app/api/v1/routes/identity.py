@@ -20,7 +20,8 @@ async def read_identity(claims: dict = claims_dependency, session: AsyncSession 
                    '{}'
                ) as role_keys,
                coalesce(
-                   array_agg(distinct rp.permission_key) filter (where rp.permission_key is not null),
+                   array_agg(distinct rp.permission_key)
+                       filter (where rp.permission_key is not null),
                    '{}'
                ) as permissions
         from public.memberships m
