@@ -157,6 +157,10 @@ export function AdminPortalClient({
             tenants={portal.tenants}
             orgUnits={portal.orgUnits}
             users={portal.users}
+            roles={portal.roles}
+            onReplaceMembershipRole={portal.handleReplaceMembershipRole}
+            onActivateMembership={portal.handleActivateMembership}
+            onSuspendMembership={portal.handleSuspendMembership}
             onOpenOrgUnitModal={(unit) =>
               portal.setModal({ type: 'org-unit-crud', unit })
             }
