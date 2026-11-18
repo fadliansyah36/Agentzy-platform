@@ -30,7 +30,12 @@ export const corporatePortalService = {
     };
   },
 
-  getAnalyticsSeries(_filter: AnalyticsFilterState) {
+  getAnalyticsSeries(_filter: AnalyticsFilterState): Array<{
+    month: string;
+    aktivasi: number;
+    target: number;
+    order: number;
+  }> {
     return [];
   },
 
