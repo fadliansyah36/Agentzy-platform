@@ -30,6 +30,9 @@ class AuditRedactionTests(TestCase):
         self.assertEqual(result["message"].count("[REDACTED]"), 2)
 
     def test_preserves_non_sensitive_values_and_handles_tuples(self):
-        result = redact_audit_value({\n            "status": "active",\n            "items": ("ok", {"ip_address": "127.0.0.1"}),\n        })
+        result = redact_audit_value({
+            "status": "active",
+            "items": ("ok", {"ip_address": "127.0.0.1"}),
+        })
         self.assertEqual(result["status"], "active")
         self.assertEqual(result["items"], ["ok", {"ip_address": "[REDACTED]"}])
