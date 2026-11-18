@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
+from app.core.redaction import redact_audit_value
 from app.db.session import engine
 
 settings = get_settings()
@@ -92,7 +93,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     message = exc.detail if isinstance(exc.detail, str) else "Permintaan tidak dapat diproses."
     error = {"code": code, "message": message, **_error_context(request)}
     if not isinstance(exc.detail, str):
-        error["details"] = jsonable_encoder(exc.detail)
+        error["details"] = jsonable_encoder(redact_audit_value(exc.detail))
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": error},
@@ -108,7 +109,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "Data permintaan tidak valid.",
-                "details": jsonable_encoder(exc.errors()),
+                "details": jsonable_encoder(redact_audit_value(exc.errors())),
                 **_error_context(request),
             }
         },
