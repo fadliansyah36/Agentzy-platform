@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.authorization import authorize_action, authorize_platform_action
+from app.core.config import get_settings
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
