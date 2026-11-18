@@ -552,6 +552,91 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     }
   }, [auth.session?.access_token, auth.aal, showToast]);
 
+  const refreshMembershipsForTenant = useCallback(async (tenantId: string) => {
+    const accessToken = auth.session?.access_token;
+    const tenant = tenants.find((item) => item.id === tenantId);
+    if (!accessToken || auth.aal !== 'aal2' || !tenant) {
+      throw new Error('Session AAL2 atau tenant context tidak tersedia.');
+    }
+    const rows = await listTenantMemberships(accessToken, tenantId);
+    const mapped = rows.map((membership) => {
+      const roleKeys = membership.role_keys ?? [];
+      return {
+        id: membership.id,
+        tenantId,
+        tenantName: tenant.name,
+        name: membership.display_name ?? membership.email ?? membership.user_id,
+        email: membership.email ?? '',
+        roleId: roles.find((item) => roleKeys.includes(item.key))?.id ?? roleKeys[0] ?? '',
+        roleKey: roleKeys.find((key) => key.startsWith('corporate_')) ?? roleKeys[0] ?? '',
+        roleName: roleKeys.map((key) => roles.find((item) => item.key === key)?.name ?? key).join(', '),
+        department: membership.department_id ?? '',
+        branchScope: membership.branch_id ?? '',
+        organizationId: membership.organization_id,
+        organizationUnitId: membership.organization_unit_id,
+        branchId: membership.branch_id,
+        departmentId: membership.department_id,
+        mfaEnabled: null,
+        status: membership.status === 'active'
+          ? 'Aktif' as const
+          : membership.status === 'revoked'
+            ? 'Dicabut' as const
+            : membership.status === 'suspended'
+              ? 'Suspended' as const
+              : 'Pending' as const,
+        lastLogin: null,
+      };
+    });
+    setUsers((current) => [
+      ...current.filter((item) => item.tenantId !== tenantId),
+      ...mapped,
+    ]);
+  }, [auth.session?.access_token, auth.aal, roles, tenants]);
+
+  const handleReplaceMembershipRole = useCallback(async (
+    membershipId: string, tenantId: string, roleKey: string
+  ) => {
+    const accessToken = auth.session?.access_token;
+    const role = roles.find((item) => item.key === roleKey && item.scopeType === 'Tenant');
+    if (!accessToken || auth.aal !== 'aal2' || !role) {
+      showToast('Session AAL2 atau role tenant yang valid tidak tersedia.');
+      return;
+    }
+    try {
+      await replaceMembershipRole(accessToken, tenantId, membershipId, {
+        role_key: role.key, scope_type: 'tenant',
+      });
+      await refreshMembershipsForTenant(tenantId);
+      showToast('Role membership diperbarui melalui FastAPI.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gagal mengganti role membership.');
+    }
+  }, [auth.session?.access_token, auth.aal, roles, refreshMembershipsForTenant, showToast]);
+
+  const handleActivateMembership = useCallback(async (membershipId: string, tenantId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || auth.aal !== 'aal2') return;
+    try {
+      await activateTenantMembership(accessToken, tenantId, membershipId);
+      await refreshMembershipsForTenant(tenantId);
+      showToast('Membership diaktifkan kembali melalui FastAPI.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gagal mengaktifkan membership.');
+    }
+  }, [auth.session?.access_token, auth.aal, refreshMembershipsForTenant, showToast]);
+
+  const handleSuspendMembership = useCallback(async (membershipId: string, tenantId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || auth.aal !== 'aal2') return;
+    try {
+      await suspendTenantMembership(accessToken, tenantId, membershipId);
+      await refreshMembershipsForTenant(tenantId);
+      showToast('Membership ditangguhkan melalui FastAPI.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gagal menangguhkan membership.');
+    }
+  }, [auth.session?.access_token, auth.aal, refreshMembershipsForTenant, showToast]);
+
   const handleLogin = useCallback(
     async (email: string, password: string, mfaCode: string) => {
       const context = await auth.signIn(email, password, true, mfaCode);
@@ -1954,6 +2039,9 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     users: canReadMembershipDirectory ? users : [],
     upsertPlatformUser,
     deletePlatformUser,
+    handleReplaceMembershipRole,
+    handleActivateMembership,
+    handleSuspendMembership,
     roles,
     permissionRegistry,
     upsertRbacRole,
