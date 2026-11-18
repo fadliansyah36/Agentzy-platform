@@ -30,7 +30,8 @@ Never commit database passwords, JWT secrets, service-role keys or the bootstrap
 Set the following secrets on the API service only:
 
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service-role key. Server-side only.
-- `PLATFORM_BOOTSTRAP_TOKEN`: long random one-time secret.
+- `AUTH_PROVIDER_WEBHOOK_SECRET`: random secret of at least 32 characters; configure the same value in the Supabase Auth webhook delivery header `X-Provider-Webhook-Secret`.
+- `PLATFORM_BOOTSTRAP_TOKEN`: long random one-time secret used only while bootstrapping the first administrator.
 - `APP_BASE_URL`: frontend origin used for the Auth invitation callback.
 
 Open `/bootstrap` in the frontend, enter the first administrator's full name and email plus the bootstrap token. The endpoint invites the user through Supabase Auth, creates the internal Agentzy Platform tenant membership, assigns the `platform_super_admin` role and writes an audit event. It refuses to run once an active platform super-admin membership exists.
@@ -45,7 +46,7 @@ The service-role key is only used by the protected one-time bootstrap flow and m
 
 ## Deployment
 
-Build the API container with `docker build -t agentzy-api apps/api`. Deploy it to a private or managed container runtime and configure its secrets. Set `NEXT_PUBLIC_AGENTZY_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` on the frontend deployment. Configure Supabase Auth redirect URLs and Google OAuth only if SSO is enabled.
+Build the API container with `docker build -t agentzy-api apps/api`. Deploy it to a private or managed container runtime and configure its secrets. In `APP_ENV=production`, startup fails closed unless `SUPABASE_SERVICE_ROLE_KEY` and `AUTH_PROVIDER_WEBHOOK_SECRET` are configured; the bootstrap token is optional after first-admin setup. Set `NEXT_PUBLIC_AGENTZY_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` on the frontend deployment. Configure Supabase Auth redirect URLs and Google OAuth only if SSO is enabled.
 
 ## Checks and release policy
 
