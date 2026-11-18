@@ -165,3 +165,8 @@ The following code increment is committed after the previous report snapshot. It
 Commits: `a3bff5177c42694bf098f911b302b606017cd715`, `27013c8fa7ad3dbd45b829fc17bc792a173a57fd`, `59447a6ddcfeed02a89dc51bf5e76aa15fbab06f`, `63a501f29266626c2102cff9fa3552c2c362d816`, `a998cf39cefe6ca61b87e44a43de71bf1cb2d5f4`, `7e9fec7cc292c9214a46abe3a2ce554524dd8aa6`, `8f717c294bbd3d3d17bdf6bd977614ad0eebeb0a`.
 
 **Current disposition remains PARTIAL / IN PROGRESS — NOT DONE.** This increment does not prove full object-level authorization coverage, Super Admin and AI Workforce lifecycle parity, complete hierarchy CRUD parity, universal API contract compliance, hosted Supabase Auth configuration, or live authentication evidence. Engineering workflow for the final code commit must be checked before reporting a pass.
+
+
+## Engineering verification — membership lifecycle increment
+
+The corrected implementation code commit `2560e24369da21a755bdf253c537e329f7c2f6a4` passed GitHub Actions minimum engineering workflow [44302719914](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44302719914): frozen frontend dependency install, ESLint, TypeScript, Python compile, Ruff, focused deterministic authorization checks, FastAPI import/OpenAPI generation, and migration source consistency. Earlier failed runs were due to formatting/syntax introduced during the incremental edit and were corrected before this passing commit. The passing run is the evidence for the code commit, not a claim of live integration or hosted Auth acceptance.
