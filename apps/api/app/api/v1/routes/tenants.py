@@ -9,12 +9,14 @@ from app.db.session import engine, user_session
 from app.schemas.identity import OrganizationRead, TenantRead
 
 router = APIRouter()
+claims_dependency = Depends(current_claims)
+session_dependency = Depends(user_session)
 
 
 @router.get("", response_model=list[TenantRead])
 async def list_tenants(
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ) -> list[TenantRead]:
     result = await session.execute(text("""
         select t.id, t.name, t.slug, t.status, m.status as membership_status
@@ -29,8 +31,8 @@ async def list_tenants(
 @router.get("/{tenant_id}/organizations", response_model=list[OrganizationRead])
 async def list_organizations(
     tenant_id: UUID,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ) -> list[OrganizationRead]:
     permission = await session.execute(text("""
         select exists (
