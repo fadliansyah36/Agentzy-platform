@@ -125,6 +125,10 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     [platformMemberships]
   );
   const hasPlatformAccess = platformMemberships.length > 0;
+  const platformPermissions = useMemo(
+    () => Array.from(new Set(platformMemberships.flatMap((membership) => membership.permissions))),
+    [platformMemberships]
+  );
   const isAuthenticated = Boolean(
     !auth.loading && auth.session && auth.identity && hasPlatformAccess && auth.aal === 'aal2'
   );
@@ -1586,6 +1590,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     authError: auth.error,
     adminRole,
     adminEmail,
+    platformPermissions,
     activeSection,
     modal,
     setModal,
