@@ -6,7 +6,19 @@ import {
 } from '../lib/corporate-data';
 import { corporatePortalService } from '../services/corporate-service';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { createOrganization, inviteTenantMember, listTenantMemberships, listTenantOrganizations, type AgentzyOrganization } from '@/apps/web/lib/api-client';
+import {
+  createOrganization,
+  inviteTenantMember,
+  listTenantMemberships,
+  listTenantOrganizations,
+  listOrganizationUnits,
+  listBranches,
+  listDepartments,
+  type AgentzyOrganization,
+  type AgentzyOrganizationUnit,
+  type AgentzyBranch,
+  type AgentzyDepartment,
+} from '@/apps/web/lib/api-client';
 import type {
   AICreditTransaction,
   AIWorkerRecord,
@@ -88,6 +100,9 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   );
   const [users, setUsers] = useState<CorporateUserMember[]>(initialCollections.users);
   const [organizations, setOrganizations] = useState<AgentzyOrganization[]>([]);
+  const [organizationUnits, setOrganizationUnits] = useState<AgentzyOrganizationUnit[]>([]);
+  const [branches, setBranches] = useState<AgentzyBranch[]>([]);
+  const [departments, setDepartments] = useState<AgentzyDepartment[]>([]);
   const [organizationsTenantId, setOrganizationsTenantId] = useState('');
   const [alerts, setAlerts] = useState<CorporateAlertItem[]>(initialCollections.alerts);
   const [reportHistory, setReportHistory] = useState<ReportExportHistory[]>(
@@ -199,11 +214,18 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       return;
     }
     let active = true;
-    void listTenantOrganizations(accessToken, activeTenantId).then((rows) => {
-      if (active) {
-        setOrganizations(rows);
-        setOrganizationsTenantId(activeTenantId);
-      }
+    void Promise.all([
+      listTenantOrganizations(accessToken, activeTenantId),
+      listOrganizationUnits(accessToken, activeTenantId),
+      listBranches(accessToken, activeTenantId),
+      listDepartments(accessToken, activeTenantId),
+    ]).then(([organizationRows, unitRows, branchRows, departmentRows]) => {
+      if (!active) return;
+      setOrganizations(organizationRows);
+      setOrganizationUnits(unitRows);
+      setBranches(branchRows);
+      setDepartments(departmentRows);
+      setOrganizationsTenantId(activeTenantId);
     }).catch((error) => {
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat struktur organisasi.');
     });
