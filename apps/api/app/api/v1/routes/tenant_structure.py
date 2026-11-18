@@ -314,7 +314,7 @@ async def update_organization(
                           and status='active')
                       or exists(select 1 from public.memberships
                         where tenant_id=:tenant_id and organization_id=:organization_id
-                          and status='active')
+                          and status in ('active','invited','suspended'))
                 """),
                 {"tenant_id": tenant_id, "organization_id": organization_id},
             )
@@ -716,6 +716,41 @@ async def accept_membership(
             raise HTTPException(status_code=403, detail="Verifikasi email wajib diselesaikan.")
         if row["invitation_expires_at"] and row["invitation_expires_at"] <= datetime.now(UTC):
             raise HTTPException(status_code=410, detail="Undangan telah kedaluwarsa.")
+        hierarchy = await connection.execute(
+            text("""
+                select
+                  (m.organization_id is null or exists(
+                    select 1 from public.organizations o
+                    where o.id=m.organization_id and o.tenant_id=m.tenant_id
+                      and o.status='active'
+                  )) as organization_active,
+                  (m.organization_unit_id is null or exists(
+                    select 1 from public.organization_units u
+                    where u.id=m.organization_unit_id and u.tenant_id=m.tenant_id
+                      and u.organization_id=m.organization_id and u.status='active'
+                  )) as unit_active,
+                  (m.branch_id is null or exists(
+                    select 1 from public.branches b
+                    where b.id=m.branch_id and b.tenant_id=m.tenant_id
+                      and b.organization_id=m.organization_id and b.status='active'
+                  )) as branch_active,
+                  (m.department_id is null or exists(
+                    select 1 from public.departments d
+                    where d.id=m.department_id and d.tenant_id=m.tenant_id
+                      and d.organization_id=m.organization_id and d.branch_id=m.branch_id
+                      and d.status='active'
+                  )) as department_active
+                from public.memberships m
+                where m.id=:membership_id and m.tenant_id=:tenant_id
+            """),
+            {"membership_id": membership_id, "tenant_id": tenant_id},
+        )
+        hierarchy_state = hierarchy.mappings().one()
+        if not all(hierarchy_state.values()):
+            raise HTTPException(
+                status_code=409,
+                detail="Membership hierarchy scope is inactive; request a new invitation.",
+            )
         updated = await connection.execute(
             text("""
                 update public.memberships
@@ -1267,7 +1302,8 @@ async def update_branch(
                       exists(select 1 from public.departments
                         where tenant_id=:tenant_id and branch_id=:branch_id and status='active')
                       or exists(select 1 from public.memberships
-                        where tenant_id=:tenant_id and branch_id=:branch_id and status='active')
+                        where tenant_id=:tenant_id and branch_id=:branch_id
+                          and status in ('active','invited','suspended'))
                 """),
                 {"tenant_id": tenant_id, "branch_id": branch_id},
             )
