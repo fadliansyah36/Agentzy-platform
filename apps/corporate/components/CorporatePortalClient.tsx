@@ -210,6 +210,10 @@ export function CorporatePortalClient({
             canManageOrganization={portal.canManageOrganizations}
             onCreateOrganization={portal.handleCreateOrganization}
             onOpenInviteModal={() => portal.setModal({ type: 'invite-user' })}
+            onReplaceMembershipRole={portal.handleReplaceMembershipRole}
+            onActivateMembership={portal.handleActivateMembership}
+            onSuspendMembership={portal.handleSuspendMembership}
+            onRevokeMembership={portal.handleRevokeMembership}
             onBack={backToOverview}
           />
         )}
