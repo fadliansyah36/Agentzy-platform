@@ -207,7 +207,7 @@ async def _audit(
 async def read_tenant(
     tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ):
-    platform = await _authorize(
+    context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
     query = text("""
@@ -311,7 +311,7 @@ async def update_organization(
 async def list_organization_units(
     tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ):
-    platform = await _authorize(
+    context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
     query = text("""
@@ -357,6 +357,12 @@ async def create_organization_unit(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id,
+            f"organization_unit.create:{tenant_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         result = await connection.execute(
             text("""
                 insert into public.organization_units(
@@ -380,6 +386,10 @@ async def create_organization_unit(
             row["id"],
             {"code": payload.code},
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=row,
+        )
     return row
 
 
@@ -387,7 +397,7 @@ async def create_organization_unit(
 async def list_branches(
     tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ):
-    platform = await _authorize(
+    context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
     query = text("""
@@ -433,6 +443,12 @@ async def create_branch(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id,
+            f"branch.create:{tenant_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         result = await connection.execute(
             text("""
                 insert into public.branches(
@@ -456,6 +472,10 @@ async def create_branch(
             row["id"],
             {"code": payload.code},
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=row,
+        )
     return row
 
 
@@ -463,7 +483,7 @@ async def create_branch(
 async def list_departments(
     tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ):
-    platform = await _authorize(
+    context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
     query = text("""
@@ -509,6 +529,12 @@ async def create_department(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection, request, actor, tenant_id,
+            f"department.create:{tenant_id}", payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
         result = await connection.execute(
             text("""
                 insert into public.departments(
@@ -534,6 +560,10 @@ async def create_department(
             "department",
             row["id"],
             {"code": payload.code},
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=row,
         )
     return row
 
