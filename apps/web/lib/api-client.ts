@@ -250,7 +250,7 @@ export const createDepartment = (
 
 export type AgentzyInvitation = {
   id: string; tenant_id: string; tenant_name: string;
-  invitation_expires_at: string | null; role_keys: string[];
+  invitation_expires_at: string | null; role_keys: string[]; permission_keys: string[];
 };
 export const getMyInvitations = (accessToken: string) =>
   apiRequest<{ invitations: AgentzyInvitation[] }>("/me/invitations", {
