@@ -173,6 +173,7 @@ export function AdminAppShell({
   );
 
   const requiredPermission: Record<AdminSectionId, string> = {
+    login: 'platform.tenants.read',
     overview: 'platform.tenants.read',
     'global-analytics': 'platform.audit.read',
     tenants: 'platform.tenants.read',
