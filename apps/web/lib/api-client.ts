@@ -56,6 +56,28 @@ export type AgentzyRoleTemplate = {
   permissions: string[];
 };
 
+
+type AgentzyPage<T> = {
+  data: T[];
+  meta: { has_more: boolean; next_cursor: string | null; request_id?: string | null };
+};
+
+const fetchAllAgentzyPages = async <T>(accessToken: string, path: string): Promise<T[]> => {
+  const rows: T[] = [];
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({ limit: '100' });
+    if (cursor) query.set('cursor', cursor);
+    const page = await apiRequest<AgentzyPage<T>>(
+      `${path}?${query.toString()}`,
+      { method: 'GET', accessToken },
+    );
+    rows.push(...page.data);
+    cursor = page.meta.next_cursor;
+  } while (cursor);
+  return rows;
+};
+
 export type AgentzyTenantMembership = {
   id: string;
   tenant_id: string;
@@ -102,12 +124,10 @@ export const inviteTenantMember = (accessToken: string, tenantId: string, payloa
   });
 
 export const listTenantMemberships = (accessToken: string, tenantId: string) =>
-  apiRequest<AgentzyTenantMembership[]>(`/tenants/${encodeURIComponent(tenantId)}/memberships`, {
-    method: "GET", accessToken,
-  });
+  fetchAllAgentzyPages<AgentzyTenantMembership>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/memberships`);
 
 export const listRoleTemplates = (accessToken: string) =>
-  apiRequest<AgentzyRoleTemplate[]>("/roles", { method: "GET", accessToken });
+  fetchAllAgentzyPages<AgentzyRoleTemplate>(accessToken, "/roles");
 
 
 export type AgentzyPlatformTenant = {
@@ -121,7 +141,7 @@ export type AgentzyPlatformTenant = {
 };
 
 export const listPlatformTenants = (accessToken: string) =>
-  apiRequest<AgentzyPlatformTenant[]>("/tenants/directory", { method: "GET", accessToken });
+  fetchAllAgentzyPages<AgentzyPlatformTenant>(accessToken, "/tenants/directory");
 
 
 export type UpdateTenantInput = Partial<CreateTenantInput> & { status?: 'pending' | 'active' | 'suspended' | 'archived' };
@@ -384,7 +404,7 @@ export type AgentzyPermissionDefinition = {
   resource: string | null; risk_level: 'standard' | 'sensitive' | 'privileged' | 'critical';
 };
 export const listPermissionRegistry = (accessToken: string) =>
-  apiRequest<AgentzyPermissionDefinition[]>("/permissions", { method: "GET", accessToken });
+  fetchAllAgentzyPages<AgentzyPermissionDefinition>(accessToken, "/permissions");
 export const replaceRolePermissions = (
   accessToken: string,
   roleId: string,
