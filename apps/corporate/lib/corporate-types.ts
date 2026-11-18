@@ -140,7 +140,7 @@ export interface CorporateUserMember {
   roleLabel: string;
   department: string;
   branchScope: string;
-  status: 'Aktif' | 'Menunggu Aktivasi';
+  status: 'Aktif' | 'Menunggu Aktivasi' | 'Ditangguhkan' | 'Dicabut';
   mfaEnabled: boolean | null;
   lastActive: string;
 }
