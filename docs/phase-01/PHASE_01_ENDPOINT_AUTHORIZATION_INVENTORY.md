@@ -72,7 +72,7 @@ This is a source inspection inventory, not a penetration test or proof that ever
 
 ## 3. Confirmed gaps
 
-1. Management tenant/role endpoints that use direct `_has_platform_permission` checks are not yet consistently routed through `authorize_platform_action`; object-level ABAC coverage is therefore incomplete.
+1. Resource-aware `authorize_platform_action` checks were added for tenant update/archive and platform role update/permission replacement/delete. Other management operations still need a complete target-object and nested-resource authorization review; object-level ABAC coverage remains partial.
 2. A complete machine-generated inventory of every HTTP operation and all nested repository/service calls has not yet been added to CI.
 3. The live policy set contains 67 global ALLOW baselines and no tenant DENY policies. Deny precedence is covered by deterministic unit tests, but tenant-specific policy administration and operating procedure are not demonstrated with live tenant records.
 4. No Auth users exist in the live project at audit time; membership, password recovery delivery, break-glass and audit-reader flows have not been exercised with actual user identities.
@@ -81,4 +81,14 @@ This is a source inspection inventory, not a penetration test or proof that ever
 
 ## 4. Acceptance status
 
-**PARTIAL / IN PROGRESS.** The inventory identifies multiple central-helper-covered routes but does not support the claim that every sensitive endpoint has completed central object-level authorization.
+**PARTIAL / IN PROGRESS.** The latest continuation commit adds object-aware platform ABAC to selected tenant and role mutations, but the inventory still does not prove every sensitive endpoint and nested repository operation has complete object-level authorization.
+
+
+## 5. Execution delta — 2026-11-18
+
+- Commits `c617ab44`, `a76d21e8`, and `d1dee64d` add resource-aware platform ABAC for tenant update/archive and platform role update/permission replacement/delete, plus validity-window and tenant-scope checks for corporate-owner role resolution.
+- Added deterministic unit tests for organization-unit and department object-scope denial in `d6094d2f`.
+- The shared auth hook now guards against stale async identity hydration and validates six-digit MFA codes correctly.
+- Super Admin role registry and Corporate membership state no longer begin with demo collections; they start empty and populate from the FastAPI API path.
+- The change does not establish complete portal action parity, live Auth-user workflow evidence, audit export/redaction acceptance or universal API contract coverage.
+- Current live database has 18/18 public application tables with RLS enabled and six applied migrations including M010–M012. No additional migration was needed for this code-only increment.
