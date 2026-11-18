@@ -24,6 +24,14 @@ import {
   listPermissionRegistry,
   replaceRolePermissions,
   type AgentzyPermissionDefinition,
+  listBreakGlassRequests,
+  requestBreakGlass,
+  approveBreakGlass,
+  activateBreakGlass,
+  revokeBreakGlass,
+  reviewBreakGlass,
+  listAuditLogs,
+  exportAuditLogs,
 } from '@/apps/web/lib/api-client';
 import type {
   AdminAIWorkerRecord,
@@ -229,11 +237,9 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [activeSessionsCount, setActiveSessionsCount] = useState<number>(0);
   const [ipAllowlistEnabled, setIpAllowlistEnabled] = useState<boolean>(false);
   const [sessionTtlMinutes, setSessionTtlMinutes] = useState<number>(120);
-  const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>(
-    initial.breakGlassRequests
-  );
+  const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>([]);
   const [featureFlags, setFeatureFlags] = useState<FeatureFlagRecord[]>(initial.featureFlags);
-  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>(initial.auditLogs);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [incidents, setIncidents] = useState<IncidentRecord[]>(initial.incidents);
   const [dsrRequests, setDsrRequests] = useState<DsrRequestRecord[]>(initial.dsrRequests);
   const [vendors, setVendors] = useState<VendorSubprocessorRecord[]>(initial.vendors);
@@ -246,26 +252,11 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   }, []);
 
   const appendAudit = useCallback(
-    (
-      action: string,
-      targetResource: string,
-      tenantScope: string,
-      diffSummary: string,
-      result: AuditLogRecord['result'] = 'Sukses'
-    ) => {
-      const entry: AuditLogRecord = {
-        id: nextId('aud'),
-        action,
-        actorEmail: adminEmail,
-        targetResource,
-        tenantScope,
-        timestamp: 'Baru saja · 17 Nov 2026',
-        result,
-        diffSummary,
-      };
-      setAuditLogs((prev) => [entry, ...prev]);
+    (_action: string, _targetResource: string, _tenantScope: string,
+      _diffSummary: string, _result: AuditLogRecord['result'] = 'Sukses') => {
+      // Security/audit records are written by FastAPI; client-side activity is never treated as an audit record.
     },
-    [adminEmail]
+    []
   );
 
   const navigateTo = useCallback((section: AdminSectionId) => {
@@ -358,6 +349,63 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       });
     return () => { active = false; };
   }, [auth.session?.access_token, auth.aal, platformMemberships, showToast]);
+
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || auth.aal !== 'aal2') return;
+    let active = true;
+    if (platformPermissions.includes('platform.security.manage')) {
+      void listBreakGlassRequests(accessToken).then(({ data }) => {
+        if (!active) return;
+        setBreakGlassRequests(data.map((item) => {
+          const statusMap: Record<string, BreakGlassRequestRecord['status']> = {
+            requested: 'Menunggu Approval',
+            approved: 'Menunggu Aktivasi',
+            active: 'Aktif',
+            expired: 'Menunggu Review',
+            revoked: 'Menunggu Review',
+            reviewed: 'Selesai',
+            rejected: 'Ditolak',
+          };
+          return {
+            id: item.id,
+            actorEmail: item.requester_user_id ?? 'System',
+            requesterUserId: item.requester_user_id,
+            approverUserId: item.approver_user_id,
+            targetTenant: item.requested_scope?.tenant_ids?.join(', ') || 'Platform-wide',
+            reason: item.reason ?? '',
+            durationMinutes: item.requested_scope?.duration_minutes ?? 30,
+            permissionKeys: item.requested_scope?.permission_keys ?? [],
+            tenantIds: item.requested_scope?.tenant_ids ?? [],
+            approver1: item.approver_user_id ?? 'Menunggu approval',
+            approver2: item.reviewed_at ? 'Post-incident reviewed' : 'Pending review',
+            status: statusMap[item.status] ?? 'Menunggu Approval',
+            requestedAt: item.requested_at ?? '',
+          };
+        }));
+      }).catch((error) => {
+        if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat break-glass requests.');
+      });
+    }
+    if (platformPermissions.includes('platform.audit.read')) {
+      void listAuditLogs(accessToken, { limit: 100 }).then(({ data }) => {
+        if (!active) return;
+        setAuditLogs(data.map((item) => ({
+          id: item.id,
+          action: item.action,
+          actorEmail: item.actor_user_id ?? 'System',
+          targetResource: [item.resource_type, item.resource_id].filter(Boolean).join(':'),
+          tenantScope: item.tenant_id ?? 'Platform',
+          timestamp: item.created_at,
+          result: item.action.includes('denied') ? 'Ditolak' : item.action.includes('approved') ? 'Disetujui' : 'Sukses',
+          diffSummary: JSON.stringify(item.metadata ?? {}),
+        })));
+      }).catch((error) => {
+        if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat audit logs.');
+      });
+    }
+    return () => { active = false; };
+  }, [auth.session?.access_token, auth.aal, platformPermissions, showToast]);
 
   const handleLogin = useCallback(
     async (email: string, password: string, mfaCode: string) => {
@@ -1463,44 +1511,103 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
 
   const createBreakGlassRequest = useCallback(
-    (payload: { targetTenant: string; reason: string; durationMinutes: number }) => {
-      const req: BreakGlassRequestRecord = {
-        id: nextId('bg'),
-        actorEmail: adminEmail,
-        targetTenant: payload.targetTenant,
-        reason: payload.reason,
-        durationMinutes: payload.durationMinutes,
-        approver1: 'platform_super_admin',
-        approver2: 'Menunggu Security Admin',
-        status: 'Menunggu Approval',
-        requestedAt: 'Baru saja · 17 Nov 2026',
-      };
-      setBreakGlassRequests((prev) => [req, ...prev]);
-      appendAudit('Break-Glass Request', payload.targetTenant, payload.targetTenant, payload.reason, 'Disetujui');
-      setModal({ type: 'none' });
-      showToast('Permintaan Break-Glass Access dicatat & menunggu persetujuan tahap-2.');
+    async (payload: {
+      tenantIds: string[];
+      permissionKeys: string[];
+      reason: string;
+      durationMinutes: number;
+    }) => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk meminta break-glass.');
+        return;
+      }
+      try {
+        await requestBreakGlass(accessToken, {
+          tenant_ids: payload.tenantIds,
+          permission_keys: payload.permissionKeys,
+          reason: payload.reason,
+          duration_minutes: payload.durationMinutes,
+        });
+        const { data } = await listBreakGlassRequests(accessToken);
+        setBreakGlassRequests(data.map((item) => ({
+          id: item.id,
+          actorEmail: item.requester_user_id ?? 'System',
+          requesterUserId: item.requester_user_id,
+          approverUserId: item.approver_user_id,
+          targetTenant: item.requested_scope?.tenant_ids?.join(', ') || 'Platform-wide',
+          reason: item.reason ?? '',
+          durationMinutes: item.requested_scope?.duration_minutes ?? 30,
+          permissionKeys: item.requested_scope?.permission_keys ?? [],
+          tenantIds: item.requested_scope?.tenant_ids ?? [],
+          approver1: item.approver_user_id ?? 'Menunggu approval',
+          approver2: item.reviewed_at ? 'Post-incident reviewed' : 'Pending review',
+          status: ({
+            requested: 'Menunggu Approval', approved: 'Menunggu Aktivasi',
+            active: 'Aktif', expired: 'Menunggu Review', revoked: 'Menunggu Review',
+            reviewed: 'Selesai', rejected: 'Ditolak',
+          } as Record<string, BreakGlassRequestRecord['status']>)[item.status] ?? 'Menunggu Approval',
+          requestedAt: item.requested_at ?? '',
+        })));
+        setModal({ type: 'none' });
+        showToast('Break-glass request berhasil dicatat dan menunggu approver yang berbeda.');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Gagal mengajukan break-glass.');
+      }
     },
-    [adminEmail, appendAudit, showToast]
+    [auth.session?.access_token, auth.aal, showToast]
   );
 
   const decideBreakGlass = useCallback(
-    (id: string, status: 'Aktif' | 'Ditolak' | 'Selesai') => {
-      setBreakGlassRequests((prev) =>
-        prev.map((b) =>
-          b.id === id
-            ? {
-                ...b,
-                status,
-                approver2: status === 'Aktif' ? 'platform_security_admin' : b.approver2,
-              }
-            : b
-        )
-      );
-      appendAudit('Break-Glass Governance', id, 'Security Center', `status → ${status}`);
-      showToast(`Break-Glass ${id} diubah menjadi ${status}.`);
+    async (id: string, action: 'approve' | 'reject' | 'activate' | 'revoke' | 'review') => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk lifecycle break-glass.');
+        return;
+      }
+      const current = breakGlassRequests.find((item) => item.id === id);
+      try {
+        if (action === 'approve') await approveBreakGlass(accessToken, id);
+        if (action === 'reject') await (await import('@/apps/web/lib/api-client')).rejectBreakGlass(accessToken, id);
+        if (action === 'activate') await activateBreakGlass(accessToken, id, current?.durationMinutes ?? 30);
+        if (action === 'revoke') await revokeBreakGlass(accessToken, id);
+        if (action === 'review') {
+          const notes = window.prompt('Catatan post-incident review (minimal 20 karakter):');
+          if (!notes || notes.trim().length < 20) {
+            showToast('Catatan review minimal 20 karakter wajib diisi.');
+            return;
+          }
+          await reviewBreakGlass(accessToken, id, notes.trim());
+        }
+        const { data } = await listBreakGlassRequests(accessToken);
+        setBreakGlassRequests(data.map((item) => ({
+          id: item.id,
+          actorEmail: item.requester_user_id ?? 'System',
+          requesterUserId: item.requester_user_id,
+          approverUserId: item.approver_user_id,
+          targetTenant: item.requested_scope?.tenant_ids?.join(', ') || 'Platform-wide',
+          reason: item.reason ?? '',
+          durationMinutes: item.requested_scope?.duration_minutes ?? 30,
+          permissionKeys: item.requested_scope?.permission_keys ?? [],
+          tenantIds: item.requested_scope?.tenant_ids ?? [],
+          approver1: item.approver_user_id ?? 'Menunggu approval',
+          approver2: item.reviewed_at ? 'Post-incident reviewed' : 'Pending review',
+          status: ({
+            requested: 'Menunggu Approval', approved: 'Menunggu Aktivasi',
+            active: 'Aktif', expired: 'Menunggu Review', revoked: 'Menunggu Review',
+            reviewed: 'Selesai', rejected: 'Ditolak',
+          } as Record<string, BreakGlassRequestRecord['status']>)[item.status] ?? 'Menunggu Approval',
+          requestedAt: item.requested_at ?? '',
+        })));
+        showToast(`Break-glass request ${action} berhasil diproses.`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Break-glass action gagal.');
+      }
     },
-    [appendAudit, showToast]
+    [auth.session?.access_token, auth.aal, breakGlassRequests, showToast]
   );
+
+
 
   const toggleFeatureFlag = useCallback(
     (flagId: string) => {
@@ -1719,11 +1826,24 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     sessionTtlMinutes,
     setSessionTtlMinutes,
     breakGlassRequests,
+    activeBreakGlassCount: breakGlassRequests.filter((item) => item.status === 'Aktif').length,
+    currentUserId: auth.identity?.user_id ?? null,
     createBreakGlassRequest,
     decideBreakGlass,
     featureFlags,
     toggleFeatureFlag,
     auditLogs,
+    exportAuditLogs: async () => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken) throw new Error('Session tidak tersedia.');
+      const blob = await exportAuditLogs(accessToken);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'agentzy-audit-export.csv';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    },
     incidents,
     createIncident,
     resolveIncident,
