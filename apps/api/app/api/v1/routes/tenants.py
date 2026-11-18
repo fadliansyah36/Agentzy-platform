@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.authorization import authorize_tenant
+from app.core.authorization import authorize_action
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 from app.schemas.identity import OrganizationRead, TenantRead
@@ -34,13 +34,16 @@ async def list_tenants(
 async def list_organizations(
     tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ) -> list[OrganizationRead]:
-    context = await authorize_tenant(
+    context, _ = await authorize_action(
         session,
         user_id=UUID(claims["sub"]),
         tenant_id=tenant_id,
         permission_key="corporate.organization.read",
         platform_permission="platform.tenants.read",
         aal=claims.get("aal"),
+        resource_type="corporate.organization",
+        action="read",
+        resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
     )
     query = text("""
         select id,tenant_id,parent_id,name,slug,organization_type,status
