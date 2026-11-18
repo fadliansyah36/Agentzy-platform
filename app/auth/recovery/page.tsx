@@ -20,26 +20,26 @@ export default function PasswordRecoveryPage() {
     const client = getSupabaseBrowserClient();
     if (!client) return;
     let alive = true;
-    const params = new URLSearchParams(window.location.search);
-    const requestedReturn = params.get('returnTo');
-    const allowedReturnPaths = new Set(['/admin', '/corporate', '/ai-workforce', '/workforce']);
-    if (requestedReturn && allowedReturnPaths.has(requestedReturn)) {
-      setReturnPath(requestedReturn);
-    }
-    const recoveryHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
-    const recoveryQuery = params.get('type');
-    const isRecoveryCallback = recoveryHash === 'recovery' || recoveryQuery === 'recovery';
-    const errorCode = params.get('error_code');
-    if (errorCode) {
-      setError(
-        errorCode === 'otp_expired'
-          ? 'Tautan pemulihan sudah kedaluwarsa. Minta tautan baru.'
-          : 'Tautan pemulihan tidak valid. Minta tautan baru.'
-      );
-      setPhase('request');
-    }
     void client.auth.getSession().then(({ data }) => {
       if (!alive) return;
+      const params = new URLSearchParams(window.location.search);
+      const requestedReturn = params.get('returnTo');
+      const allowedReturnPaths = new Set(['/admin', '/corporate', '/ai-workforce', '/workforce']);
+      if (requestedReturn && allowedReturnPaths.has(requestedReturn)) {
+        setReturnPath(requestedReturn);
+      }
+      const recoveryHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
+      const recoveryQuery = params.get('type');
+      const isRecoveryCallback = recoveryHash === 'recovery' || recoveryQuery === 'recovery';
+      const errorCode = params.get('error_code');
+      if (errorCode) {
+        setError(
+          errorCode === 'otp_expired'
+            ? 'Tautan pemulihan sudah kedaluwarsa. Minta tautan baru.'
+            : 'Tautan pemulihan tidak valid. Minta tautan baru.'
+        );
+        setPhase('request');
+      }
       const recovery = Boolean(data.session) && isRecoveryCallback;
       setHasRecoverySession(recovery);
       if (recovery) setPhase('reset');
