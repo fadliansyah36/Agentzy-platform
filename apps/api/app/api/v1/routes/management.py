@@ -4,12 +4,14 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_action, authorize_platform_action
 from app.core.config import get_settings
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -173,6 +175,17 @@ async def create_tenant(
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=user_id, tenant_id=None,
+            command_key="tenant.create",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text("""
             insert into public.tenants(name,slug,tenant_type,status,created_by)
@@ -232,6 +245,10 @@ async def create_tenant(
                 "slug": payload.slug,
             },
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=row,
+        )
     return row
 
 
@@ -277,6 +294,17 @@ async def create_organization(
                     detail="Parent organization harus berada pada tenant yang sama.",
                 )
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=user_id, tenant_id=tenant_id,
+            command_key=f"organization.create:{tenant_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text("""
             insert into public.organizations(tenant_id,parent_id,name,slug,organization_type)
@@ -310,6 +338,10 @@ async def create_organization(
                 "request_id": request.headers.get("x-request-id"),
                 "ip": request.client.host if request.client else None,
             },
+        )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=row,
         )
     return row
 
