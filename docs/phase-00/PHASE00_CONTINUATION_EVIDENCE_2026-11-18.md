@@ -212,3 +212,44 @@ Phase 01 is **PARTIAL / BLOCKED**, not DONE. The three migrations and identity/t
 The Phase 00 backlog execution guard remains authoritative: Phase 01 tasks cannot be marked IN PROGRESS until Phase 00 mandatory gates are signed off. P00-AC-06 (Security Advisor WARN/event-trigger fail-open behavior), P00-AC-05 (authoritative Auth/Data API/Storage configuration and grants/default privileges), P00-AC-03 (remaining license/asset dispositions), P00-AC-02/P00-AC-04 (complete source and screen/action ownership inventory), P00-AC-08 (M000–M220 reconciliation), P00-AC-09 (DoD evidence), and P00-AC-10 (Phase 01 readiness sign-off) remain open or partial.
 
 No code, migration, grant, policy, function, trigger, Auth setting, deployment, or business data was changed by this review. No staging, UAT, real-world, load, security-acceptance, or production-release testing was run.
+
+
+## 11. Phase 00 closure re-audit and readiness decision — 18 November 2026
+
+A fresh re-audit was performed on `main` and the canonical Supabase project. Full gate-by-gate evidence and residual risks are in `docs/phase-00/PHASE00_CLOSURE_READINESS_REAUDIT_2026-11-18.md`.
+
+### Repository and Supabase correction
+
+- Audited pre-documentation HEAD: `4d3db7b36df411aefc5ad81aaa04e5892d99493c`; recursive tree: 1,350 entries, 1,233 files, 117 directories, `truncated=false`.
+- The repository contains the existing frontend portals and the FastAPI backend; 11 page/layout route files, 3 Next.js API handlers, 89 portal feature source files, 3 portal service modules, 4 hooks and 20 tracked files under `apps/api/` were counted.
+- Supabase `Agentzy-db` is `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
+- Remote migration history has three Phase 01 entries matching the three source migrations. Live public schema contains nine Agentzy application tables, RLS enabled on all nine, 15 system roles, 45 permission keys and 134 role-permission links. Auth users and Storage buckets are both zero.
+- These later verified values supersede older statements in this file and earlier audit documents that described zero public application tables or empty migration history. Historical snapshots are retained but must not be treated as current state.
+
+### Security/configuration evidence
+
+- `public.rls_auto_enable()` is SECURITY DEFINER, owned by postgres, fixed `pg_catalog` search_path, and callable by PUBLIC/anon/authenticated/service_role. Event trigger `ensure_rls` is enabled for CREATE TABLE, CREATE TABLE AS and SELECT INTO. The function catches `WHEN OTHERS` and only logs; RLS activation failure can therefore be swallowed. Security Advisor still returns two WARN findings.
+- No production ACL/function/event-trigger modification was made. Fail-closed exception handling and narrow EXECUTE grants remain a candidate remediation requiring authoritative privilege semantics and controlled isolated reproduction.
+- Current `anon` and `authenticated` table grants and global default privileges are broader than least privilege. RLS policies are SELECT-only; RLS being enabled does not itself satisfy least-privilege grants.
+- Auth providers, live signup/confirmation/redirect/password/MFA/SMTP/session settings and hosted Data API exposed schemas could not be verified through the available connector. Repository `supabase/config.toml` values are local declarative configuration only. Storage has no buckets.
+
+### Gate disposition
+
+| Gate | Status |
+|---|---|
+| P00-AC-01 | PARTIAL |
+| P00-AC-02 | PARTIAL — structure inventoried; screen/control/action-level inventory incomplete |
+| P00-AC-03 | PARTIAL — package exceptions and all asset provenance/rights remain open |
+| P00-AC-04 | PARTIAL — API ownership proposal exists; full action mapping and owner sign-off incomplete |
+| P00-AC-05 | PARTIAL / BLOCKED — live Auth/Data API settings unverified; grants/default privileges not least-privilege |
+| P00-AC-06 | BLOCKED — fail-open event-trigger function and two Security Advisor WARN findings unresolved |
+| P00-AC-07 | COMPLETE (ADR register only) |
+| P00-AC-08 | PARTIAL — M010 applied; M000 is audit-only; M020–M220 not applied and mapped to future phases |
+| P00-AC-09 | PARTIAL — final DoD checklist drafted; formal acceptance pending |
+| P00-AC-10 | BLOCKED / NOT APPROVED |
+
+### Engineering checks and non-actions
+
+The existing dependency/license GitHub Actions run `44138463292` is recorded as successful for exact package coordinate reconciliation. Build/lint/type-check, Python compile/import, migration consistency and OpenAPI checks were not executed in this re-audit; no passing result is claimed. No code, database schema, migration, data, ACL, policy, function, trigger, Auth setting, Storage setting or deployment was changed. No staging/UAT/real-world/load/security-acceptance/production-release test was run.
+
+**Decision:** Phase 00 remains PARTIAL/BLOCKED. Phase 01 readiness has not been approved. Do not begin additional Phase 01 coding.
