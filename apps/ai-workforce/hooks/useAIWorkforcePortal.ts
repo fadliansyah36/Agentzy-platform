@@ -26,12 +26,7 @@ import type {
   WorkflowNodeItem,
   WorkflowRunItem,
 } from '../lib/ai-workforce-types';
-import {
-  loadHumanAIBindings,
-  saveHumanAIBindings,
-  type AgentzyManagerRole,
-  type HumanAIBindingRecord,
-} from '@/lib/human-ai-bindings';
+import type { AgentzyManagerRole, HumanAIBindingRecord } from '@/lib/human-ai-bindings';
 
 export type AIWorkforceModalState =
   | { type: 'none' }
@@ -91,22 +86,19 @@ export function useAIWorkforcePortal(
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
 
-  // Human <-> AI Binding & Agentzy Internal RBAC
-  const [managerRole, setManagerRole] =
-    useState<AgentzyManagerRole>('HRD Agentzy');
-  const [humanAiBindings, setHumanAiBindings] = useState<HumanAIBindingRecord[]>(
-    []
+  // Human <-> AI binding data remains empty until its FastAPI domain contract is available.
+  const [humanAiBindings] = useState<HumanAIBindingRecord[]>([]);
+  const activeMembership = auth.identity?.memberships.find(
+    (membership) => membership.tenant_id === activeTenantId
   );
-
-  useEffect(() => {
-    const sync = () => setHumanAiBindings(loadHumanAIBindings());
-    const raf = window.requestAnimationFrame(sync);
-    window.addEventListener('storage', sync);
-    return () => {
-      window.cancelAnimationFrame(raf);
-      window.removeEventListener('storage', sync);
-    };
-  }, []);
+  const managerRole = useMemo<AgentzyManagerRole>(() => {
+    if (activeMembership?.permissions.includes('platform.security.manage')) return 'Admin Agentzy';
+    if (
+      activeMembership?.permissions.includes('workforce.assignments.manage') ||
+      activeMembership?.permissions.includes('corporate.workforce.manage')
+    ) return 'HRD Agentzy';
+    return 'Corporate / ISP Partner (Read-Only)';
+  }, [activeMembership]);
 
   const [modal, setModal] = useState<AIWorkforceModalState>({ type: 'none' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -713,10 +705,11 @@ export function useAIWorkforcePortal(
     [appendAudit, showToast]
   );
 
-  const canManageBindings =
-    managerRole === 'HRD Agentzy' ||
-    managerRole === 'Admin Agentzy' ||
-    managerRole === 'Direksi Agentzy';
+  const canManageBindings = Boolean(
+    activeMembership?.permissions.includes('workforce.assignments.manage') ||
+    activeMembership?.permissions.includes('corporate.workforce.manage') ||
+    activeMembership?.permissions.includes('platform.security.manage')
+  );
 
   const handleCreateBinding = useCallback(
     (
@@ -1026,7 +1019,6 @@ export function useAIWorkforcePortal(
     isGeneratingContent,
     contentError,
     managerRole,
-    setManagerRole,
     canManageBindings,
     humanAiBindings,
     modal,
