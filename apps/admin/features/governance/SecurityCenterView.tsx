@@ -37,8 +37,8 @@ export function SecurityCenterView({
 }: {
   mfaEnforced: boolean | null;
   activeSessionsCount: number | null;
-  ipAllowlistEnabled: boolean;
-  sessionTtlMinutes: number;
+  ipAllowlistEnabled: boolean | null;
+  sessionTtlMinutes: number | null;
   breakGlassRequests: BreakGlassRequestRecord[];
   securityAlerts: AgentzySecurityAlert[];
   onAcknowledgeSecurityAlert: (alertId: string) => Promise<void>;
