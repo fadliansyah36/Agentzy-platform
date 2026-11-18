@@ -954,7 +954,8 @@ async def update_department(
                 raise HTTPException(
                     status_code=409,
                     detail=(
-                        "Archive child departments and memberships before archiving this department."
+                        "Archive child departments and memberships before archiving "
+                        "this department."
                     ),
                 )
         assignments = ", ".join(f"{key}=:{key}" for key in values)
