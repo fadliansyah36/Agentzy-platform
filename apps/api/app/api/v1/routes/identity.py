@@ -165,7 +165,7 @@ async def read_my_permissions(
     result = await session.execute(
         text("""
             select m.id as membership_id,m.tenant_id,t.name as tenant_name,
-                   m.organization_id,m.status,
+                   m.organization_id,m.organization_unit_id,m.branch_id,m.department_id,m.status,
                    coalesce(
                      array_agg(distinct r.key) filter (where r.key is not null), '{}'
                    ) as roles,
