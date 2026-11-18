@@ -9,6 +9,10 @@ import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
   createOrganization,
   inviteTenantMember,
+  activateTenantMembership,
+  suspendTenantMembership,
+  revokeTenantMembership,
+  replaceMembershipRole,
   listTenantMemberships,
   listTenantOrganizations,
   listOrganizationUnits,
@@ -205,7 +209,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           roleLabel: roleMeta?.label ?? roleKey,
           department: '',
           branchScope: '',
-          status: row.status === 'active' ? 'Aktif' as const : 'Menunggu Aktivasi' as const,
+          status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
           mfaEnabled: null,
           lastActive: 'Belum ada aktivitas',
         };
@@ -378,8 +382,8 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
           roleLabel: roleMeta?.label ?? roleKey,
           department: '',
           branchScope: '',
-          status: row.status === 'active' ? 'Aktif' as const : 'Menunggu Aktivasi' as const,
-          mfaEnabled: false,
+          status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
+          mfaEnabled: null,
           lastActive: 'Undangan dikirim',
         };
       }));
@@ -388,6 +392,55 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     },
     [auth.session?.access_token, activeTenantId, showToast]
   );
+
+  const refreshTenantMemberships = useCallback(async () => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+    const rows = await listTenantMemberships(accessToken, activeTenantId);
+    setUsers(rows.map((row) => {
+      const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? 'corporate_auditor') as CorporateRoleKey;
+      const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
+      return {
+        id: row.id, name: row.display_name ?? row.email ?? row.user_id,
+        email: row.email ?? '', roleKey, roleLabel: roleMeta?.label ?? roleKey,
+        department: '', branchScope: '',
+        status: row.status === 'active' ? 'Aktif' as const : row.status === 'suspended' ? 'Ditangguhkan' as const : row.status === 'revoked' ? 'Dicabut' as const : 'Menunggu Aktivasi' as const,
+        mfaEnabled: null, lastActive: 'Belum ada aktivitas',
+      };
+    }));
+  }, [auth.session?.access_token, activeTenantId]);
+
+  const handleReplaceMembershipRole = useCallback(async (membershipId: string, roleKey: CorporateRoleKey) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+    await replaceMembershipRole(accessToken, activeTenantId, membershipId, { role_key: roleKey, scope_type: 'tenant' });
+    await refreshTenantMemberships();
+    showToast('Role membership berhasil diganti melalui FastAPI.');
+  }, [auth.session?.access_token, activeTenantId, refreshTenantMemberships, showToast]);
+
+  const handleActivateMembership = useCallback(async (membershipId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+    await activateTenantMembership(accessToken, activeTenantId, membershipId);
+    await refreshTenantMemberships();
+    showToast('Membership berhasil diaktifkan kembali.');
+  }, [auth.session?.access_token, activeTenantId, refreshTenantMemberships, showToast]);
+
+  const handleSuspendMembership = useCallback(async (membershipId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+    await suspendTenantMembership(accessToken, activeTenantId, membershipId);
+    await refreshTenantMemberships();
+    showToast('Membership berhasil ditangguhkan.');
+  }, [auth.session?.access_token, activeTenantId, refreshTenantMemberships, showToast]);
+
+  const handleRevokeMembership = useCallback(async (membershipId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) throw new Error('Session atau tenant context tidak tersedia.');
+    await revokeTenantMembership(accessToken, activeTenantId, membershipId);
+    await refreshTenantMemberships();
+    showToast('Membership berhasil dicabut.');
+  }, [auth.session?.access_token, activeTenantId, refreshTenantMemberships, showToast]);
 
   const handleCreateOrganization = useCallback(
     async (payload: { name: string; slug: string; organization_type: 'company' | 'division' | 'department' | 'branch' | 'team'; parent_id?: string | null }) => {
@@ -503,6 +556,10 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     handlePayInvoice,
     handleInviteUser,
     handleCreateOrganization,
+    handleReplaceMembershipRole,
+    handleActivateMembership,
+    handleSuspendMembership,
+    handleRevokeMembership,
     handleMarkAlertRead,
     handleMarkAllAlertsRead,
     handleApproveWorkOrderQC,
