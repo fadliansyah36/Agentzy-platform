@@ -78,7 +78,10 @@ export type InviteTenantMemberInput = {
 };
 
 export const createTenant = (accessToken: string, payload: CreateTenantInput) =>
-  apiRequest<AgentzyPlatformTenant>("/tenants", { method: "POST", accessToken, body: JSON.stringify(payload) });
+  apiRequest<AgentzyPlatformTenant>("/tenants", {
+    method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() },
+    body: JSON.stringify(payload),
+  });
 
 export const createOrganization = (accessToken: string, tenantId: string, payload: CreateOrganizationInput) =>
   apiRequest<Record<string, unknown>>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
