@@ -65,6 +65,11 @@ async def request_context(request: Request, call_next):
     )
     try:
         response = await call_next(request)
+        logger.info(
+            "api_request_completed",
+            method=request.method,
+            status_code=response.status_code,
+        )
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Trace-ID"] = trace_id
@@ -73,19 +78,30 @@ async def request_context(request: Request, call_next):
         structlog.contextvars.clear_contextvars()
 
 
+def _error_context(request: Request) -> dict:
+    return {
+        "request_id": getattr(request.state, "request_id", None),
+        "correlation_id": getattr(request.state, "correlation_id", None),
+        "trace_id": getattr(request.state, "trace_id", None),
+    }
+
+
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_: Request, exc: HTTPException):
+async def http_exception_handler(request: Request, exc: HTTPException):
     code = "REQUEST_REJECTED" if exc.status_code < 500 else "API_ERROR"
     message = exc.detail if isinstance(exc.detail, str) else "Permintaan tidak dapat diproses."
+    error = {"code": code, "message": message, **_error_context(request)}
+    if not isinstance(exc.detail, str):
+        error["details"] = jsonable_encoder(exc.detail)
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": code, "message": message}},
+        content={"error": error},
         headers=exc.headers,
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(_: Request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=422,
         content={
@@ -93,17 +109,24 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
                 "code": "VALIDATION_ERROR",
                 "message": "Data permintaan tidak valid.",
                 "details": jsonable_encoder(exc.errors()),
+                **_error_context(request),
             }
         },
     )
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception(_: Request, exc: Exception):
-    logger.exception("unhandled_api_error", error=str(exc))
+async def unhandled_exception(request: Request, exc: Exception):
+    logger.exception("unhandled_api_error", error_type=type(exc).__name__)
     return JSONResponse(
         status_code=500,
-        content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"}},
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                **_error_context(request),
+            }
+        },
     )
 
 
