@@ -338,3 +338,41 @@ No Phase 01 coding is authorized by this report. The already-applied M010 migrat
 - Supabase docs: [Securing your API](https://supabase.com/docs/guides/api/securing-your-api), [Data API exposure change](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically).
 
 **Final status: PHASE 00 PARTIAL / BLOCKED. Phase 01 remains NOT APPROVED and must not start.**
+
+
+## 12. Phase 00 continuation — implementation evidence and residual blockers
+
+This section is the latest addendum to the audit above.
+
+### Work products added on main
+
+- `docs/phase-00/RLS_SECURITY_REMEDIATION_2026-11-18.md` — PostgreSQL 17 invocation privilege analysis, fail-closed SQL draft, two Security Advisor remediation records, recovery plan and non-application reason.
+- `docs/phase-00/LICENSE_ASSET_PROVENANCE_DISPOSITION_2026-11-18.md` — package exception groups, exact manual-review coordinates, asset evidence gaps and owner/approval assignments.
+- `docs/phase-00/SCREEN_ACTION_API_DOMAIN_INVENTORY_2026-11-18.md` — verified route/module inventory and current API/domain ownership mapping; callback-level scan remains partial.
+- `docs/phase-00/ENGINEERING_CHECKS_REPORT_2026-11-18.md` — workflow and actual CI evidence.
+
+### RLS remediation source review
+
+PostgreSQL 17 stable `EventTriggerInvoke` source uses `fmgr_info` and `FunctionCallInvoke` to call the registered event-trigger function, without a per-event end-user EXECUTE ACL check. This supports revoking EXECUTE from PUBLIC/anon/authenticated/service_role while retaining the postgres-owned event trigger. The SQL proposal is additive and fail-closed, but was **not applied** because the Supabase CLI required by the migration workflow is unavailable in the execution environment and no verified backup/PITR recovery point or isolated managed-build validation is available.
+
+Latest live Security Advisor observation at 2026-11-18T02:34:49Z still shows both:
+- `anon_security_definer_function_executable` WARN for `public.rls_auto_enable()`
+- `authenticated_security_definer_function_executable` WARN for `public.rls_auto_enable()`
+
+Function owner/search_path/event-trigger owner/enabled state and function ACL remain unchanged. No production database change is claimed.
+
+### Engineering workflow result
+
+Workflow `.github/workflows/phase-00-engineering-checks.yml` was added in commit `3a427e3a4990bee3889192eca83fcf285531e332`. Run `44224158408` failed:
+- Migration filename/version/order check: PASS (3 files).
+- Python compileall: PASS.
+- Ruff: FAIL, 101 findings (including I001/E501; 7 auto-fixable).
+- FastAPI import/OpenAPI: SKIPPED after Ruff failure.
+- Bun frozen install: FAIL because `@supabase/supabase-js` is in package.json but absent from bun.lock.
+- ESLint and TypeScript: SKIPPED after dependency install failure.
+
+See `ENGINEERING_CHECKS_REPORT_2026-11-18.md`. These failures are now actionable engineering debt; no lint/type-check pass is claimed.
+
+### Current decision
+
+Phase 00 remains **PARTIAL / BLOCKED**. Phase 01 is not started. No UI, Phase 01 feature, migration, Supabase DDL, grant, policy, function, trigger, Auth setting, Storage setting, deployment or business data was changed by this continuation.
