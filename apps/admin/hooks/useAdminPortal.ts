@@ -1009,14 +1009,22 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
               name: membership.display_name ?? membership.email ?? membership.user_id,
               email: membership.email ?? '',
               roleId: roles.find((item) => roleKeys.includes(item.key))?.id ?? roleKeys[0] ?? '',
+              roleKey: roleKeys.find((key) => key.startsWith('corporate_')) ?? roleKeys[0] ?? '',
               roleName: roleKeys.map((key) => roles.find((item) => item.key === key)?.name ?? key).join(', '),
-              department: '',
+              department: membership.department_id ?? '',
+              branchScope: membership.branch_id ?? '',
+              organizationId: membership.organization_id,
+              organizationUnitId: membership.organization_unit_id,
+              branchId: membership.branch_id,
+              departmentId: membership.department_id,
               mfaEnabled: null,
               status: membership.status === 'active'
                 ? 'Aktif' as const
-                : membership.status === 'suspended' || membership.status === 'revoked'
-                  ? 'Suspended' as const
-                  : 'Pending' as const,
+                : membership.status === 'revoked'
+                  ? 'Dicabut' as const
+                  : membership.status === 'suspended'
+                    ? 'Suspended' as const
+                    : 'Pending' as const,
               lastLogin: null,
             };
           }),
