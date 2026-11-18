@@ -619,3 +619,53 @@ async def export_audit_logs(
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="agentzy-audit-export.csv"'},
     )
+
+
+@router.post("/break-glass/requests/{request_id}/reject")
+async def reject_break_glass(
+    request_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = await _require_platform_permission(
+        claims, session, "platform.security.break_glass.approve", "approve", str(request_id)
+    )
+    async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"security.break_glass.reject:{request_id}",
+            idempotency_key=request.headers.get("idempotency-key"), payload={},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
+        current = await connection.execute(
+            text("select * from public.break_glass_requests where id=:id for update"),
+            {"id": request_id},
+        )
+        row = current.mappings().first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Break-glass request not found.")
+        if row["requester_user_id"] == actor:
+            raise HTTPException(status_code=403, detail="Requester cannot reject their own emergency request.")
+        if row["status"] != "requested":
+            raise HTTPException(status_code=409, detail="Only requested emergency access can be rejected.")
+        updated = await connection.execute(
+            text("""
+                update public.break_glass_requests
+                set status='rejected',approver_user_id=:actor,approved_at=now()
+                where id=:id returning id,status,approver_user_id,approved_at
+            """),
+            {"actor": actor, "id": request_id},
+        )
+        result = dict(updated.mappings().one())
+        await _audit(connection, request, actor, "break_glass.rejected",
+                     "break_glass_request", request_id)
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=result,
+        )
+    return result
