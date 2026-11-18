@@ -511,13 +511,8 @@ export function AdminPortalClient({
         onUpsertTechBonusRule={portal.upsertTechBonusRule}
         onUpsertIntegration={portal.upsertIntegration}
         onCreateBreakGlass={portal.createBreakGlassRequest}
-        onUpdateSecurityPolicy={(ipAllow, ttl) => {
-          portal.setIpAllowlistEnabled(ipAllow);
-          portal.setSessionTtlMinutes(ttl);
-          portal.setModal({ type: 'none' });
-          portal.showToast(
-            `Kebijakan keamanan diperbarui (IP Allowlist: ${ipAllow ? 'Aktif' : 'Nonaktif'}, TTL: ${ttl} mnt).`
-          );
+        onUpdateSecurityPolicy={() => {
+          portal.showToast('Perubahan tidak diterapkan: konfigurasi hosted Supabase Auth belum dapat diverifikasi melalui connector.');
         }}
         onCreateIncident={portal.createIncident}
         onUpsertVendor={portal.upsertVendor}
