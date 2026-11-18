@@ -296,8 +296,8 @@ export function OrganizationUsersView({
                       </td>
                       <td className="px-4 py-3">
                         <AdminStatusText
-                          tone={u.mfaEnabled ? 'success' : 'warning'}
-                          label={u.mfaEnabled ? 'MFA Aktif' : 'Belum MFA'}
+                          tone={u.mfaEnabled === true ? 'success' : 'warning'}
+                          label={u.mfaEnabled === true ? 'MFA Aktif' : u.mfaEnabled === false ? 'Belum MFA' : 'Status MFA belum diverifikasi'}
                         />
                       </td>
                       <td className="px-4 py-3">
