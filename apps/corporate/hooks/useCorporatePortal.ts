@@ -15,6 +15,7 @@ import {
   replaceMembershipRole,
   reassignMembershipHierarchy,
   listTenantMemberships,
+  listRoleTemplates,
   listTenantOrganizations,
   listOrganizationUnits,
   listBranches,
@@ -23,6 +24,7 @@ import {
   type AgentzyOrganizationUnit,
   type AgentzyBranch,
   type AgentzyDepartment,
+  type AgentzyRoleTemplate,
 } from '@/apps/web/lib/api-client';
 import type {
   AICreditTransaction,
@@ -104,6 +106,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     initialCollections.payments
   );
   const [users, setUsers] = useState<CorporateUserMember[]>([]);
+  const [tenantRoleOptions, setTenantRoleOptions] = useState<Array<{ key: CorporateRoleKey; label: string; permissionsSummary: string }>>([]);
   const [organizations, setOrganizations] = useState<AgentzyOrganization[]>([]);
   const [organizationUnits, setOrganizationUnits] = useState<AgentzyOrganizationUnit[]>([]);
   const [branches, setBranches] = useState<AgentzyBranch[]>([]);
@@ -195,13 +198,40 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
+    if (!accessToken) {
+      setTenantRoleOptions([]);
+      return;
+    }
+    let active = true;
+    void listRoleTemplates(accessToken).then((roles: AgentzyRoleTemplate[]) => {
+      if (!active) return;
+      setTenantRoleOptions(
+        roles
+          .filter((role) => role.key.startsWith('corporate_'))
+          .map((role) => ({
+            key: role.key as CorporateRoleKey,
+            label: role.name,
+            permissionsSummary: role.permissions.join(', '),
+          })),
+      );
+    }).catch((error) => {
+      if (active) {
+        setTenantRoleOptions([]);
+        showToast(error instanceof Error ? error.message : 'Gagal memuat role registry.');
+      }
+    });
+    return () => { active = false; };
+  }, [auth.session?.access_token, showToast]);
+
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
     if (!accessToken || !activeTenantId) return;
     let active = true;
     void listTenantMemberships(accessToken, activeTenantId).then((rows) => {
       if (!active) return;
       setUsers(rows.map((row) => {
         const roleKey = (row.role_keys.find((key) => key.startsWith('corporate_')) ?? null) as CorporateRoleKey | null;
-        const roleMeta = CORPORATE_ROLE_OPTIONS.find((role) => role.key === roleKey);
+        const roleMeta = tenantRoleOptions.find((role) => role.key === roleKey);
         return {
           id: row.id,
           name: row.display_name ?? row.email ?? row.user_id,
@@ -227,7 +257,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat membership tenant.');
     });
     return () => { active = false; };
-  }, [auth.session?.access_token, activeTenantId, branches, departments, showToast]);
+  }, [auth.session?.access_token, activeTenantId, branches, departments, showToast, tenantRoleOptions]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
@@ -428,7 +458,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
         mfaEnabled: null, lastActive: null,
       };
     }));
-  }, [auth.session?.access_token, activeTenantId, branches, departments]);
+  }, [auth.session?.access_token, activeTenantId, branches, departments, tenantRoleOptions]);
 
   const handleReplaceMembershipRole = useCallback(async (membershipId: string, roleKey: CorporateRoleKey) => {
     const accessToken = auth.session?.access_token;
@@ -577,6 +607,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     invoices,
     payments,
     users,
+    tenantRoleOptions,
     organizations: visibleOrganizations,
     organizationUnits,
     branches,
