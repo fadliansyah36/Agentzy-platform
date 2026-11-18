@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.redaction import redact_audit_value
 from app.core.pagination import (
     PageMeta,
     PageResponse,
@@ -28,11 +29,13 @@ router = APIRouter()
 
 def _audit_metadata(request: Request, metadata: dict | None = None) -> str:
     return json.dumps(
-        {
-            **(metadata or {}),
-            "correlation_id": getattr(request.state, "correlation_id", None),
-            "trace_id": getattr(request.state, "trace_id", None),
-        },
+        redact_audit_value(
+            {
+                **(metadata or {}),
+                "correlation_id": getattr(request.state, "correlation_id", None),
+                "trace_id": getattr(request.state, "trace_id", None),
+            }
+        ),
         default=str,
     )
 
