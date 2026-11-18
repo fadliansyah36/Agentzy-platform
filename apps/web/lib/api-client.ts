@@ -42,7 +42,7 @@ export type AgentzyTenant = { id: string; name: string; slug: string; status: st
 export const getMyIdentity = (accessToken: string) =>
   apiRequest<AgentzyIdentity>("/me", { method: "GET", accessToken });
 export const getMyTenants = (accessToken: string) =>
-  apiRequest<AgentzyTenant[]>("/tenants", { method: "GET", accessToken });
+  fetchAllAgentzyPages<AgentzyTenant>(accessToken, "/tenants");
 
 
 export type AgentzyRoleTemplate = {
@@ -168,9 +168,7 @@ export type AgentzyOrganization = {
 };
 
 export const listTenantOrganizations = (accessToken: string, tenantId: string) =>
-  apiRequest<AgentzyOrganization[]>(`/tenants/${encodeURIComponent(tenantId)}/organizations`, {
-    method: "GET", accessToken,
-  });
+  fetchAllAgentzyPages<AgentzyOrganization>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/organizations`);
 
 export type AgentzyPermissionContext = {
   user_id: string;
