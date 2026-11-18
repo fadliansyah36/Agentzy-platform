@@ -28,13 +28,9 @@ class Settings(BaseSettings):
             }
             missing = [name for name, value in required.items() if not value]
             if missing:
-                raise ValueError(
-                    "Missing required production secrets: " + ", ".join(missing)
-                )
+                raise ValueError("Missing required production secrets: " + ", ".join(missing))
             if len(self.auth_provider_webhook_secret or "") < 32:
-                raise ValueError(
-                    "AUTH_PROVIDER_WEBHOOK_SECRET must be at least 32 characters."
-                )
+                raise ValueError("AUTH_PROVIDER_WEBHOOK_SECRET must be at least 32 characters.")
             if self.platform_bootstrap_token and len(self.platform_bootstrap_token) < 32:
                 raise ValueError(
                     "PLATFORM_BOOTSTRAP_TOKEN must be at least 32 characters when configured."

@@ -551,8 +551,7 @@ async def read_access_policy_versions(
         data=rows,
         meta=PageMeta(
             has_more=has_more,
-            next_cursor=encode_key_cursor(str(rows[-1]["version"]))
-            if has_more and rows else None,
+            next_cursor=encode_key_cursor(str(rows[-1]["version"])) if has_more and rows else None,
             request_id=_request_id(request),
         ),
     )
