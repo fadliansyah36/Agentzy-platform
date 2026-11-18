@@ -102,10 +102,26 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     return `${prefix}-${idCounter.current}`;
   };
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminRole, setAdminRole] = useState<SuperAdminRoleKey>('platform_super_admin');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [activeSection, setActiveSection] = useState<AdminSectionId>(initialSection);
+  const assignedRoles = useMemo(
+    () => auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? [],
+    [auth.identity]
+  );
+  const verifiedRole = useMemo(
+    () => (['platform_super_admin', 'platform_security_admin', 'platform_finance_admin', 'platform_operations_admin'] as SuperAdminRoleKey[])
+      .find((candidate) => assignedRoles.includes(candidate)),
+    [assignedRoles]
+  );
+  const isAuthenticated = Boolean(
+    !auth.loading && auth.session && auth.identity && verifiedRole && auth.aal === 'aal2'
+  );
+  const adminRole = verifiedRole ?? 'platform_super_admin';
+  const adminEmail = auth.identity?.email ?? auth.session?.user.email ?? '';
+  const [requestedActiveSection, setActiveSection] = useState<AdminSectionId>(initialSection);
+  const activeSection = !auth.loading && !isAuthenticated
+    ? 'login'
+    : isAuthenticated && requestedActiveSection === 'login'
+      ? 'overview'
+      : requestedActiveSection;
   const [modal, setModal] = useState<AdminModalState>({ type: 'none' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -239,21 +255,10 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   }, []);
 
   useEffect(() => {
-    if (auth.loading) return;
-    const assignedRoles = auth.identity?.memberships.flatMap((membership) => membership.role_keys) ?? [];
-    const verifiedRole = (['platform_super_admin','platform_security_admin','platform_finance_admin','platform_operations_admin'] as SuperAdminRoleKey[])
-      .find((candidate) => assignedRoles.includes(candidate));
-    if (auth.session && auth.identity && verifiedRole && auth.aal === 'aal2') {
-      setAdminRole(verifiedRole);
-      setAdminEmail(auth.identity.email ?? auth.session.user.email ?? '');
-      setIsAuthenticated(true);
-      setActiveSection((current) => current === 'login' ? 'overview' : current);
-    } else {
-      setIsAuthenticated(false);
-      setAdminEmail('');
-      if (auth.session && auth.identity && !verifiedRole) void auth.signOut();
+    if (!auth.loading && auth.session && auth.identity && !verifiedRole) {
+      void auth.signOut();
     }
-  }, [auth.loading, auth.session, auth.identity, auth.aal, auth.signOut]);
+  }, [auth.loading, auth.session, auth.identity, verifiedRole, auth.signOut]);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
@@ -299,9 +304,6 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
         await auth.signOut();
         throw new Error('Akun ini tidak memiliki role Super Admin platform yang sah.');
       }
-      setAdminRole(verifiedRole);
-      setAdminEmail(context.identity.email ?? email);
-      setIsAuthenticated(true);
       setActiveSection('overview');
       showToast(`Autentikasi berhasil untuk ${context.identity.email ?? email}.`);
     },
@@ -310,8 +312,6 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
 
   const handleLogout = useCallback(async () => {
     await auth.signOut();
-    setIsAuthenticated(false);
-    setAdminEmail('');
     setActiveSection('login');
     setModal({ type: 'none' });
   }, [auth.signOut]);
@@ -1453,7 +1453,6 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     authLoading: auth.loading,
     authError: auth.error,
     adminRole,
-    setAdminRole,
     adminEmail,
     activeSection,
     modal,
