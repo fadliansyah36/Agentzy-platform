@@ -527,11 +527,18 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
 
   const acknowledgeSecurityAlert = useCallback(async (alertId: string) => {
     const accessToken = auth.session?.access_token;
-    if (!accessToken || auth.aal !== 'aal2') throw new Error('Session AAL2 diperlukan.');
-    await acknowledgeSecurityAlertApi(accessToken, alertId);
-    const { data } = await listSecurityAlerts(accessToken, { limit: 100 });
-    setSecurityAlerts(data);
-    showToast('Security alert berhasil di-acknowledge.');
+    if (!accessToken || auth.aal !== 'aal2') {
+      showToast('Session AAL2 diperlukan untuk acknowledge security alert.');
+      return;
+    }
+    try {
+      await acknowledgeSecurityAlertApi(accessToken, alertId);
+      const { data } = await listSecurityAlerts(accessToken, { limit: 100 });
+      setSecurityAlerts(data);
+      showToast('Security alert berhasil di-acknowledge.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gagal acknowledge security alert.');
+    }
   }, [auth.session?.access_token, auth.aal, showToast]);
 
   const handleLogin = useCallback(
