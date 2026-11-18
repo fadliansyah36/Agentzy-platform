@@ -141,29 +141,36 @@ export function useAIWorkforcePortal(
     ) return 'HRD Agentzy';
     return 'Corporate / ISP Partner (Read-Only)';
   }, [activeMembership]);
-  const [workforceTenantContext, setWorkforceTenantContext] =
-    useState<AgentzyWorkforceTenantContext | null>(null);
-  const [workforceContextError, setWorkforceContextError] = useState<string | null>(null);
+  const [workforceContextResult, setWorkforceContextResult] = useState<{
+    tenantId: string;
+    context?: AgentzyWorkforceTenantContext;
+    error?: string;
+  } | null>(null);
+  const workforceTenantContext =
+    workforceContextResult?.tenantId === activeTenantId
+      ? workforceContextResult.context ?? null
+      : null;
+  const workforceContextError =
+    workforceContextResult?.tenantId === activeTenantId
+      ? workforceContextResult.error ?? null
+      : null;
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
-    if (!accessToken || !activeTenantId) {
-      setWorkforceTenantContext(null);
-      setWorkforceContextError(null);
-      return;
-    }
+    if (!accessToken || !activeTenantId) return;
     let active = true;
-    setWorkforceTenantContext(null);
-    setWorkforceContextError(null);
     void getWorkforceTenantContext(accessToken, activeTenantId)
       .then((context) => {
-        if (active) setWorkforceTenantContext(context);
+        if (active) setWorkforceContextResult({ tenantId: activeTenantId, context });
       })
       .catch((error) => {
         if (!active) return;
-        setWorkforceContextError(
-          error instanceof Error ? error.message : 'Gagal memuat scope organisasi AI Workforce.'
-        );
+        setWorkforceContextResult({
+          tenantId: activeTenantId,
+          error: error instanceof Error
+            ? error.message
+            : 'Gagal memuat scope organisasi AI Workforce.',
+        });
       });
     return () => { active = false; };
   }, [auth.session?.access_token, activeTenantId]);
