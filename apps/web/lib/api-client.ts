@@ -303,17 +303,18 @@ export const deleteAgentzyRole = (accessToken: string, roleId: string) =>
 
 export type AgentzyBreakGlassRequest = {
   id: string;
-  requester_user_id: string;
-  approver_user_id: string | null;
-  reason: string;
-  requested_scope: { permission_keys: string[]; tenant_ids: string[]; duration_minutes?: number };
+  tenant_id?: string | null;
+  requester_user_id?: string;
+  approver_user_id?: string | null;
+  reason?: string;
+  requested_scope?: { permission_keys: string[]; tenant_ids: string[]; duration_minutes?: number };
   status: 'requested' | 'approved' | 'active' | 'expired' | 'revoked' | 'rejected' | 'reviewed';
-  requested_at: string;
-  approved_at: string | null;
-  activated_at: string | null;
-  expires_at: string | null;
-  revoked_at: string | null;
-  reviewed_at: string | null;
+  requested_at?: string;
+  approved_at?: string | null;
+  activated_at?: string | null;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  reviewed_at?: string | null;
 };
 const createIdempotencyKey = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -374,9 +375,16 @@ export const listAuditLogs = (
     `/security/audit?${query.toString()}`, { method: 'GET', accessToken },
   );
 };
-export const exportAuditLogs = (accessToken: string, tenantId?: string) => {
+export async function exportAuditLogs(accessToken: string, tenantId?: string): Promise<Blob> {
   const query = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
-  return apiRequest<Blob>(`/security/audit/export${query}`, {
-    method: 'GET', accessToken, headers: { Accept: 'text/csv' },
+  const response = await fetch(`${API_BASE_URL}/api/v1/security/audit/export${query}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'text/csv' },
+    cache: 'no-store',
   });
-};
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new ApiError(payload?.error?.message ?? 'Audit export failed.', response.status);
+  }
+  return response.blob();
+}
