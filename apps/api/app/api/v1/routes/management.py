@@ -664,6 +664,17 @@ async def replace_role_permissions(
     if len(permission_keys) != len(payload.permission_keys):
         raise HTTPException(status_code=422, detail="Permission key tidak boleh duplikat.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"role.permissions.replace:{role_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         role_result = await connection.execute(
             text(
                 "select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"
@@ -721,7 +732,12 @@ async def replace_role_permissions(
                 "metadata": json.dumps({"permission_keys": permission_keys}),
             },
         )
-    return {"role_id": str(role_id), "permission_keys": permission_keys}
+        response_body = {"role_id": str(role_id), "permission_keys": permission_keys}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
 
 
 @router.get("/roles", tags=["Access Control"])
@@ -892,6 +908,17 @@ async def update_tenant(
     assignments = ", ".join(f"{key}=:{key}" for key in values)
     values["tenant_id"] = tenant_id
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=user_id, tenant_id=tenant_id,
+            command_key=f"tenant.update:{tenant_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text(f"""
             update public.tenants set {assignments},updated_at=now()
@@ -922,7 +949,12 @@ async def update_tenant(
                 "metadata": json.dumps(values, default=str),
             },
         )
-    return dict(row)
+        response_body = dict(row)
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
 
 
 @router.delete("/tenants/{tenant_id}", tags=["Tenant Administration"])
@@ -937,6 +969,17 @@ async def archive_tenant(
     if not await _has_platform_permission(session, user_id, "platform.tenants.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.manage permission.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=user_id, tenant_id=tenant_id,
+            command_key=f"tenant.archive:{tenant_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text("""
             update public.tenants set status='archived',updated_at=now()
@@ -965,7 +1008,12 @@ async def archive_tenant(
                 "ip": request.client.host if request.client else None,
             },
         )
-    return dict(row)
+        response_body = dict(row)
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
 
 
 @router.post("/roles", status_code=status.HTTP_201_CREATED, tags=["Access Control"])
@@ -980,6 +1028,17 @@ async def create_role(
     if not await _has_platform_permission(session, actor, "platform.roles.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key="role.create",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
         existing = await connection.execute(
             text("select id from public.roles where key=:key and tenant_id is null"),
             {"key": payload.key},
@@ -1011,6 +1070,10 @@ async def create_role(
                 "metadata": json.dumps({"key": row["key"], "scope_type": row["scope_type"]}),
             },
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=201, response_body=row,
+        )
     return row
 
 
@@ -1033,6 +1096,17 @@ async def update_role(
         raise HTTPException(status_code=422, detail="Role name and description cannot be null.")
     assignments = ", ".join(f"{key}=:{key}" for key in values)
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"role.update:{role_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text(f"""
                 update public.roles set {assignments}
@@ -1068,6 +1142,10 @@ async def update_role(
                 "metadata": json.dumps({"fields": sorted(values)}),
             },
         )
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=row,
+        )
     return row
 
 
@@ -1083,6 +1161,17 @@ async def delete_role(
     if not await _has_platform_permission(session, actor, "platform.roles.manage"):
         raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"role.delete:{role_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload={},
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         result = await connection.execute(
             text("""
                 select id,key,is_system from public.roles
@@ -1122,4 +1211,9 @@ async def delete_role(
                 "metadata": json.dumps({"key": role["key"]}),
             },
         )
-    return {"id": str(role_id), "status": "deleted"}
+        response_body = {"id": str(role_id), "status": "deleted"}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id,
+            response_status=200, response_body=response_body,
+        )
+    return response_body
