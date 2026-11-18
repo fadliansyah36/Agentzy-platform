@@ -171,12 +171,12 @@ export const updateMyIdentity = (
   accessToken: string,
   payload: { display_name?: string | null; locale?: string; timezone?: string }
 ) => apiRequest<AgentzyIdentity>("/me", {
-  method: "PATCH", accessToken, body: JSON.stringify(payload),
+  method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload),
 });
 
 export const revokeMySessions = (accessToken: string) =>
   apiRequest<{ status: string; scope: string }>("/auth/session/revoke", {
-    method: "POST", accessToken, body: JSON.stringify({}),
+    method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}),
   });
 
 export type AgentzyOrganizationUnit = {
