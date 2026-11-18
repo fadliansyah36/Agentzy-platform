@@ -236,13 +236,20 @@ async def list_organization_units(
                created_at,updated_at
         from public.organization_units
         where tenant_id=:tenant_id and status='active'
+          and (:organization_id is null or organization_id=:organization_id)
+          and (:organization_unit_id is null or id=:organization_unit_id)
         order by name
     """)
-    if platform is None:
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
+    }
+    if context is None:
         async with engine.connect() as connection:
-            result = await connection.execute(query, {"tenant_id": tenant_id})
+            result = await connection.execute(query, params)
     else:
-        result = await session.execute(query, {"tenant_id": tenant_id})
+        result = await session.execute(query, params)
     return [dict(row) for row in result.mappings().all()]
 
 
@@ -303,13 +310,23 @@ async def list_branches(
     query = text("""
         select id,tenant_id,organization_id,organization_unit_id,name,code,status,
                created_at,updated_at
-        from public.branches where tenant_id=:tenant_id and status='active' order by name
+        from public.branches where tenant_id=:tenant_id and status='active'
+          and (:organization_id is null or organization_id=:organization_id)
+          and (:organization_unit_id is null or organization_unit_id=:organization_unit_id)
+          and (:branch_id is null or id=:branch_id)
+        order by name
     """)
-    if platform is None:
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
+        "branch_id": context.branch_id if context else None,
+    }
+    if context is None:
         async with engine.connect() as connection:
-            result = await connection.execute(query, {"tenant_id": tenant_id})
+            result = await connection.execute(query, params)
     else:
-        result = await session.execute(query, {"tenant_id": tenant_id})
+        result = await session.execute(query, params)
     return [dict(row) for row in result.mappings().all()]
 
 
@@ -369,13 +386,23 @@ async def list_departments(
     query = text("""
         select id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,
                created_at,updated_at
-        from public.departments where tenant_id=:tenant_id and status='active' order by name
+        from public.departments where tenant_id=:tenant_id and status='active'
+          and (:organization_id is null or organization_id=:organization_id)
+          and (:branch_id is null or branch_id=:branch_id)
+          and (:department_id is null or id=:department_id)
+        order by name
     """)
-    if platform is None:
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "branch_id": context.branch_id if context else None,
+        "department_id": context.department_id if context else None,
+    }
+    if context is None:
         async with engine.connect() as connection:
-            result = await connection.execute(query, {"tenant_id": tenant_id})
+            result = await connection.execute(query, params)
     else:
-        result = await session.execute(query, {"tenant_id": tenant_id})
+        result = await session.execute(query, params)
     return [dict(row) for row in result.mappings().all()]
 
 
