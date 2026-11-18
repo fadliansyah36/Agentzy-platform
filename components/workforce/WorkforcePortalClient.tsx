@@ -39,7 +39,13 @@ import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
 import { WorkforceIdentityGate } from '@/components/workforce/WorkforceIdentityGate';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { acceptTenantMembership, getMyInvitations, type AgentzyInvitation } from '@/apps/web/lib/api-client';
+import {
+  acceptTenantMembership,
+  getMyInvitations,
+  getWorkforceTenantContext,
+  type AgentzyInvitation,
+  type AgentzyWorkforceTenantContext,
+} from '@/apps/web/lib/api-client';
 import {
   SalesDashboardView,
   TasksView,
@@ -209,6 +215,43 @@ export function WorkforcePortalClient() {
   }, [auth.identity]);
 
   const accessToken = auth.session?.access_token;
+  const [workforceTenantContexts, setWorkforceTenantContexts] = useState<
+    AgentzyWorkforceTenantContext[]
+  >([]);
+  const [workforceContextError, setWorkforceContextError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const memberships = (auth.identity?.memberships ?? []).filter((membership) =>
+      membership.permissions.some((permission) =>
+        [
+          'corporate.sales.read',
+          'sales.leads.read',
+          'affiliate.profile.read',
+          'workforce.assignments.read',
+          'workforce.profile.read',
+        ].includes(permission)
+      )
+    );
+    if (!accessToken || memberships.length === 0) {
+      setWorkforceTenantContexts([]);
+      setWorkforceContextError(null);
+      return;
+    }
+    let active = true;
+    setWorkforceTenantContexts([]);
+    setWorkforceContextError(null);
+    void Promise.all(
+      memberships.map((membership) => getWorkforceTenantContext(accessToken, membership.tenant_id))
+    ).then((contexts) => {
+      if (active) setWorkforceTenantContexts(contexts);
+    }).catch((error) => {
+      if (!active) return;
+      setWorkforceContextError(
+        error instanceof Error ? error.message : 'Scope organisasi Workforce gagal diverifikasi.'
+      );
+    });
+    return () => { active = false; };
+  }, [accessToken, auth.identity]);
 
   useEffect(() => {
     if (!accessToken || !auth.identity || allowedWorkforceRoles.length > 0) return;
@@ -720,14 +763,32 @@ export function WorkforcePortalClient() {
           <p className="mt-5 text-sm text-[var(--az-text-primary)]">{auth.identity.display_name || auth.identity.email || 'Pengguna Agentzy'}</p>
           <p className="mt-1 text-xs text-[var(--az-text-muted)]">{auth.identity.email || auth.identity.user_id}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {membershipRows.map((membership) => (
-              <div key={membership.id} className="rounded-xl border border-[var(--az-border-default)] p-4">
-                <p className="text-sm font-semibold text-[var(--az-text-primary)]">{membership.tenant_name}</p>
-                <p className="mt-1 text-[11px] text-[var(--az-text-muted)]">Membership aktif · {membership.status}</p>
-                <p className="mt-3 break-words text-xs text-[var(--az-text-secondary)]">{membership.role_keys.join(', ')}</p>
-              </div>
-            ))}
+            {membershipRows.map((membership) => {
+              const scope = workforceTenantContexts.find(
+                (item) => item.tenant_id === membership.tenant_id
+              );
+              return (
+                <div key={membership.id} className="rounded-xl border border-[var(--az-border-default)] p-4">
+                  <p className="text-sm font-semibold text-[var(--az-text-primary)]">{membership.tenant_name}</p>
+                  <p className="mt-1 text-[11px] text-[var(--az-text-muted)]">Membership aktif · {membership.status}</p>
+                  <p className="mt-3 break-words text-xs text-[var(--az-text-secondary)]">{membership.role_keys.join(', ')}</p>
+                  {scope && (
+                    <p className="mt-2 text-[11px] leading-relaxed text-[var(--az-text-muted)]">
+                      Org: {scope.organizations.map((item) => item.name).join(', ') || '—'}
+                      {' · '}Unit: {scope.organization_units.map((item) => item.name).join(', ') || '—'}
+                      {' · '}Cabang: {scope.branches.map((item) => item.name).join(', ') || '—'}
+                      {' · '}Departemen: {scope.departments.map((item) => item.name).join(', ') || '—'}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
+          {workforceContextError && (
+            <p role="alert" className="mt-4 text-xs font-medium text-[#B23A48]">
+              Scope organisasi tidak dapat diverifikasi: {workforceContextError}
+            </p>
+          )}
           <div className="mt-6 rounded-xl border border-[var(--az-border-default)] bg-[var(--az-surface-canvas)] p-4">
             <p className="text-sm font-semibold text-[var(--az-text-primary)]">Operasional Workforce belum terhubung penuh</p>
             <p className="mt-1 text-xs leading-relaxed text-[var(--az-text-secondary)]">
