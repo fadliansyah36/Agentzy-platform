@@ -14,7 +14,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
-from app.core.authorization import authorize_action, authorize_platform_action
+from app.core.authorization import (
+    TenantAccessContext,
+    authorize_action,
+    authorize_platform_action,
+)
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
@@ -719,6 +723,7 @@ async def _audit_rows(
     actor_user_id: UUID | None,
     limit: int,
     cursor: str | None,
+    context: TenantAccessContext | None = None,
 ):
     params = {"limit": limit + 1}
     filters = []
@@ -731,6 +736,78 @@ async def _audit_rows(
     if actor_user_id:
         filters.append("actor_user_id=:actor_user_id")
         params["actor_user_id"] = actor_user_id
+    if context is not None:
+        if context.department_id:
+            params["scope_department_id"] = context.department_id
+            filters.append("""
+                (
+                  (resource_type='department' and resource_id=:scope_department_id::text)
+                  or (resource_type='membership' and resource_id in (
+                    select id::text from public.memberships
+                    where tenant_id=:tenant_id and department_id=:scope_department_id
+                  ))
+                )
+            """)
+        elif context.branch_id:
+            params["scope_branch_id"] = context.branch_id
+            filters.append("""
+                (
+                  (resource_type='branch' and resource_id=:scope_branch_id::text)
+                  or (resource_type='department' and resource_id in (
+                    select id::text from public.departments
+                    where tenant_id=:tenant_id and branch_id=:scope_branch_id
+                  ))
+                  or (resource_type='membership' and resource_id in (
+                    select id::text from public.memberships
+                    where tenant_id=:tenant_id and branch_id=:scope_branch_id
+                  ))
+                )
+            """)
+        elif context.organization_unit_id:
+            params["scope_unit_id"] = context.organization_unit_id
+            filters.append("""
+                (
+                  (resource_type='organization_unit' and resource_id=:scope_unit_id::text)
+                  or (resource_type='branch' and resource_id in (
+                    select id::text from public.branches
+                    where tenant_id=:tenant_id and organization_unit_id=:scope_unit_id
+                  ))
+                  or (resource_type='department' and resource_id in (
+                    select d.id::text from public.departments d
+                    join public.branches b on b.id=d.branch_id and b.tenant_id=d.tenant_id
+                    where d.tenant_id=:tenant_id and b.organization_unit_id=:scope_unit_id
+                  ))
+                  or (resource_type='membership' and resource_id in (
+                    select id::text from public.memberships
+                    where tenant_id=:tenant_id and organization_unit_id=:scope_unit_id
+                  ))
+                )
+            """)
+        elif context.organization_id:
+            params["scope_organization_id"] = context.organization_id
+            filters.append("""
+                (
+                  (resource_type='organization' and resource_id=:scope_organization_id::text)
+                  or (resource_type='organization_unit' and resource_id in (
+                    select id::text from public.organization_units
+                    where tenant_id=:tenant_id and organization_id=:scope_organization_id
+                  ))
+                  or (resource_type='branch' and resource_id in (
+                    select id::text from public.branches
+                    where tenant_id=:tenant_id and organization_id=:scope_organization_id
+                  ))
+                  or (resource_type='department' and resource_id in (
+                    select id::text from public.departments
+                    where tenant_id=:tenant_id and organization_id=:scope_organization_id
+                  ))
+                  or (resource_type='membership' and resource_id in (
+                    select id::text from public.memberships
+                    where tenant_id=:tenant_id and organization_id=:scope_organization_id
+                  ))
+                )
+            """)
+        else:
+            filters.append("false")
     if cursor:
         created_at, row_id = _decode_cursor(cursor)
         filters.append("(created_at,id) < (:created_at,:cursor_id)")
@@ -788,7 +865,7 @@ async def read_audit_logs(
                 status_code=403,
                 detail="Tenant-scoped audit access requires tenant_id.",
             )
-        await authorize_action(
+        tenant_context, _ = await authorize_action(
             session,
             user_id=actor,
             tenant_id=tenant_id,
@@ -800,9 +877,11 @@ async def read_audit_logs(
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
             request_id=request.headers.get("x-request-id"),
         )
+    if platform_read:
+        tenant_context = None
     async with engine.connect() as connection:
         rows, has_more, next_cursor = await _audit_rows(
-            connection, tenant_id, resource_type, actor_user_id, limit, cursor
+            connection, tenant_id, resource_type, actor_user_id, limit, cursor, tenant_context
         )
     async with engine.begin() as connection:
         await _audit(
@@ -849,7 +928,7 @@ async def export_audit_logs(
                 status_code=403,
                 detail="Tenant-scoped audit export requires tenant_id.",
             )
-        await authorize_action(
+        tenant_context, _ = await authorize_action(
             session,
             user_id=actor,
             tenant_id=tenant_id,
@@ -861,8 +940,12 @@ async def export_audit_logs(
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
             request_id=request.headers.get("x-request-id"),
         )
+    if platform_export:
+        tenant_context = None
     async with engine.connect() as connection:
-        rows, _, _ = await _audit_rows(connection, tenant_id, resource_type, None, 5000, None)
+        rows, _, _ = await _audit_rows(
+            connection, tenant_id, resource_type, None, 5000, None, tenant_context
+        )
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
