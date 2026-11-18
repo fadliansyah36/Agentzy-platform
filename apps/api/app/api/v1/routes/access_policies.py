@@ -16,6 +16,10 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter(prefix="/security/access-policies", tags=["ABAC Policies"])
+
+
+def _request_id(request: Request) -> str | None:
+    return _request_id(request)
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
@@ -160,7 +164,7 @@ async def _audit(
             "actor": actor,
             "action": action,
             "resource_id": str(policy_id),
-            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            "request_id": _request_id(request),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "metadata": json.dumps(metadata or {}, default=str),
@@ -225,7 +229,7 @@ async def list_access_policies(
         "meta": {
             "next_cursor": next_cursor,
             "has_more": has_more,
-            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
+            "request_id": _request_id(request),
         },
     }
 
