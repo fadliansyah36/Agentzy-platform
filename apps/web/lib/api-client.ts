@@ -1,7 +1,15 @@
 const API_BASE_URL = (process.env.NEXT_PUBLIC_AGENTZY_API_URL ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly details?: unknown,
+    readonly requestId?: string | null,
+    readonly correlationId?: string | null,
+    readonly traceId?: string | null,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -24,8 +32,16 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
     { ...requestOptions, headers, cache: "no-store" });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new ApiError(payload?.error?.message ?? payload?.detail ?? "Permintaan ke Agentzy API gagal.",
-      response.status, payload?.error?.code);
+    const error = payload?.error ?? payload;
+    throw new ApiError(
+      error?.message ?? "Permintaan ke Agentzy API gagal.",
+      response.status,
+      error?.code,
+      error?.details,
+      error?.request_id ?? response.headers.get("X-Request-ID"),
+      error?.correlation_id ?? response.headers.get("X-Correlation-ID"),
+      error?.trace_id ?? response.headers.get("X-Trace-ID"),
+    );
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
