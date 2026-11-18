@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.authorization import authorize_action, authorize_platform_action
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -75,20 +76,17 @@ class MembershipInvite(BaseModel):
 
 
 async def _has_platform_permission(session: AsyncSession, user_id: UUID, permission: str) -> bool:
-    result = await session.execute(
-        text("""
-        select exists (
-          select 1 from public.memberships m
-          join public.tenants t on t.id=m.tenant_id and t.status='active'
-          join public.membership_roles mr on mr.membership_id=m.id
-          join public.role_permissions rp on rp.role_id=mr.role_id
-          where m.user_id=:user_id and m.status='active'
-            and mr.scope_type='platform' and rp.permission_key=:permission
+    resource, action = permission.rsplit(".", 1)
+    try:
+        await authorize_platform_action(
+            session, user_id=user_id, permission_key=permission,
+            resource_type=resource, action=action, resource={"id": permission},
         )
-    """),
-        {"user_id": user_id, "permission": permission},
-    )
-    return bool(result.scalar_one())
+        return True
+    except HTTPException as exc:
+        if exc.status_code in (403, 404):
+            return False
+        raise
 
 
 async def _has_tenant_role(
@@ -101,11 +99,8 @@ async def _has_tenant_role(
           join public.tenants t on t.id=m.tenant_id and t.status='active'
           join public.membership_roles mr on mr.membership_id=m.id
           join public.roles r on r.id=mr.role_id
-          where m.user_id=:user_id
-            and m.tenant_id=:tenant_id
-            and m.status='active'
-            and mr.scope_type='tenant'
-            and r.key=:role_key
+          where m.user_id=:user_id and m.tenant_id=:tenant_id
+            and m.status='active' and mr.scope_type='tenant' and r.key=:role_key
         )
     """),
         {"user_id": user_id, "tenant_id": tenant_id, "role_key": role_key},
@@ -116,21 +111,21 @@ async def _has_tenant_role(
 async def _has_tenant_permission(
     session: AsyncSession, user_id: UUID, tenant_id: UUID, permissions: tuple[str, ...]
 ) -> bool:
-    result = await session.execute(
-        text("""
-        select exists (
-          select 1 from public.memberships m
-          join public.tenants t on t.id=m.tenant_id and t.status='active'
-          join public.membership_roles mr on mr.membership_id=m.id
-          join public.role_permissions rp on rp.role_id=mr.role_id
-          where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active'
-            and mr.scope_type='tenant'
-            and rp.permission_key = any(:permissions)
-        )
-    """),
-        {"user_id": user_id, "tenant_id": tenant_id, "permissions": list(permissions)},
-    )
-    return bool(result.scalar_one())
+    for permission in permissions:
+        resource, action = permission.rsplit(".", 1)
+        try:
+            await authorize_action(
+                session, user_id=user_id, tenant_id=tenant_id,
+                permission_key=permission, platform_permission="", aal=None,
+                resource_type=resource, action=action,
+                resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+            )
+            return True
+        except HTTPException as exc:
+            if exc.status_code in (403, 404):
+                continue
+            raise
+    return False
 
 
 @router.post("/tenants", status_code=status.HTTP_201_CREATED, tags=["Tenant Administration"])
