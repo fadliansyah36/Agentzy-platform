@@ -1083,15 +1083,16 @@ async def reassign_membership_hierarchy(
                         status_code=422, detail="Branch harus berada pada organization unit yang dipilih."
                     )
         if department_id is not None:
-            if branch_id is None or organization_id is None:
+            if organization_id is None:
                 raise HTTPException(
-                    status_code=422, detail="Organization dan branch diperlukan untuk department."
+                    status_code=422, detail="Organization diperlukan untuk department."
                 )
             department = await connection.execute(
                 text("""
                     select id from public.departments
                     where id=:id and tenant_id=:tenant_id
-                      and organization_id=:organization_id and branch_id=:branch_id
+                      and organization_id=:organization_id
+                      and branch_id is not distinct from :branch_id
                       and status='active'
                 """),
                 {
