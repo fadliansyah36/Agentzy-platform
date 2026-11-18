@@ -154,6 +154,9 @@ async def _has_tenant_role(
           join public.roles r on r.id=mr.role_id
           where m.user_id=:user_id and m.tenant_id=:tenant_id
             and m.status='active' and mr.scope_type='tenant' and r.key=:role_key
+            and (mr.valid_from is null or mr.valid_from<=now())
+            and (mr.valid_until is null or mr.valid_until>now())
+            and (r.tenant_id is null or r.tenant_id=:tenant_id)
         )
     """),
         {"user_id": user_id, "tenant_id": tenant_id, "role_key": role_key},
