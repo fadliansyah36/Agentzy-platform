@@ -124,6 +124,33 @@ def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
         raise HTTPException(status_code=422, detail="Invalid cursor") from exc
 
 
+async def _authorize_policy_object(
+    session: AsyncSession,
+    *,
+    actor: UUID,
+    policy: dict,
+    request_id: str | None,
+) -> None:
+    await authorize_platform_action(
+        session,
+        user_id=actor,
+        permission_key="platform.security.manage",
+        resource_type="platform.security",
+        action="manage",
+        resource={
+            "id": str(policy.get("id") or policy.get("policy_key")),
+            "tenant_id": str(policy["tenant_id"]) if policy.get("tenant_id") else None,
+            "policy_key": policy.get("policy_key"),
+            "resource": policy.get("resource"),
+            "action": policy.get("action"),
+            "effect": policy.get("effect"),
+            "status": policy.get("status"),
+            "version": policy.get("version"),
+        },
+        request_id=request_id,
+    )
+
+
 async def _require_security_admin(claims: dict, session: AsyncSession) -> UUID:
     actor = UUID(claims["sub"])
     if claims.get("aal") != "aal2":
