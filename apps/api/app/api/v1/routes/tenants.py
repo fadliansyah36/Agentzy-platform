@@ -35,9 +35,12 @@ async def list_organizations(
     tenant_id: UUID, claims: dict = claims_dependency, session: AsyncSession = session_dependency
 ) -> list[OrganizationRead]:
     context = await authorize_tenant(
-        session, user_id=UUID(claims["sub"]), tenant_id=tenant_id,
+        session,
+        user_id=UUID(claims["sub"]),
+        tenant_id=tenant_id,
         permission_key="corporate.organization.read",
-        platform_permission="platform.tenants.read", aal=claims.get("aal"),
+        platform_permission="platform.tenants.read",
+        aal=claims.get("aal"),
     )
     query = text("""
         select id,tenant_id,parent_id,name,slug,organization_type,status

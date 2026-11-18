@@ -54,18 +54,23 @@ async def resolve_tenant_context(
               )
         """),
         {
-            "membership_id": membership["membership_id"], "tenant_id": tenant_id,
+            "membership_id": membership["membership_id"],
+            "tenant_id": tenant_id,
             "organization_id": membership["organization_id"],
             "organization_unit_id": membership["organization_unit_id"],
-            "branch_id": membership["branch_id"], "department_id": membership["department_id"],
+            "branch_id": membership["branch_id"],
+            "department_id": membership["department_id"],
         },
     )
     rows = roles_result.mappings().all()
     return TenantAccessContext(
-        user_id=user_id, tenant_id=tenant_id, membership_id=membership["membership_id"],
+        user_id=user_id,
+        tenant_id=tenant_id,
+        membership_id=membership["membership_id"],
         organization_id=membership["organization_id"],
         organization_unit_id=membership["organization_unit_id"],
-        branch_id=membership["branch_id"], department_id=membership["department_id"],
+        branch_id=membership["branch_id"],
+        department_id=membership["department_id"],
         permissions=frozenset(row["permission_key"] for row in rows if row["permission_key"]),
         role_keys=frozenset(row["role_key"] for row in rows),
     )
@@ -94,8 +99,13 @@ async def has_platform_permission(
 
 
 async def authorize_tenant(
-    session: AsyncSession, *, user_id: UUID, tenant_id: UUID, permission_key: str,
-    platform_permission: str, aal: str | None,
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    tenant_id: UUID,
+    permission_key: str,
+    platform_permission: str,
+    aal: str | None,
 ) -> TenantAccessContext | None:
     try:
         context = await resolve_tenant_context(session, user_id, tenant_id)
@@ -116,9 +126,13 @@ def require_permission(context: TenantAccessContext, permission_key: str) -> Non
 
 
 def authorize_object(
-    context: TenantAccessContext, *, resource_tenant_id: UUID,
-    organization_id: UUID | None = None, organization_unit_id: UUID | None = None,
-    branch_id: UUID | None = None, department_id: UUID | None = None,
+    context: TenantAccessContext,
+    *,
+    resource_tenant_id: UUID,
+    organization_id: UUID | None = None,
+    organization_unit_id: UUID | None = None,
+    branch_id: UUID | None = None,
+    department_id: UUID | None = None,
 ) -> None:
     if resource_tenant_id != context.tenant_id:
         raise HTTPException(status_code=404, detail="Resource tidak tersedia.")

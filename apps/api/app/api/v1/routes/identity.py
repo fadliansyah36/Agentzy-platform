@@ -191,9 +191,7 @@ async def list_my_invitations(claims: dict = claims_dependency):
 
 
 @router.post("/auth/session/revoke", status_code=202)
-async def revoke_sessions(
-    request: Request, claims: dict = claims_dependency
-):
+async def revoke_sessions(request: Request, claims: dict = claims_dependency):
     user_id = UUID(claims["sub"])
     session_id = UUID(claims["session_id"])
     async with engine.begin() as connection:

@@ -18,7 +18,9 @@ session_dependency = Depends(user_session)
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     slug: str | None = Field(
-        default=None, min_length=2, max_length=80,
+        default=None,
+        min_length=2,
+        max_length=80,
         pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$",
     )
     status: str | None = Field(default=None, pattern="^(active|inactive|archived)$")
@@ -77,8 +79,16 @@ async def _authorize(
     )
 
 
-async def _audit(connection, request: Request, actor: UUID, tenant_id: UUID, action: str,
-                 resource_type: str, resource_id: UUID, metadata: dict | None = None):
+async def _audit(
+    connection,
+    request: Request,
+    actor: UUID,
+    tenant_id: UUID,
+    action: str,
+    resource_type: str,
+    resource_id: UUID,
+    metadata: dict | None = None,
+):
     import json
 
     await connection.execute(
@@ -130,8 +140,12 @@ async def read_tenant(
 
 @router.patch("/{tenant_id}/organizations/{organization_id}", tags=["Organization"])
 async def update_organization(
-    tenant_id: UUID, organization_id: UUID, payload: OrganizationUpdate, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    organization_id: UUID,
+    payload: OrganizationUpdate,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
@@ -153,9 +167,7 @@ async def update_organization(
         if row is None:
             raise HTTPException(status_code=404, detail="Organization tidak ditemukan.")
         if context is not None:
-            authorize_object(
-                context, resource_tenant_id=tenant_id, organization_id=organization_id
-            )
+            authorize_object(context, resource_tenant_id=tenant_id, organization_id=organization_id)
         assignments = ", ".join(f"{key}=:{key}" for key in values)
         result = await connection.execute(
             text(f"""
@@ -168,8 +180,14 @@ async def update_organization(
         )
         updated = dict(result.mappings().one())
         await _audit(
-            connection, request, UUID(claims["sub"]), tenant_id,
-            "organization.updated", "organization", organization_id, values
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            "organization.updated",
+            "organization",
+            organization_id,
+            values,
         )
     return updated
 
@@ -230,8 +248,16 @@ async def create_organization_unit(
             {"tenant_id": tenant_id, **payload.model_dump(), "actor": actor},
         )
         row = dict(result.mappings().one())
-        await _audit(connection, request, actor, tenant_id, "organization_unit.created",
-                     "organization_unit", row["id"], {"code": payload.code})
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "organization_unit.created",
+            "organization_unit",
+            row["id"],
+            {"code": payload.code},
+        )
     return row
 
 
@@ -268,7 +294,9 @@ async def create_branch(
     )
     if context is not None:
         authorize_object(
-            context, resource_tenant_id=tenant_id, organization_id=payload.organization_id,
+            context,
+            resource_tenant_id=tenant_id,
+            organization_id=payload.organization_id,
             organization_unit_id=payload.organization_unit_id,
         )
     actor = UUID(claims["sub"])
@@ -286,8 +314,16 @@ async def create_branch(
             {"tenant_id": tenant_id, **payload.model_dump(), "actor": actor},
         )
         row = dict(result.mappings().one())
-        await _audit(connection, request, actor, tenant_id, "branch.created",
-                     "branch", row["id"], {"code": payload.code})
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "branch.created",
+            "branch",
+            row["id"],
+            {"code": payload.code},
+        )
     return row
 
 
@@ -324,7 +360,9 @@ async def create_department(
     )
     if context is not None:
         authorize_object(
-            context, resource_tenant_id=tenant_id, organization_id=payload.organization_id,
+            context,
+            resource_tenant_id=tenant_id,
+            organization_id=payload.organization_id,
             branch_id=payload.branch_id,
         )
     actor = UUID(claims["sub"])
@@ -343,8 +381,16 @@ async def create_department(
             {"tenant_id": tenant_id, **payload.model_dump(), "actor": actor},
         )
         row = dict(result.mappings().one())
-        await _audit(connection, request, actor, tenant_id, "department.created",
-                     "department", row["id"], {"code": payload.code})
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "department.created",
+            "department",
+            row["id"],
+            {"code": payload.code},
+        )
     return row
 
 
@@ -393,8 +439,15 @@ async def accept_membership(
             {"membership_id": membership_id},
         )
         accepted = dict(updated.mappings().one())
-        await _audit(connection, request, user_id, tenant_id, "membership.accepted",
-                     "membership", membership_id)
+        await _audit(
+            connection,
+            request,
+            user_id,
+            tenant_id,
+            "membership.accepted",
+            "membership",
+            membership_id,
+        )
     return accepted
 
 
@@ -404,8 +457,11 @@ async def accept_membership(
     tags=["Membership"],
 )
 async def suspend_membership(
-    tenant_id: UUID, membership_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    membership_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.manage", "platform.memberships.manage"
@@ -425,10 +481,12 @@ async def suspend_membership(
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
         if context is not None:
             authorize_object(
-                context, resource_tenant_id=tenant_id,
+                context,
+                resource_tenant_id=tenant_id,
                 organization_id=target["organization_id"],
                 organization_unit_id=target["organization_unit_id"],
-                branch_id=target["branch_id"], department_id=target["department_id"],
+                branch_id=target["branch_id"],
+                department_id=target["department_id"],
             )
         result = await connection.execute(
             text("""
@@ -440,8 +498,15 @@ async def suspend_membership(
         )
         if result.scalar_one_or_none() is None:
             raise HTTPException(status_code=404, detail="Membership aktif tidak ditemukan.")
-        await _audit(connection, request, actor, tenant_id, "membership.suspended",
-                     "membership", membership_id)
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "membership.suspended",
+            "membership",
+            membership_id,
+        )
     return {"id": str(membership_id), "status": "suspended"}
 
 
@@ -451,8 +516,11 @@ async def suspend_membership(
     tags=["Membership"],
 )
 async def revoke_membership(
-    tenant_id: UUID, membership_id: UUID, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    membership_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.manage", "platform.memberships.manage"
@@ -472,10 +540,12 @@ async def revoke_membership(
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
         if context is not None:
             authorize_object(
-                context, resource_tenant_id=tenant_id,
+                context,
+                resource_tenant_id=tenant_id,
                 organization_id=target["organization_id"],
                 organization_unit_id=target["organization_unit_id"],
-                branch_id=target["branch_id"], department_id=target["department_id"],
+                branch_id=target["branch_id"],
+                department_id=target["department_id"],
             )
         result = await connection.execute(
             text("""
@@ -490,8 +560,9 @@ async def revoke_membership(
         revoked = result.mappings().first()
         if revoked is None:
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
-        await _audit(connection, request, actor, tenant_id, "membership.revoked",
-                     "membership", membership_id)
+        await _audit(
+            connection, request, actor, tenant_id, "membership.revoked", "membership", membership_id
+        )
     return {"id": str(membership_id), "status": "revoked"}
 
 
@@ -501,8 +572,12 @@ async def revoke_membership(
     tags=["Access Control"],
 )
 async def assign_membership_role(
-    tenant_id: UUID, membership_id: UUID, payload: MembershipRoleAssign, request: Request,
-    claims: dict = claims_dependency, session: AsyncSession = session_dependency,
+    tenant_id: UUID,
+    membership_id: UUID,
+    payload: MembershipRoleAssign,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.manage", "platform.memberships.manage"
@@ -513,7 +588,10 @@ async def assign_membership_role(
             status_code=422, detail="Platform role tidak dapat diberikan pada tenant."
         )
     if role_key in (
-        "corporate_owner", "corporate_admin", "corporate_ai_manager", "ai_workforce_admin"
+        "corporate_owner",
+        "corporate_admin",
+        "corporate_ai_manager",
+        "ai_workforce_admin",
     ):
         owner = await session.execute(
             text("""
@@ -565,9 +643,12 @@ async def assign_membership_role(
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
         if context is not None:
             authorize_object(
-                context, resource_tenant_id=tenant_id, organization_id=target["organization_id"],
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=target["organization_id"],
                 organization_unit_id=target["organization_unit_id"],
-                branch_id=target["branch_id"], department_id=target["department_id"],
+                branch_id=target["branch_id"],
+                department_id=target["department_id"],
             )
         role = await connection.execute(
             text("""
@@ -606,13 +687,27 @@ async def assign_membership_role(
                   valid_until=excluded.valid_until,assigned_at=now()
             """),
             {
-                "membership_id": membership_id, "role_id": role_id,
-                "actor": UUID(claims["sub"]), "scope_type": payload.scope_type,
-                "scope_id": payload.scope_id, "valid_until": payload.valid_until,
+                "membership_id": membership_id,
+                "role_id": role_id,
+                "actor": UUID(claims["sub"]),
+                "scope_type": payload.scope_type,
+                "scope_id": payload.scope_id,
+                "valid_until": payload.valid_until,
             },
         )
-        await _audit(connection, request, UUID(claims["sub"]), tenant_id,
-                     "membership.role.assigned", "membership", membership_id,
-                     {"role_key": role_key, "scope_type": payload.scope_type})
-    return {"membership_id": str(membership_id), "role_key": role_key,
-            "scope_type": payload.scope_type, "scope_id": payload.scope_id}
+        await _audit(
+            connection,
+            request,
+            UUID(claims["sub"]),
+            tenant_id,
+            "membership.role.assigned",
+            "membership",
+            membership_id,
+            {"role_key": role_key, "scope_type": payload.scope_type},
+        )
+    return {
+        "membership_id": str(membership_id),
+        "role_key": role_key,
+        "scope_type": payload.scope_type,
+        "scope_id": payload.scope_id,
+    }

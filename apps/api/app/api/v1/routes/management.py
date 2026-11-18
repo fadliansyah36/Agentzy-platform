@@ -378,8 +378,13 @@ async def invite_tenant_member(
     if role_key.startswith("ai_") or role_key == "corporate_ai_manager":
         redirect_surface = "ai-workforce"
     elif role_key in (
-        "sales_manager", "sales_supervisor", "sales_official", "affiliate_worker",
-        "technician", "field_quality_inspector", "support_agent",
+        "sales_manager",
+        "sales_supervisor",
+        "sales_official",
+        "affiliate_worker",
+        "technician",
+        "field_quality_inspector",
+        "support_agent",
     ):
         redirect_surface = "workforce"
     else:
@@ -433,7 +438,9 @@ async def invite_tenant_member(
             returning id,tenant_id,user_id,status,created_at
         """),
             {
-                "tenant_id": tenant_id, "user_id": invited_user_id, "actor": user_id,
+                "tenant_id": tenant_id,
+                "user_id": invited_user_id,
+                "actor": user_id,
                 "organization_id": payload.organization_id,
                 "organization_unit_id": payload.organization_unit_id,
                 "branch_id": payload.branch_id,
@@ -447,13 +454,20 @@ async def invite_tenant_member(
             )
         membership = dict(membership_row)
         scope_type = (
-            "department" if payload.department_id else
-            "branch" if payload.branch_id else
-            "organization_unit" if payload.organization_unit_id else
-            "organization" if payload.organization_id else "tenant"
+            "department"
+            if payload.department_id
+            else "branch"
+            if payload.branch_id
+            else "organization_unit"
+            if payload.organization_unit_id
+            else "organization"
+            if payload.organization_id
+            else "tenant"
         )
         scope_id = (
-            payload.department_id or payload.branch_id or payload.organization_unit_id
+            payload.department_id
+            or payload.branch_id
+            or payload.organization_unit_id
             or payload.organization_id
         )
         await connection.execute(
@@ -468,8 +482,11 @@ async def invite_tenant_member(
                 valid_until=null,assigned_at=now()
         """),
             {
-                "membership_id": membership["id"], "role_id": role_id, "actor": user_id,
-                "scope_type": scope_type, "scope_id": scope_id,
+                "membership_id": membership["id"],
+                "role_id": role_id,
+                "actor": user_id,
+                "scope_type": scope_type,
+                "scope_id": scope_id,
             },
         )
         await connection.execute(
@@ -532,8 +549,7 @@ async def replace_role_permissions(
     async with engine.begin() as connection:
         role_result = await connection.execute(
             text(
-                "select id,key,tenant_id,scope_type from public.roles "
-                "where id=:role_id for update"
+                "select id,key,tenant_id,scope_type from public.roles where id=:role_id for update"
             ),
             {"role_id": role_id},
         )
@@ -581,7 +597,9 @@ async def replace_role_permissions(
                 )
             """),
             {
-                "tenant_id": role["tenant_id"], "actor": actor, "resource_id": str(role_id),
+                "tenant_id": role["tenant_id"],
+                "actor": actor,
+                "resource_id": str(role_id),
                 "request_id": request.headers.get("x-request-id"),
                 "metadata": json.dumps({"permission_keys": permission_keys}),
             },
