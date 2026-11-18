@@ -117,6 +117,24 @@ class DepartmentCreate(BaseModel):
     code: str = Field(min_length=2, max_length=40, pattern="^[A-Z0-9][A-Z0-9_-]*$")
 
 
+class MembershipAssignmentUpdate(BaseModel):
+    organization_id: UUID | None
+    organization_unit_id: UUID | None
+    branch_id: UUID | None
+    department_id: UUID | None
+
+
+class MembershipAssignmentRead(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    user_id: UUID
+    organization_id: UUID | None
+    organization_unit_id: UUID | None
+    branch_id: UUID | None
+    department_id: UUID | None
+    status: str
+
+
 class MembershipRoleAssign(BaseModel):
     role_key: str = Field(min_length=2, max_length=80)
     scope_type: str = Field(
@@ -959,6 +977,250 @@ async def revoke_membership(
             response_body=response_body,
         )
     return response_body
+
+
+@router.patch(
+    "/{tenant_id}/memberships/{membership_id}/assignment",
+    response_model=MembershipAssignmentRead,
+    tags=["Membership"],
+)
+async def reassign_membership_hierarchy(
+    tenant_id: UUID,
+    membership_id: UUID,
+    payload: MembershipAssignmentUpdate,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    context = await _authorize(
+        session, claims, tenant_id, "corporate.organization.manage", "platform.memberships.manage"
+    )
+    actor = UUID(claims["sub"])
+    organization_id = payload.organization_id
+    organization_unit_id = payload.organization_unit_id
+    branch_id = payload.branch_id
+    department_id = payload.department_id
+
+    async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"membership.assignment.reassign:{membership_id}",
+            payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
+        current_result = await connection.execute(
+            text("""
+                select id,user_id,status,organization_id,organization_unit_id,branch_id,department_id
+                from public.memberships
+                where id=:membership_id and tenant_id=:tenant_id
+                for update
+            """),
+            {"membership_id": membership_id, "tenant_id": tenant_id},
+        )
+        current = current_result.mappings().first()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        if current["status"] == "revoked":
+            raise HTTPException(status_code=409, detail="Membership revoked tidak dapat dipindahkan.")
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=current["organization_id"],
+                organization_unit_id=current["organization_unit_id"],
+                branch_id=current["branch_id"],
+                department_id=current["department_id"],
+            )
+
+        if organization_id is not None:
+            organization = await connection.execute(
+                text("""
+                    select id from public.organizations
+                    where id=:id and tenant_id=:tenant_id and status='active'
+                """),
+                {"id": organization_id, "tenant_id": tenant_id},
+            )
+            if organization.scalar_one_or_none() is None:
+                raise HTTPException(status_code=404, detail="Organization aktif tidak ditemukan.")
+        if organization_unit_id is not None:
+            if organization_id is None:
+                raise HTTPException(status_code=422, detail="Organization diperlukan untuk unit.")
+            unit = await connection.execute(
+                text("""
+                    select id from public.organization_units
+                    where id=:id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {
+                    "id": organization_unit_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": organization_id,
+                },
+            )
+            if unit.scalar_one_or_none() is None:
+                raise HTTPException(status_code=404, detail="Organization unit di luar tenant.")
+        if branch_id is not None:
+            if organization_id is None:
+                raise HTTPException(status_code=422, detail="Organization diperlukan untuk branch.")
+            branch = await connection.execute(
+                text("""
+                    select organization_unit_id from public.branches
+                    where id=:id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {"id": branch_id, "tenant_id": tenant_id, "organization_id": organization_id},
+            )
+            branch_row = branch.mappings().first()
+            if branch_row is None:
+                raise HTTPException(status_code=404, detail="Branch aktif tidak ditemukan.")
+            if branch_row["organization_unit_id"] is not None:
+                if organization_unit_id != branch_row["organization_unit_id"]:
+                    raise HTTPException(
+                        status_code=422, detail="Branch harus berada pada organization unit yang dipilih."
+                    )
+        if department_id is not None:
+            if branch_id is None or organization_id is None:
+                raise HTTPException(
+                    status_code=422, detail="Organization dan branch diperlukan untuk department."
+                )
+            department = await connection.execute(
+                text("""
+                    select id from public.departments
+                    where id=:id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and branch_id=:branch_id
+                      and status='active'
+                """),
+                {
+                    "id": department_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": organization_id,
+                    "branch_id": branch_id,
+                },
+            )
+            if department.scalar_one_or_none() is None:
+                raise HTTPException(status_code=404, detail="Department di luar branch terpilih.")
+
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=organization_id,
+                organization_unit_id=organization_unit_id,
+                branch_id=branch_id,
+                department_id=department_id,
+            )
+
+        scoped_roles = await connection.execute(
+            text("""
+                select scope_type,scope_id from public.membership_roles
+                where membership_id=:membership_id
+            """),
+            {"membership_id": membership_id},
+        )
+        new_scopes = {
+            "tenant": None,
+            "organization": organization_id,
+            "organization_unit": organization_unit_id,
+            "branch": branch_id,
+            "department": department_id,
+        }
+        for role_scope in scoped_roles.mappings().all():
+            scope_type = role_scope["scope_type"]
+            if scope_type not in new_scopes:
+                raise HTTPException(
+                    status_code=409, detail="Membership memiliki role dengan scope yang tidak dikenal."
+                )
+            if scope_type != "tenant" and new_scopes[scope_type] is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Role scope {scope_type} harus dihapus atau diganti sebelum reassignment.",
+                )
+
+        await connection.execute(
+            text("""
+                update public.memberships
+                set organization_id=:organization_id,
+                    organization_unit_id=:organization_unit_id,
+                    branch_id=:branch_id,
+                    department_id=:department_id,
+                    updated_at=now()
+                where id=:membership_id and tenant_id=:tenant_id
+            """),
+            {
+                "organization_id": organization_id,
+                "organization_unit_id": organization_unit_id,
+                "branch_id": branch_id,
+                "department_id": department_id,
+                "membership_id": membership_id,
+                "tenant_id": tenant_id,
+            },
+        )
+        await connection.execute(
+            text("""
+                update public.membership_roles
+                set scope_id=case scope_type
+                    when 'tenant' then null
+                    when 'organization' then :organization_id
+                    when 'organization_unit' then :organization_unit_id
+                    when 'branch' then :branch_id
+                    when 'department' then :department_id
+                    else scope_id
+                end,
+                assigned_at=now()
+                where membership_id=:membership_id
+            """),
+            {
+                "organization_id": organization_id,
+                "organization_unit_id": organization_unit_id,
+                "branch_id": branch_id,
+                "department_id": department_id,
+                "membership_id": membership_id,
+            },
+        )
+        response = {
+            "id": str(membership_id),
+            "tenant_id": str(tenant_id),
+            "user_id": str(current["user_id"]),
+            "organization_id": str(organization_id) if organization_id else None,
+            "organization_unit_id": str(organization_unit_id) if organization_unit_id else None,
+            "branch_id": str(branch_id) if branch_id else None,
+            "department_id": str(department_id) if department_id else None,
+            "status": current["status"],
+        }
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "membership.assignment.reassigned",
+            "membership",
+            membership_id,
+            {
+                "previous": {
+                    "organization_id": str(current["organization_id"]) if current["organization_id"] else None,
+                    "organization_unit_id": str(current["organization_unit_id"]) if current["organization_unit_id"] else None,
+                    "branch_id": str(current["branch_id"]) if current["branch_id"] else None,
+                    "department_id": str(current["department_id"]) if current["department_id"] else None,
+                },
+                "current": {
+                    "organization_id": response["organization_id"],
+                    "organization_unit_id": response["organization_unit_id"],
+                    "branch_id": response["branch_id"],
+                    "department_id": response["department_id"],
+                },
+            },
+        )
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response,
+        )
+    return MembershipAssignmentRead(**response)
 
 
 @router.post(
