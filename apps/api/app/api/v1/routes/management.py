@@ -45,6 +45,18 @@ class RolePermissionUpdate(BaseModel):
     permission_keys: list[str] = Field(max_length=200)
 
 
+class RoleCreate(BaseModel):
+    key: str = Field(min_length=3, max_length=80, pattern="^[a-z][a-z0-9_.-]+$")
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    scope_type: str = Field(pattern="^(platform|tenant)$")
+
+
+class RolePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+
+
 class MembershipInvite(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     full_name: str = Field(min_length=1, max_length=120)
@@ -823,3 +835,155 @@ async def archive_tenant(
             },
         )
     return dict(row)
+
+
+
+@router.post("/roles", status_code=status.HTTP_201_CREATED, tags=["Access Control"])
+async def create_role(
+    payload: RoleCreate,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = UUID(claims["sub"])
+    _require_aal2(claims)
+    if not await _has_platform_permission(session, actor, "platform.roles.manage"):
+        raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
+    async with engine.begin() as connection:
+        existing = await connection.execute(
+            text("select id from public.roles where key=:key and tenant_id is null"),
+            {"key": payload.key},
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Role key already exists.")
+        result = await connection.execute(
+            text("""
+                insert into public.roles(key,name,description,is_system,scope_type,tenant_id)
+                values(:key,:name,:description,false,:scope_type,null)
+                returning id,key,name,description,is_system,scope_type,tenant_id
+            """),
+            payload.model_dump(),
+        )
+        row = dict(result.mappings().one())
+        row["permissions"] = []
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values (
+                  :actor,'role.created','role',:resource_id,:request_id,cast(:metadata as jsonb)
+                )
+            """),
+            {
+                "actor": actor, "resource_id": str(row["id"]),
+                "request_id": request.headers.get("x-request-id"),
+                "metadata": json.dumps({"key": row["key"], "scope_type": row["scope_type"]}),
+            },
+        )
+    return row
+
+
+@router.patch("/roles/{role_id}", tags=["Access Control"])
+async def update_role(
+    role_id: UUID,
+    payload: RolePatch,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = UUID(claims["sub"])
+    _require_aal2(claims)
+    if not await _has_platform_permission(session, actor, "platform.roles.manage"):
+        raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
+    values = payload.model_dump(exclude_unset=True)
+    if not values:
+        raise HTTPException(status_code=422, detail="No role changes supplied.")
+    if any(value is None for value in values.values()):
+        raise HTTPException(status_code=422, detail="Role name and description cannot be null.")
+    assignments = ", ".join(f"{key}=:{key}" for key in values)
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text(f"""
+                update public.roles set {assignments}
+                where id=:role_id and tenant_id is null and is_system=false
+                returning id,key,name,description,is_system,scope_type,tenant_id
+            """),
+            {**values, "role_id": role_id},
+        )
+        row = result.mappings().first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Custom platform role not found.")
+        row = dict(row)
+        permissions = await connection.execute(
+            text("select permission_key from public.role_permissions where role_id=:id order by permission_key"),
+            {"id": role_id},
+        )
+        row["permissions"] = [item["permission_key"] for item in permissions.mappings().all()]
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values (
+                  :actor,'role.updated','role',:resource_id,:request_id,cast(:metadata as jsonb)
+                )
+            """),
+            {
+                "actor": actor, "resource_id": str(role_id),
+                "request_id": request.headers.get("x-request-id"),
+                "metadata": json.dumps({"fields": sorted(values)}),
+            },
+        )
+    return row
+
+
+@router.delete("/roles/{role_id}", status_code=status.HTTP_200_OK, tags=["Access Control"])
+async def delete_role(
+    role_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = UUID(claims["sub"])
+    _require_aal2(claims)
+    if not await _has_platform_permission(session, actor, "platform.roles.manage"):
+        raise HTTPException(status_code=403, detail="Missing platform.roles.manage permission.")
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                select id,key,is_system from public.roles
+                where id=:role_id and tenant_id is null for update
+            """),
+            {"role_id": role_id},
+        )
+        role = result.mappings().first()
+        if role is None or role["is_system"]:
+            raise HTTPException(status_code=404, detail="Custom role not found.")
+        assigned = await connection.execute(
+            text("select exists(select 1 from public.membership_roles where role_id=:role_id)"),
+            {"role_id": role_id},
+        )
+        if assigned.scalar_one():
+            raise HTTPException(status_code=409, detail="Role is still assigned to memberships.")
+        await connection.execute(
+            text("delete from public.role_permissions where role_id=:role_id"),
+            {"role_id": role_id},
+        )
+        await connection.execute(
+            text("delete from public.roles where id=:role_id"),
+            {"role_id": role_id},
+        )
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values (
+                  :actor,'role.deleted','role',:resource_id,:request_id,cast(:metadata as jsonb)
+                )
+            """),
+            {
+                "actor": actor, "resource_id": str(role_id),
+                "request_id": request.headers.get("x-request-id"),
+                "metadata": json.dumps({"key": role["key"]}),
+            },
+        )
+    return {"id": str(role_id), "status": "deleted"}
