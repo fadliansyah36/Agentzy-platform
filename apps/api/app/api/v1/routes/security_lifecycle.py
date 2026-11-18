@@ -750,7 +750,7 @@ async def _audit_rows(
             params["scope_department_id"] = context.department_id
             filters.append("""
                 (
-                  (resource_type='department' and resource_id=:scope_department_id::text)
+                  (resource_type='department' and resource_id=cast(:scope_department_id as text))
                   or (resource_type='membership' and resource_id in (
                     select id::text from public.memberships
                     where tenant_id=:tenant_id and department_id=:scope_department_id
@@ -761,7 +761,7 @@ async def _audit_rows(
             params["scope_branch_id"] = context.branch_id
             filters.append("""
                 (
-                  (resource_type='branch' and resource_id=:scope_branch_id::text)
+                  (resource_type='branch' and resource_id=cast(:scope_branch_id as text))
                   or (resource_type='department' and resource_id in (
                     select id::text from public.departments
                     where tenant_id=:tenant_id and branch_id=:scope_branch_id
@@ -776,7 +776,7 @@ async def _audit_rows(
             params["scope_unit_id"] = context.organization_unit_id
             filters.append("""
                 (
-                  (resource_type='organization_unit' and resource_id=:scope_unit_id::text)
+                  (resource_type='organization_unit' and resource_id=cast(:scope_unit_id as text))
                   or (resource_type='branch' and resource_id in (
                     select id::text from public.branches
                     where tenant_id=:tenant_id and organization_unit_id=:scope_unit_id
@@ -796,7 +796,7 @@ async def _audit_rows(
             params["scope_organization_id"] = context.organization_id
             filters.append("""
                 (
-                  (resource_type='organization' and resource_id=:scope_organization_id::text)
+                  (resource_type='organization' and resource_id=cast(:scope_organization_id as text))
                   or (resource_type='organization_unit' and resource_id in (
                     select id::text from public.organization_units
                     where tenant_id=:tenant_id and organization_id=:scope_organization_id
