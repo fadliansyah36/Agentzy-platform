@@ -376,3 +376,14 @@ See `ENGINEERING_CHECKS_REPORT_2026-11-18.md`. These failures are now actionable
 ### Current decision
 
 Phase 00 remains **PARTIAL / BLOCKED**. Phase 01 is not started. No UI, Phase 01 feature, migration, Supabase DDL, grant, policy, function, trigger, Auth setting, Storage setting, deployment or business data was changed by this continuation.
+
+
+## 13. Additional evidence pack index
+
+- RLS assessment/remediation draft: `RLS_SECURITY_REMEDIATION_2026-11-18.md`
+- License/asset disposition register: `LICENSE_ASSET_PROVENANCE_DISPOSITION_2026-11-18.md`
+- Screen/action/API/domain inventory: `SCREEN_ACTION_API_DOMAIN_INVENTORY_2026-11-18.md`
+- Engineering checks actual run results: `ENGINEERING_CHECKS_REPORT_2026-11-18.md`
+- Residual risk and owner register: `PHASE00_RESIDUAL_RISK_REGISTER_2026-11-18.md`
+
+These files are evidence and decision records; they do not substitute for external Dashboard evidence, legal/asset-owner approval, complete callback-level inventory, production migration execution or independent sign-off.
