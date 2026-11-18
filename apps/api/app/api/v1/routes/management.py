@@ -427,7 +427,7 @@ async def invite_tenant_member(
         """),
         {"organization_id": payload.organization_id, "tenant_id": tenant_id},
     )
-    if organization.scalar_one_or_none() is None:
+    if payload.organization_id is not None and organization.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Active organization not found in this tenant.")
     if organization_unit_id is not None:
         unit = await session.execute(
