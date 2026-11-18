@@ -36,3 +36,9 @@ class AuditRedactionTests(TestCase):
         })
         self.assertEqual(result["status"], "active")
         self.assertEqual(result["items"], ["ok", {"ip_address": "[REDACTED]"}])
+
+    def test_redacts_opaque_provider_keys_in_free_text(self):
+        secret = "sk-proj-" + "x" * 24
+        result = redact_audit_value({"message": f"provider credential {secret}"})
+        self.assertNotIn(secret, result["message"])
+        self.assertIn("[REDACTED]", result["message"])
