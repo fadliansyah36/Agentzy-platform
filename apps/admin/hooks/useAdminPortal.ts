@@ -243,10 +243,10 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     initial.integrations
   );
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogRecord[]>(initial.webhookLogs);
-  const [mfaEnforced, setMfaEnforced] = useState<boolean>(true);
-  const [activeSessionsCount, setActiveSessionsCount] = useState<number>(0);
-  const [ipAllowlistEnabled, setIpAllowlistEnabled] = useState<boolean>(false);
-  const [sessionTtlMinutes, setSessionTtlMinutes] = useState<number>(120);
+  const [mfaEnforced] = useState<boolean | null>(null);
+  const [activeSessionsCount] = useState<number | null>(null);
+  const [ipAllowlistEnabled] = useState<boolean | null>(null);
+  const [sessionTtlMinutes] = useState<number | null>(null);
   const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>([]);
   const [featureFlags, setFeatureFlags] = useState<FeatureFlagRecord[]>(initial.featureFlags);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -2013,13 +2013,9 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     webhookLogs,
     testWebhookConnector,
     mfaEnforced,
-    setMfaEnforced,
     activeSessionsCount,
-    setActiveSessionsCount,
     ipAllowlistEnabled,
-    setIpAllowlistEnabled,
     sessionTtlMinutes,
-    setSessionTtlMinutes,
     breakGlassRequests,
     activeBreakGlassCount: breakGlassRequests.filter((item) => item.status === 'Aktif').length,
     currentUserId: auth.identity?.user_id ?? null,
