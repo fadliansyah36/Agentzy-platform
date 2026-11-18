@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { AgentzyPermissionDefinition } from '@/apps/web/lib/api-client';
 import {
   X,
   Plus,
