@@ -125,9 +125,9 @@ export function OrganizationUsersView({
                     <div>
                       <p className="text-xs font-bold text-[#17324D]">{u.name}</p>
                       <p className="text-[11px] text-[#526675]">
-                        Induk: {u.parentName} · Kepala: {u.headName} ·{' '}
+                        Induk: {u.parentName ?? '—'} · Kepala: {u.headName ?? 'Belum ditetapkan'} ·{' '}
                         <span className="font-mono-tabular">
-                          {formatNumberID(u.memberCount)} anggota
+                          {u.memberCount === null ? '—' : formatNumberID(u.memberCount)} anggota
                         </span>
                       </p>
                     </div>
@@ -180,9 +180,9 @@ export function OrganizationUsersView({
                     <div>
                       <p className="text-xs font-bold text-[#17324D]">{u.name}</p>
                       <p className="text-[11px] text-[#526675]">
-                        PIC: {u.headName} ·{' '}
+                        PIC: {u.headName ?? 'Belum ditetapkan'} ·{' '}
                         <span className="font-mono-tabular">
-                          {formatNumberID(u.memberCount)} personel
+                          {u.memberCount === null ? '—' : formatNumberID(u.memberCount)} personel
                         </span>
                       </p>
                     </div>
