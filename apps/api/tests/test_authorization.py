@@ -58,3 +58,46 @@ class AuthorizationBoundaryTests(TestCase):
 
     def test_granted_permission_is_accepted(self):
         require_permission(self.context, "corporate.organization.read")
+    def test_denies_cross_organization_unit_resource(self):
+        scoped_context = TenantAccessContext(
+            user_id=self.context.user_id,
+            tenant_id=self.tenant_id,
+            membership_id=self.context.membership_id,
+            organization_id=self.organization_id,
+            organization_unit_id=uuid4(),
+            branch_id=None,
+            department_id=None,
+            permissions=self.context.permissions,
+            role_keys=self.context.role_keys,
+        )
+        with self.assertRaises(HTTPException) as raised:
+            authorize_object(
+                scoped_context,
+                resource_tenant_id=self.tenant_id,
+                organization_id=self.organization_id,
+                organization_unit_id=uuid4(),
+            )
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_denies_cross_department_resource(self):
+        scoped_context = TenantAccessContext(
+            user_id=self.context.user_id,
+            tenant_id=self.tenant_id,
+            membership_id=self.context.membership_id,
+            organization_id=self.organization_id,
+            organization_unit_id=None,
+            branch_id=self.branch_id,
+            department_id=uuid4(),
+            permissions=self.context.permissions,
+            role_keys=self.context.role_keys,
+        )
+        with self.assertRaises(HTTPException) as raised:
+            authorize_object(
+                scoped_context,
+                resource_tenant_id=self.tenant_id,
+                organization_id=self.organization_id,
+                branch_id=self.branch_id,
+                department_id=uuid4(),
+            )
+        self.assertEqual(raised.exception.status_code, 404)
+
