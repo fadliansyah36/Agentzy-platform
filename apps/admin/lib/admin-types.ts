@@ -142,6 +142,7 @@ export interface PlatformUserRecord {
   roleKey: string;
   roleName: string;
   department: string;
+  branchScope: string;
   organizationId: string | null;
   organizationUnitId: string | null;
   branchId: string | null;
