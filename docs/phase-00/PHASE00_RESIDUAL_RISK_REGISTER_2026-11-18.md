@@ -20,9 +20,9 @@
 | RR-011 | 31 asset provenance incomplete | BLOCKED | Metadata/hash inventory; source/owner/license/commercial rights/attribution missing | Complete creator/rightsholder/source/license/permission/attribution/usage evidence for every asset | Brand/Asset Owner + Legal/IP | PENDING |
 | RR-012 | Screen callback/action inventory incomplete | PARTIAL | Route/module inventory and view file lists; 11 page/layout, 3 API handlers | Trace every button/form/callback/hook/service and record API, permission and entity | Frontend Lead | PENDING |
 | RR-013 | API/domain ownership incomplete | PARTIAL | Current FastAPI routes and three Next handlers mapped at domain level | Approve canonical owner and API contract for every action; resolve Next.js AI provider route | Backend Lead + Domain Owners | PENDING |
-| RR-014 | Bun lockfile does not match package.json | BLOCKED | CI run 44224158408: frozen install failed because @supabase/supabase-js added but not locked | Generate lock with Bun after confirming exact dependency resolution; rerun frozen install | Frontend/Dependency Owner | PENDING |
-| RR-015 | FastAPI Ruff checks fail | BLOCKED | CI run 44224158408: 101 findings, 7 auto-fixable | Review lint findings and format/import cleanup without behavior change; rerun Ruff | Backend Lead | PENDING |
-| RR-016 | Frontend ESLint/TypeScript/OpenAPI checks not executed | BLOCKED | CI steps skipped after install/Ruff failures | Fix lockfile/Ruff; rerun all checks and capture results | Frontend + Backend Leads | PENDING |
+| RR-014 | Bun lockfile does not match package.json | DONE | Bun 1.4.4 regenerated `bun.lock`; frozen install passed in run 44229181139; dependency is present in lockfile | Keep manifest/lock synchronized and retain frozen-install gate | Frontend/Dependency Owner | Verified by engineering CI; independent review tracked in RR-018 |
+| RR-015 | FastAPI Ruff checks fail | DONE | All 101 original Ruff findings handled; final `ruff check app` passed in run 44229181139 without disabling rules | Retain Ruff gate; review source diff in commit 721708634fa0f424ce3a2701249676b4ceae98ba | Backend Lead | Verified by engineering CI; independent review tracked in RR-018 |
+| RR-016 | Frontend ESLint/TypeScript/OpenAPI checks not executed | DONE | Run 44229181139 passed frozen Bun install, ESLint, TypeScript, Ruff, Python compileall, FastAPI import/OpenAPI (10 paths), migration source filename/order check and git diff --check | Keep all minimum engineering gates required on main | Frontend + Backend Leads | Verified by engineering CI; independent review tracked in RR-018 |
 | RR-017 | GitHub main branch not protected | PARTIAL | GitHub branch API reports protected=false | Project owner decides branch-protection/required-check policy; no policy changed in this pass | Repository Owner | PENDING |
 | RR-018 | No independent Phase 00 approval | PENDING APPROVAL | No signed Product Owner/Security/Engineering approval record | Review evidence pack and record approval or rejection; do not start Phase 01 without separate explicit instruction | Product Owner | PENDING |
 
@@ -171,3 +171,42 @@ The new workflow is deliberately gated:
 - It does not run migrations, database queries, staging, UAT, production deployment, or application runtime tests.
 
 **Current gate:** Phase 00 remains **PARTIAL / BLOCKED**. No Phase 01 work is authorized or started. No Phase 01 migration was added or modified in this pass.
+
+
+## Verified engineering remediation — 18 November 2026, 03:16 UTC
+
+**Latest engineering workflow:** [Run 44229181139](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44229181139)  
+**Conclusion:** SUCCESS  
+**Verified branch HEAD at evidence capture:** `2eace9cfc199e7eb1ee364ebb52a5160fab13d84`
+
+### Corrective actions and evidence
+
+| Risk ID | Owner | Status after correction | Resource / commit | Verification |
+|---|---|---|---|---|
+| RR-014 | Frontend/Dependency Owner | DONE | `bun.lock`; lock synchronization commit `90c37e...` | Bun 1.4.4 `bun install` and `bun install --frozen-lockfile` passed in run 44229181139; `@supabase/supabase-js` exists in both package manifest and lockfile |
+| RR-015 | Backend Lead | DONE | Python dependency-injection and formatting corrections; source commit `721708634fa0f424ce3a2701249676b4ceae98ba` | All original 101 Ruff findings addressed. Final `ruff check app` passed in run 44229181139. No Ruff rule was disabled and no `noqa`/rule suppression was added |
+| RR-016 | Frontend + Backend Leads | DONE | Frontend type/state corrections and engineering workflow; commits `a3a411ee26393afbe5e4ebbb4033bd1a854b20f2`, `a06283cdee0d5408df1ffb6243e86ffeb6d4992c`, `2f47b38bdbb56f08d265e6c8bb5b95a87f0f8153`, `8855a49917ba3286dc02cfb379db80eb464256db`, `576c41690b2df66d47a286379e6f57611335c3c4`, `e9bdfc49e593013bfd505b5091859f032193f924`, `a015613d8b1a147792c1b4d64297634269316f16`, `c4f3458f2efd34c2dc37396d16263488d0378f77`, `17a77bfd20f3449912001d8e9593d8249ee46d38`, `721708634fa0f424ce3a2701249676b4ceae98ba` | ESLint PASS; TypeScript PASS; Python compileall PASS; FastAPI import/OpenAPI PASS (OpenAPI 3.1.0, 10 paths); migration filename/order check PASS (3 source files); `git diff --check` PASS. All results are from GitHub Actions run 44229181139 |
+
+### Engineering source hygiene correction
+
+The first successful source-formatting commit also staged generated Python bytecode because the workflow used a directory-wide `git add`. That was corrected:
+- Added `__pycache__/` and `*.py[cod]` to `.gitignore`.
+- Changed the workflow to stage only `*.py` source files.
+- Removed all 16 generated `.pyc` files from the repository in commit `2eace9cfc199e7eb1ee364ebb52a5160fab13d84`.
+- Re-read the repository tree: current tracked `.pyc` count is zero.
+
+### What this does not close
+
+RR-001–RR-006 remain BLOCKED; RR-007 remains pending Product Owner Storage decision; RR-008–RR-011 remain BLOCKED pending legal/rightsholder evidence; RR-012–RR-013 remain PARTIAL pending exhaustive action inventory and owner approvals; RR-017 remains PARTIAL pending repository-owner branch protection decision; RR-018 remains PENDING INDEPENDENT REVIEW.
+
+Latest Supabase evidence from the canonical project `cwhjdnkotuhueeudpgeu`:
+- Project `Agentzy-db`, ACTIVE_HEALTHY, PostgreSQL 17.12.0.000, ap-northeast-1.
+- Security Advisor at `2026-11-18T03:16:20.345Z` still reports WARN 0028 and WARN 0029 for `public.rls_auto_enable()`.
+- Live function remains SECURITY DEFINER, owner postgres, `search_path=pg_catalog`, and EXECUTE remains granted to PUBLIC, anon, authenticated and service_role.
+- The event trigger `ensure_rls` remains enabled. The function still catches and swallows `WHEN OTHERS`.
+- RLS is enabled on the nine public application tables, FORCE RLS is false on all nine, and each current policy is SELECT-only.
+- anon, authenticated and service_role retain broad SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER grants on all nine tables.
+- Broad public default ACLs remain for postgres and supabase_admin. Managed schema ACLs remain untouched.
+- No database DDL, grants, policies, function, trigger, Auth, Data API or Storage configuration was changed by this engineering pass.
+
+**Overall Phase 00 remains PARTIAL / BLOCKED.** Engineering quality findings RR-014–RR-016 are now closed with verified CI evidence; the security, hosted configuration, legal, asset provenance, screen/action ownership and independent-review gates remain open. Phase 01 remains prohibited.
