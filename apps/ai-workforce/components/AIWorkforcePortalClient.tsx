@@ -76,6 +76,36 @@ export function AIWorkforcePortalClient({
         onOpenLoginScreen={portal.handleLogout}
         onOpenSplashScreen={portal.handleLogout}
       >
+        <section
+          aria-label="Tenant and organization authorization scope"
+          className="mx-4 mt-4 rounded-[12px] border border-[#D8E3E9] bg-white px-4 py-3 text-xs text-[#526675] shadow-sm sm:mx-6"
+        >
+          {portal.workforceContextError ? (
+            <p role="alert" className="font-medium text-[#B23A48]">
+              Scope organisasi tidak dapat diverifikasi: {portal.workforceContextError}
+            </p>
+          ) : portal.workforceTenantContext ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-[#17324D]">Identity &amp; Organization Scope</p>
+                <p className="text-[10px] text-[#718391]">
+                  Membership: {portal.workforceTenantContext.membership_id ?? 'Platform'}
+                </p>
+              </div>
+              <p className="mt-1">
+                Organisasi: {portal.workforceTenantContext.organizations.map((item) => item.name).join(', ') || 'Tidak ada organisasi dalam scope'}
+                {' · '}Unit: {portal.workforceTenantContext.organization_units.map((item) => item.name).join(', ') || '—'}
+                {' · '}Cabang: {portal.workforceTenantContext.branches.map((item) => item.name).join(', ') || '—'}
+                {' · '}Departemen: {portal.workforceTenantContext.departments.map((item) => item.name).join(', ') || '—'}
+              </p>
+              <p className="mt-1 break-words text-[10px] text-[#718391]">
+                Role: {portal.workforceTenantContext.role_keys.join(', ') || '—'}
+              </p>
+            </>
+          ) : (
+            <p>Memuat scope organisasi melalui FastAPI…</p>
+          )}
+        </section>
         {portal.activeSection === 'overview' && (
           <AIWorkforceOverviewView
             tenant={portal.activeTenant}
