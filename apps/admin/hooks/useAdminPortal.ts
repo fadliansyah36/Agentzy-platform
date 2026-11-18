@@ -745,12 +745,23 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
         showToast('Session AAL2 diperlukan untuk memperbarui permission role.');
         return;
       }
-      const levels: Array<'F' | 'C/U' | 'A' | 'R' | 'S' | '---'> = ['F', 'C/U', 'A', 'R', 'S', '---'];
-      const current = role.permissions[resourceKey] ?? '---';
-      const next = levels[(levels.indexOf(current) + 1) % levels.length];
       const definitions = permissionRegistry.filter((item) =>
         (item.resource ?? item.domain) === resourceKey
       );
+      if (definitions.length === 0) {
+        showToast('Resource tidak tersedia pada permission registry.');
+        return;
+      }
+      const actions = new Set(definitions.map((item) => item.action));
+      const levels: Array<'F' | 'C/U' | 'A' | 'R' | 'S' | '---'> = [
+        'F',
+        ...(Array.from(actions).some((action) => ['create', 'update', 'manage', 'write'].includes(action)) ? ['C/U' as const] : []),
+        ...(Array.from(actions).some((action) => ['approve', 'review'].includes(action)) ? ['A' as const] : []),
+        ...(Array.from(actions).some((action) => ['read', 'list', 'view'].includes(action)) ? ['R' as const, 'S' as const] : []),
+        '---',
+      ];
+      const current = role.permissions[resourceKey] ?? '---';
+      const next = levels[(levels.indexOf(current) + 1) % levels.length];
       if (role.scopeType === 'Platform' && definitions.some((item) => !item.key.startsWith('platform.'))) {
         showToast('Platform role hanya dapat mengelola permission platform.');
         return;
