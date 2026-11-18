@@ -277,3 +277,83 @@ async def authorize_action(
     if decision.decision != "ALLOW":
         raise HTTPException(status_code=403, detail="Akses tidak diizinkan.")
     return tenant_context, decision
+
+
+
+async def authorize_platform_action(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    permission_key: str,
+    resource_type: str,
+    action: str,
+    resource: dict,
+    request_id: str | None = None,
+    request_context: dict | None = None,
+) -> PolicyDecision:
+    """Enforce a platform role permission through global ABAC policies."""
+    if not await has_platform_permission(session, user_id, permission_key):
+        raise HTTPException(status_code=403, detail="Akses platform tidak diizinkan.")
+    subject = {
+        "id": str(user_id),
+        "roles": ["platform"],
+        "permissions": [permission_key],
+    }
+    resource_context = {**resource, "type": resource_type}
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text("""
+                    select id,tenant_id,resource,action,effect,conditions,priority,status,
+                           version,effective_from,effective_until
+                    from public.access_policies
+                    where tenant_id is null and status='active'
+                      and resource=:resource and action=:action
+                    order by priority desc,id
+                """),
+                {"resource": resource_type, "action": action},
+            )
+            policies = [dict(row) for row in result.mappings().all()]
+        decision = evaluate_policies(
+            policies=policies,
+            tenant_id="platform",
+            resource=resource_context,
+            action=action,
+            subject=subject,
+            request_context=request_context or {},
+            now=datetime.now(UTC),
+        )
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("""
+                    insert into public.audit_logs(
+                      actor_user_id,action,resource_type,resource_id,request_id,metadata
+                    ) values (
+                      :actor,'authorization.platform_abac.evaluated',:resource_type,
+                      :resource_id,:request_id,cast(:metadata as jsonb)
+                    )
+                """),
+                {
+                    "actor": user_id,
+                    "resource_type": resource_type,
+                    "resource_id": str(resource.get("id", "")) or None,
+                    "request_id": request_id,
+                    "metadata": json.dumps({
+                        "decision": decision.decision,
+                        "reason_code": decision.reason_code,
+                        "matched_policies": decision.matched_policies,
+                        "policy_versions": decision.policy_versions,
+                        "evaluated_at": decision.evaluated_at,
+                    }, default=str),
+                },
+            )
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=503,
+            detail="Platform authorization policy evaluation is temporarily unavailable.",
+        ) from exc
+    if decision.decision != "ALLOW":
+        raise HTTPException(status_code=403, detail="Akses platform tidak diizinkan.")
+    return decision
