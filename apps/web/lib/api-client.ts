@@ -28,7 +28,9 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
 }
 
 export type AgentzyMembership = { id: string; tenant_id: string; tenant_name: string;
-  organization_id: string | null; role_keys: string[]; permissions: string[]; status: string };
+  organization_id: string | null; organization_unit_id: string | null;
+  branch_id: string | null; department_id: string | null;
+  role_keys: string[]; permissions: string[]; status: string };
 export type AgentzyIdentity = { user_id: string; email: string | null; display_name: string | null;
   memberships: AgentzyMembership[] };
 export type AgentzyTenant = { id: string; name: string; slug: string; status: string; membership_status: string };
@@ -146,6 +148,9 @@ export type AgentzyPermissionContext = {
     tenant_id: string;
     tenant_name: string;
     organization_id: string | null;
+    organization_unit_id: string | null;
+    branch_id: string | null;
+    department_id: string | null;
     status: string;
     roles: string[];
     permissions: string[];
