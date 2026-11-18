@@ -423,8 +423,12 @@ export interface BreakGlassRequestRecord {
   durationMinutes: number;
   approver1: string;
   approver2: string;
-  status: 'Menunggu Approval' | 'Aktif' | 'Selesai' | 'Ditolak';
+  status: 'Menunggu Approval' | 'Menunggu Aktivasi' | 'Aktif' | 'Menunggu Review' | 'Selesai' | 'Ditolak';
   requestedAt: string;
+  requesterUserId?: string;
+  approverUserId?: string | null;
+  permissionKeys?: string[];
+  tenantIds?: string[];
 }
 
 export interface FeatureFlagRecord {
