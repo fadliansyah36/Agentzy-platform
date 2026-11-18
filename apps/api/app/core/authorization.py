@@ -186,13 +186,17 @@ async def authorize_action(
                     select id from public.break_glass_requests
                     where requester_user_id=:user_id and status='active'
                       and expires_at > now()
-                      and requested_scope->'permission_keys' @> jsonb_build_array(:permission_key)
+                      and (
+                        requested_scope->'permission_keys' @> jsonb_build_array(:permission_key)
+                        or requested_scope->'permission_keys' @> jsonb_build_array(:platform_permission)
+                      )
                       and requested_scope->'tenant_ids' @> jsonb_build_array(:tenant_id)
                     order by activated_at desc limit 1
                 """),
                 {
                     "user_id": user_id,
                     "permission_key": permission_key,
+                    "platform_permission": platform_permission,
                     "tenant_id": str(tenant_id),
                 },
             )
@@ -293,6 +297,7 @@ async def authorize_action(
                             "matched_policies": decision.matched_policies,
                             "policy_versions": decision.policy_versions,
                             "evaluated_at": decision.evaluated_at,
+                            "break_glass_id": str(break_glass_id) if break_glass_id else None,
                         },
                         default=str,
                     ),
