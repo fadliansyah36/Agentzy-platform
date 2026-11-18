@@ -253,6 +253,14 @@ def evaluate_policies(
         try:
             if not isinstance(version, int) or isinstance(version, bool) or version < 1:
                 raise PolicyValidationError("Policy version must be a positive integer")
+            effect = str(policy.get("effect", "")).lower()
+            if effect not in {"allow", "deny"}:
+                raise PolicyValidationError("Policy effect must be allow or deny")
+            priority = policy.get("priority", 100)
+            if not isinstance(priority, int) or isinstance(priority, bool):
+                raise PolicyValidationError("Policy priority must be an integer")
+            if not isinstance(policy.get("resource"), str) or not isinstance(policy.get("action"), str):
+                raise PolicyValidationError("Policy resource and action must be strings")
             result = evaluate_condition(policy.get("conditions", {}), context)
         except (PolicyValidationError, KeyError, TypeError, ValueError) as exc:
             invalid = True
@@ -266,8 +274,8 @@ def evaluate_policies(
         if result.matched:
             matched.append({
                 "policy_id": str(policy.get("id", "unknown")),
-                "effect": str(policy.get("effect", "")).upper(),
-                "priority": int(policy.get("priority", 100)),
+                "effect": effect.upper(),
+                "priority": priority,
                 "version": version,
             })
         else:
