@@ -234,7 +234,8 @@ async def request_break_glass(
                   tenant_id,requester_user_id,reason,requested_scope,status,request_id
                 ) values (
                   :tenant_id,:actor,:reason,cast(:scope as jsonb),'requested',:request_id
-                ) returning id,tenant_id,requester_user_id,reason,requested_scope,status,requested_at
+                ) returning id,tenant_id,requester_user_id,reason,requested_scope,status,
+                  requested_at
             """),
             {
                 "actor": actor, "reason": payload.reason.strip(),
