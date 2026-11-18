@@ -1,13 +1,11 @@
 # M012 — Security Permission Registry Verification
 
 **Project:** Agentzy-db  
-**Project ref:** `cwhjdnkotuhcegqbpce` (canonical ref confirmed separately as `cwhjdnkotuhcegqbpce`)  
+**Project ref:** `cwhjdnkotuhueeudpgeu`  
 **Remote migration version:** `20261118065058`  
 **Remote migration name:** `phase_01_m012_security_permissions`  
 **Repository source:** `supabase/migrations/20261118065058_m012_security_permissions.sql`  
 **Status:** APPLIED; live catalog verification performed on 2026-11-18.
-
-> Correction: canonical project ref is `cwhjdnkotuhueeudpgeu`. The project URL is `https://cwhjdnkotuhueeudpgeu.supabase.co`.
 
 ## 1. Migration ledger
 
