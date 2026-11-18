@@ -52,8 +52,9 @@ export function AuditIncidentView({
   }, [auditLogs, query]);
 
   const handleExportAudit = () => {
-    void onExportAudit();
-    onNotify('Audit export diminta melalui FastAPI dengan permission export.');
+    void onExportAudit()
+      .then(() => onNotify('Audit export berhasil diunduh dari FastAPI.'))
+      .catch((error) => onNotify(error instanceof Error ? error.message : 'Audit export gagal.'));
   };
 
   return (
