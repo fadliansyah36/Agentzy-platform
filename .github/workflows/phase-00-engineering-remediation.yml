@@ -6,6 +6,10 @@ on:
     paths:
       - ".github/workflows/phase-00-engineering-remediation.yml"
       - "apps/api/**"
+      - "apps/admin/**"
+      - "apps/ai-workforce/**"
+      - "apps/corporate/**"
+      - "apps/web/**"
       - "package.json"
       - "bun.lock"
 
