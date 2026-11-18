@@ -339,6 +339,7 @@ async def authorize_platform_action(
                     where requester_user_id=:user_id and status='active'
                       and expires_at > now()
                       and requested_scope->'permission_keys' @> jsonb_build_array(:permission_key)
+                      and coalesce(requested_scope->'tenant_ids','[]'::jsonb) = '[]'::jsonb
                     order by activated_at desc limit 1
                 """),
                 {"user_id": user_id, "permission_key": permission_key},
