@@ -160,7 +160,7 @@ async def _audit(
             "actor": actor,
             "action": action,
             "resource_id": str(policy_id),
-            "request_id": request.headers.get("x-request-id"),
+            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
             "ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "metadata": json.dumps(metadata or {}, default=str),
@@ -225,7 +225,7 @@ async def list_access_policies(
         "meta": {
             "next_cursor": next_cursor,
             "has_more": has_more,
-            "request_id": request.headers.get("x-request-id"),
+            "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
         },
     }
 
