@@ -30,7 +30,7 @@ export function AuditIncidentView({
   auditLogs: AuditLogRecord[];
   incidents: IncidentRecord[];
   onOpenAuditDetail: (logId: string) => void;
-  onExportAudit: () => void;
+  onExportAudit: () => Promise<void>;
   onOpenCreateIncident: () => void;
   onResolveIncident: (id: string) => void;
   onNotify: (msg: string) => void;
