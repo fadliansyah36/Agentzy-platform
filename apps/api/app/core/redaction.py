@@ -1,0 +1,46 @@
+"""Recursive redaction for audit and security event payloads."""
+
+import re
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+_REDACTED = "[REDACTED]"
+_SENSITIVE_KEYS = frozenset({
+    "accesstoken", "refreshtoken", "idtoken", "token", "secret", "clientsecret",
+    "password", "passwd", "credential", "credentials", "authorization",
+    "proxyauthorization", "cookie", "setcookie", "apikey", "privatekey",
+    "email", "emailaddress", "phone", "phonenumber", "mobile", "ip",
+    "ipaddress", "useragent", "sessiontoken", "webhooksecret", "nik",
+    "npwp", "passport", "bankaccount", "accountnumber", "dateofbirth",
+})
+_SENSITIVE_SUFFIXES = (
+    "accesstoken", "refreshtoken", "idtoken", "clientsecret", "webhooksecret",
+    "password", "credential", "authorization", "cookie", "apikey", "privatekey",
+    "emailaddress", "phonenumber", "ipaddress", "sessiontoken",
+)
+_BEARER = re.compile(r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]{12,}")
+_JWT = re.compile(r"\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{8,}\\b")
+
+
+def _normalized_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).lower())
+
+
+def redact_audit_value(value: Any) -> Any:
+    """Redact sensitive fields recursively and opaque bearer/JWT credentials in text."""
+    if isinstance(value, Mapping):
+        result = {}
+        for key, item in value.items():
+            normalized = _normalized_key(key)
+            sensitive = normalized in _SENSITIVE_KEYS or any(
+                normalized.endswith(suffix) for suffix in _SENSITIVE_SUFFIXES
+            )
+            result[str(key)] = _REDACTED if sensitive else redact_audit_value(item)
+        return result
+    if isinstance(value, list):
+        return [redact_audit_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [redact_audit_value(item) for item in value]
+    if isinstance(value, str):
+        return _JWT.sub(_REDACTED, _BEARER.sub(_REDACTED, value))
+    return value
