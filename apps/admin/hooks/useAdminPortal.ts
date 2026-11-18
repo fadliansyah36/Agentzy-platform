@@ -325,24 +325,16 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
       const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
       const organizationUnits: OrgUnitRecord[] = [
-        ...unitRows.map((item) => ({
-          id: item.id,
-          tenantId: tenant.id,
-          name: item.name,
-          unitType: 'Cabang / Regional' as const,
-          parentName: item.parent_unit_id ? unitNames.get(item.parent_unit_id) ?? '' : '',
-          headName: '',
-          memberCount: 0,
-          status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
-        })),
         ...branchRows.map((item) => ({
           id: item.id,
           tenantId: tenant.id,
           name: item.name,
           unitType: 'Cabang / Regional' as const,
-          parentName: item.organization_unit_id ? unitNames.get(item.organization_unit_id) ?? '' : '',
-          headName: '',
-          memberCount: 0,
+          parentName: item.organization_unit_id
+            ? unitNames.get(item.organization_unit_id) ?? null
+            : null,
+          headName: null,
+          memberCount: null,
           status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
         })),
         ...departmentRows.map((item) => ({
@@ -351,12 +343,12 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           name: item.name,
           unitType: 'Departemen' as const,
           parentName: item.branch_id
-            ? branchNames.get(item.branch_id) ?? ''
+            ? branchNames.get(item.branch_id) ?? null
             : item.parent_department_id
-              ? departmentRows.find((parent) => parent.id === item.parent_department_id)?.name ?? ''
-              : '',
-          headName: '',
-          memberCount: 0,
+              ? departmentRows.find((parent) => parent.id === item.parent_department_id)?.name ?? null
+              : null,
+          headName: null,
+          memberCount: null,
           status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
         })),
       ];
