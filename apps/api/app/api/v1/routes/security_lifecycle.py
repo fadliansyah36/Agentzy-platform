@@ -21,6 +21,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.pagination import PageMeta, PageResponse, decode_time_id_cursor, encode_time_id_cursor
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
@@ -865,29 +866,50 @@ async def review_break_glass(
     return result
 
 
-@router.get("/break-glass/requests")
+@router.get("/break-glass/requests", response_model=PageResponse)
 async def list_break_glass_requests(
     request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
-):
+) -> PageResponse:
     actor = await _require_platform_permission(
         claims, session, "platform.security.manage", "manage", "break_glass_requests"
     )
     async with engine.begin() as connection:
         await _expire_break_glass(connection, request)
+    params = {"limit": limit + 1}
+    cursor_clause = ""
+    if cursor:
+        requested_at, request_row_id = decode_time_id_cursor(cursor)
+        cursor_clause = "where (requested_at,id) < (:cursor_requested_at,:cursor_id)"
+        params.update({"cursor_requested_at": requested_at, "cursor_id": request_row_id})
     async with engine.connect() as connection:
         result = await connection.execute(
-            text("""
+            text(f"""
                 select id,tenant_id,requester_user_id,approver_user_id,reason,requested_scope,
                        status,requested_at,approved_at,activated_at,expires_at,
                        revoked_at,reviewed_at
                 from public.break_glass_requests
+                {cursor_clause}
                 order by requested_at desc,id desc
-                limit 200
-            """)
+                limit :limit
+            """),
+            params,
         )
-    return {"data": [dict(row) for row in result.mappings().all()], "actor": str(actor)}
+    rows = [dict(row) for row in result.mappings().all()]
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return PageResponse(
+        data=rows,
+        meta=PageMeta(
+            has_more=has_more,
+            next_cursor=encode_time_id_cursor(rows[-1]["requested_at"], rows[-1]["id"])
+            if has_more and rows else None,
+            request_id=_request_id(request),
+        ),
+    )
 
 
 async def _audit_rows(
@@ -1015,7 +1037,7 @@ async def _audit_rows(
     return safe, has_more, next_cursor
 
 
-@router.get("/audit")
+@router.get("/audit", response_model=PageResponse)
 async def read_audit_logs(
     request: Request,
     tenant_id: UUID | None = None,
