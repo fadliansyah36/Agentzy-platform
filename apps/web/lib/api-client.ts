@@ -188,6 +188,27 @@ export type AgentzyDepartment = {
   parent_department_id: string | null; name: string; code: string; status: string;
 };
 
+export type AgentzyWorkforceTenantContext = {
+  tenant_id: string;
+  membership_id: string | null;
+  organization_id: string | null;
+  organization_unit_id: string | null;
+  branch_id: string | null;
+  department_id: string | null;
+  role_keys: string[];
+  permissions: string[];
+  organizations: AgentzyOrganization[];
+  organization_units: AgentzyOrganizationUnit[];
+  branches: AgentzyBranch[];
+  departments: AgentzyDepartment[];
+};
+
+export const getWorkforceTenantContext = (accessToken: string, tenantId: string) =>
+  apiRequest<AgentzyWorkforceTenantContext>(
+    `/tenants/${encodeURIComponent(tenantId)}/workforce-context`,
+    { method: "GET", accessToken },
+  );
+
 export const listOrganizationUnits = (accessToken: string, tenantId: string) =>
   apiRequest<AgentzyOrganizationUnit[]>(`/tenants/${encodeURIComponent(tenantId)}/organization-units`, {
     method: "GET", accessToken,
