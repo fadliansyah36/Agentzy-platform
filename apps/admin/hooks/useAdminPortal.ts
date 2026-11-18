@@ -751,6 +751,14 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       const definitions = permissionRegistry.filter((item) =>
         (item.resource ?? item.domain) === resourceKey
       );
+      if (role.scopeType === 'Platform' && definitions.some((item) => !item.key.startsWith('platform.'))) {
+        showToast('Platform role hanya dapat mengelola permission platform.');
+        return;
+      }
+      if (role.scopeType === 'Tenant' && definitions.some((item) => item.key.startsWith('platform.'))) {
+        showToast('Tenant role tidak dapat menerima permission platform.');
+        return;
+      }
       const targetKeys = definitions.filter((item) => {
         if (next === 'F') return true;
         if (next === 'C/U') return ['create', 'update', 'manage', 'write'].includes(item.action);
