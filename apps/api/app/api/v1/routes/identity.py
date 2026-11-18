@@ -120,7 +120,7 @@ async def update_identity(
             {
                 "actor": user_id,
                 "resource_id": str(user_id),
-                "request_id": request.headers.get("x-request-id"),
+                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
                 "metadata": json.dumps(values, default=str),
             },
         )
@@ -219,7 +219,7 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
                       reason=excluded.reason,
                       request_id=excluded.request_id
             """),
-            {"user_id": user_id, "request_id": request.headers.get("x-request-id")},
+            {"user_id": user_id, "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id")},
         )
         await connection.execute(
             text("""
@@ -233,7 +233,7 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
             {
                 "actor": user_id,
                 "resource_id": str(session_id),
-                "request_id": request.headers.get("x-request-id"),
+                "request_id": getattr(request.state, "request_id", None) or request.headers.get("x-request-id"),
             },
         )
     return {"status": "revoked", "scope": "all_sessions"}
