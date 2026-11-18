@@ -961,7 +961,6 @@ async def revoke_membership(
     return response_body
 
 
-
 @router.post(
     "/{tenant_id}/memberships/{membership_id}/activate",
     status_code=status.HTTP_200_OK,
@@ -1064,12 +1063,19 @@ async def activate_membership(
         )
         response_body = {"id": str(membership_id), "status": "active"}
         await _audit(
-            connection, request, actor, tenant_id, "membership.activated",
-            "membership", membership_id,
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "membership.activated",
+            "membership",
+            membership_id,
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=response_body,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response_body,
         )
     return response_body
 
@@ -1244,7 +1250,6 @@ async def assign_membership_role(
     return response_body
 
 
-
 @router.put(
     "/{tenant_id}/memberships/{membership_id}/roles",
     status_code=status.HTTP_200_OK,
@@ -1270,7 +1275,10 @@ async def replace_membership_role(
     if payload.valid_until is not None and payload.valid_until <= datetime.now(UTC):
         raise HTTPException(status_code=422, detail="Masa berlaku role harus berada di masa depan.")
     elevated_roles = {
-        "corporate_owner", "corporate_admin", "corporate_ai_manager", "ai_workforce_admin"
+        "corporate_owner",
+        "corporate_admin",
+        "corporate_ai_manager",
+        "ai_workforce_admin",
     }
     if role_key in elevated_roles and context is not None:
         owner = await session.execute(
@@ -1308,8 +1316,12 @@ async def replace_membership_role(
         raise HTTPException(status_code=422, detail="Scope ID wajib diisi untuk role scoped.")
     async with engine.begin() as connection:
         reservation = await _reserve_command(
-            connection, request, actor, tenant_id,
-            f"membership.role.replace:{membership_id}", payload.model_dump(mode="json"),
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"membership.role.replace:{membership_id}",
+            payload.model_dump(mode="json"),
         )
         if isinstance(reservation, JSONResponse):
             return reservation
@@ -1330,10 +1342,12 @@ async def replace_membership_role(
             raise HTTPException(status_code=409, detail="Membership tidak dapat diubah.")
         if context is not None:
             authorize_object(
-                context, resource_tenant_id=tenant_id,
+                context,
+                resource_tenant_id=tenant_id,
                 organization_id=target["organization_id"],
                 organization_unit_id=target["organization_unit_id"],
-                branch_id=target["branch_id"], department_id=target["department_id"],
+                branch_id=target["branch_id"],
+                department_id=target["department_id"],
             )
         role_result = await connection.execute(
             text("""
@@ -1405,27 +1419,41 @@ async def replace_membership_role(
                 )
             """),
             {
-                "membership_id": membership_id, "role_id": role["id"], "actor": actor,
-                "scope_type": payload.scope_type, "scope_id": payload.scope_id,
+                "membership_id": membership_id,
+                "role_id": role["id"],
+                "actor": actor,
+                "scope_type": payload.scope_type,
+                "scope_id": payload.scope_id,
                 "valid_until": payload.valid_until,
             },
         )
         response_body = {
-            "membership_id": str(membership_id), "role_key": role_key,
+            "membership_id": str(membership_id),
+            "role_key": role_key,
             "previous_role_keys": previous_role_keys,
             "scope_type": payload.scope_type,
             "scope_id": str(payload.scope_id) if payload.scope_id else None,
             "valid_until": payload.valid_until.isoformat() if payload.valid_until else None,
         }
         await _audit(
-            connection, request, actor, tenant_id, "membership.role.replaced",
-            "membership", membership_id,
-            {"previous_role_keys": previous_role_keys, "role_key": role_key,
-             "scope_type": payload.scope_type},
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "membership.role.replaced",
+            "membership",
+            membership_id,
+            {
+                "previous_role_keys": previous_role_keys,
+                "role_key": role_key,
+                "scope_type": payload.scope_type,
+            },
         )
         await complete_idempotency(
-            connection, record_id=reservation.record_id,
-            response_status=200, response_body=response_body,
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response_body,
         )
     return response_body
 
