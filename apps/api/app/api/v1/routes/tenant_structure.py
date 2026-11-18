@@ -1315,7 +1315,8 @@ async def replace_membership_role(
             return reservation
         membership_result = await connection.execute(
             text("""
-                select id,user_id,status,organization_id,organization_unit_id,\n                       branch_id,department_id
+                select id,user_id,status,organization_id,organization_unit_id,
+                       branch_id,department_id
                 from public.memberships
                 where id=:membership_id and tenant_id=:tenant_id
                 for update
