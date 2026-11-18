@@ -10,6 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.abac import PolicyDecision, evaluate_policies
 
 
+def _resource_uuid(value) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True, slots=True)
 class TenantAccessContext:
     user_id: UUID
@@ -225,11 +234,7 @@ async def authorize_action(
             permission_key=permission_key,
             platform_permission=platform_permission,
             aal=aal,
-            resource_id=(
-                UUID(str(resource["id"]))
-                if resource.get("id") is not None
-                else None
-            ),
+            resource_id=_resource_uuid(resource.get("id")),
         )
     except HTTPException as exc:
         if exc.status_code != 403 or aal != "aal2":
