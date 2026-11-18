@@ -317,10 +317,10 @@ No Phase 01 coding is authorized by this report. The already-applied M010 migrat
 
 ## 10. Engineering-check and execution evidence
 
-- GitHub recursive tree returned `truncated=false`; source path inventory and counts recorded in §6.
+- GitHub recursive tree returned `truncated=false`; source path inventory and counts recorded in §6. The GitHub branch API reports `main` is currently **not protected** and required status checks are disabled; this is a repository-governance residual (no branch-protection setting was changed because the requested execution model is direct-to-main and policy approval is required).
 - Supabase project metadata, migration history, function definition, event trigger, table RLS flags, policies, grants, default ACLs, role attributes, constraints, indexes, extensions and Storage bucket count were queried read-only.
-- Existing GitHub Actions dependency/license review run `44138463292` is recorded as successful in the existing evidence. It validates package/license inventory collection and coordinate reconciliation, not application build correctness or legal approval.
-- Build/lint/type-check, Python compile/import, migration consistency, OpenAPI validation and focused deterministic checks were **not executed in this audit**. A local repository checkout/runtime was not available through the current GitHub connector path; do not claim these checks passed. This remains an engineering evidence gap.
+- Existing GitHub Actions dependency/license review run `44138463292` completed successfully on commit `ffb514ce42aa917e9b63382f153c5306872c710b` (17 Nov 2026). It validates package/license inventory collection and coordinate reconciliation, not the latest documentation HEAD, application build correctness or legal approval.
+- Current Auth users = 0; Storage buckets = 0, objects = 0 and Storage policies = 0 in the live catalog. No authoritative hosted Auth settings or Data API schema setting was obtained. Build/lint/type-check, Python compile/import, migration consistency, OpenAPI validation and focused deterministic checks were **not executed in this audit**. A local repository checkout/runtime was not available through the current GitHub connector path; do not claim these checks passed. This remains an engineering evidence gap.
 - No deployment, staging, UAT, real-world, load or security-acceptance tests were run.
 
 ## 11. Source and evidence references
