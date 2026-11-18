@@ -7,10 +7,12 @@ from app.db.session import user_session
 from app.schemas.identity import IdentityRead, MembershipRead
 
 router = APIRouter()
+claims_dependency = Depends(current_claims)
+session_dependency = Depends(user_session)
 
 
 @router.get("/me", response_model=IdentityRead)
-async def read_identity(claims: dict = Depends(current_claims), session: AsyncSession = Depends(user_session)) -> IdentityRead:
+async def read_identity(claims: dict = claims_dependency, session: AsyncSession = session_dependency) -> IdentityRead:
     result = await session.execute(text("""
         select m.id, m.tenant_id, t.name as tenant_name, m.organization_id, m.status,
                coalesce(array_agg(distinct r.key) filter (where r.key is not null), '{}') as role_keys,
