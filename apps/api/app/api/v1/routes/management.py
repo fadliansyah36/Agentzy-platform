@@ -726,14 +726,38 @@ async def list_tenant_memberships(
     session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
-    allowed = await _has_tenant_permission(
-        session, user_id, tenant_id, ("corporate.organization.read",)
-    )
-    if not allowed:
+    context = None
+    try:
+        context, _ = await authorize_action(
+            session,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            permission_key="corporate.organization.read",
+            platform_permission="",
+            aal=None,
+            resource_type="corporate.organization",
+            action="read",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
         _require_aal2(claims)
-        allowed = await _has_platform_permission(session, user_id, "platform.memberships.read")
-    if not allowed:
-        raise HTTPException(status_code=403, detail="Missing tenant membership read permission.")
+        await authorize_platform_action(
+            session,
+            user_id=user_id,
+            permission_key="platform.memberships.read",
+            resource_type="platform.memberships",
+            action="read",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
+    params = {
+        "tenant_id": tenant_id,
+        "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
+        "branch_id": context.branch_id if context else None,
+        "department_id": context.department_id if context else None,
+    }
     async with engine.connect() as connection:
         result = await connection.execute(
             text("""
@@ -743,16 +767,26 @@ async def list_tenant_memberships(
                 coalesce(
                     array_agg(distinct r.key) filter (where r.key is not null),
                     '{}'
-                ) as role_keys
+                ) as role_keys,
+                coalesce(
+                    array_agg(distinct rp.permission_key)
+                      filter (where rp.permission_key is not null),
+                    '{}'
+                ) as permissions
             from public.memberships m
             left join public.profiles p on p.user_id=m.user_id
             left join public.membership_roles mr on mr.membership_id=m.id
             left join public.roles r on r.id=mr.role_id
+            left join public.role_permissions rp on rp.role_id=r.id
             where m.tenant_id=:tenant_id
+              and (:organization_id is null or m.organization_id=:organization_id)
+              and (:organization_unit_id is null or m.organization_unit_id=:organization_unit_id)
+              and (:branch_id is null or m.branch_id=:branch_id)
+              and (:department_id is null or m.department_id=:department_id)
             group by m.id,p.display_name,p.email
             order by m.created_at desc
         """),
-            {"tenant_id": tenant_id},
+            params,
         )
         return [dict(row) for row in result.mappings().all()]
 
