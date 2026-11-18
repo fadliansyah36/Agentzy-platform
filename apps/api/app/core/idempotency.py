@@ -42,7 +42,10 @@ async def reserve_idempotency(
     if not idempotency_key:
         raise HTTPException(status_code=428, detail="Idempotency-Key header is required.")
     if not 8 <= len(idempotency_key) <= 128:
-        raise HTTPException(status_code=422, detail="Idempotency-Key length must be 8–128 characters.")
+        raise HTTPException(
+            status_code=422,
+            detail="Idempotency-Key length must be 8–128 characters.",
+        )
     fingerprint = request_fingerprint(payload)
     now = datetime.now(UTC)
     expires = now + timedelta(hours=ttl_hours)
@@ -82,7 +85,10 @@ async def reserve_idempotency(
     )
     existing = existing_result.mappings().first()
     if existing is None:
-        raise HTTPException(status_code=409, detail="Idempotency reservation could not be acquired.")
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency reservation could not be acquired.",
+        )
     if existing["expires_at"] <= now:
         await connection.execute(
             text("""
@@ -96,7 +102,10 @@ async def reserve_idempotency(
         )
         return IdempotencyReservation(existing["id"])
     if existing["request_fingerprint"] != fingerprint:
-        raise HTTPException(status_code=409, detail="Idempotency-Key was already used with a different payload.")
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency-Key was already used with a different payload.",
+        )
     if existing["status"] == "completed":
         return IdempotencyReservation(
             existing["id"],
@@ -113,7 +122,10 @@ async def reserve_idempotency(
             {"id": existing["id"]},
         )
         return IdempotencyReservation(existing["id"])
-    raise HTTPException(status_code=409, detail="A command with this Idempotency-Key is still processing.")
+    raise HTTPException(
+        status_code=409,
+        detail="A command with this Idempotency-Key is still processing.",
+    )
 
 
 async def complete_idempotency(
