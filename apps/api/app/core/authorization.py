@@ -8,7 +8,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.abac import PolicyDecision, evaluate_policies
-from app.db.session import engine
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,6 +206,8 @@ async def authorize_action(
         "type": resource_type,
     }
     try:
+        from app.db.session import engine
+
         # Policy documents are intentionally private. Query only the resolved tenant
         # and global baseline policies through the backend's private database role.
         async with engine.connect() as connection:
@@ -300,6 +301,8 @@ async def authorize_platform_action(
     }
     resource_context = {**resource, "type": resource_type}
     try:
+        from app.db.session import engine
+
         async with engine.connect() as connection:
             result = await connection.execute(
                 text("""
