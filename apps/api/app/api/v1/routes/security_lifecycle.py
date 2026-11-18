@@ -796,7 +796,10 @@ async def _audit_rows(
             params["scope_organization_id"] = context.organization_id
             filters.append("""
                 (
-                  (resource_type='organization' and resource_id=cast(:scope_organization_id as text))
+                  (
+                    resource_type='organization'
+                    and resource_id=cast(:scope_organization_id as text)
+                  )
                   or (resource_type='organization_unit' and resource_id in (
                     select id::text from public.organization_units
                     where tenant_id=:tenant_id and organization_id=:scope_organization_id
