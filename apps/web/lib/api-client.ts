@@ -45,6 +45,8 @@ export type AgentzyRoleTemplate = {
   name: string;
   description: string | null;
   is_system: boolean;
+  scope_type: string;
+  tenant_id: string | null;
   permissions: string[];
 };
 
