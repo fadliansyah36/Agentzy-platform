@@ -526,3 +526,18 @@ No staging, UAT, real-world acceptance, load testing, security acceptance or pro
 - Read-only Supabase evidence: 9 core tables, all 9 with RLS enabled; 15 role templates; 45 permissions; 134 role-permission grants; Auth profile trigger and profile email projection present; zero Auth users (expected until bootstrap invitation is executed).
 - Static build/type/lint checks have not been run in this continuation. No staging, UAT, real-world, load, security acceptance or production release testing has been run.
 - Remaining Phase 01 gates: configure and deploy the FastAPI service with DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY and PLATFORM_BOOTSTRAP_TOKEN; configure frontend API URL and Supabase publishable key; configure production Auth redirect URL and SMTP; execute first-admin bootstrap and enroll TOTP; complete remaining domain API integrations and run minimum deterministic engineering checks. Phase 01 remains IN PROGRESS.
+
+
+## 15. Live-state reconciliation after identity foundation — 2026-11-18
+
+Evidence is recorded in `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.md` (updated commit `90d55ec00256be32ec9e5e51fb5e51310ab9421c`).
+
+- Supabase project `cwhjdnkotuhueeudpgeu` is `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `ap-northeast-1`.
+- Remote migration history confirms three applied versions: `20261117175948`, `20261117181011`, `20261117182410`.
+- Read-only live catalog: 9 public application tables; 9/9 have RLS enabled; 15 system role templates; 45 permission keys; 134 role-permission grants; zero Auth users; zero Storage buckets.
+- Security Advisor still reports two WARN findings for `public.rls_auto_enable()` executable by `anon` and `authenticated`. No function, ACL, trigger, or schema change was made.
+- Performance Advisor reports five INFO findings for unindexed foreign keys and seven INFO findings for unused indexes. Review workload and query plans before any index changes; unused-index findings are not deletion instructions.
+- API runtime deployment, private backend secrets, frontend production environment, Supabase Auth redirect/SMTP/provider settings, first-admin bootstrap and TOTP enrollment remain unconfigured/unverified.
+- Static build/type/lint and Python compile/import checks remain NOT RUN. No staging, UAT, real-world, load, security-acceptance or production-release testing was run.
+
+**Phase guard:** Phase 00 remains IN PROGRESS and unsigned. The already-applied identity foundation migrations are existing implementation state and do not waive Phase 00 exit acceptance. Do not start additional Phase 01 domain scope until Phase 00 readiness is signed off. Do not claim Phase 01 complete.
