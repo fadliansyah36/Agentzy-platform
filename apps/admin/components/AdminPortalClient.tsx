@@ -169,6 +169,7 @@ export function AdminPortalClient({
         {portal.activeSection === 'rbac' && (
           <RbacMatrixView
             roles={portal.roles}
+            permissionRegistry={portal.permissionRegistry}
             onOpenRoleModal={(role) => portal.setModal({ type: 'role-crud', role })}
             onCyclePermission={portal.cycleRolePermission}
             onDeleteRole={portal.deleteRbacRole}
