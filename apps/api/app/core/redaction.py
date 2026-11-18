@@ -58,8 +58,8 @@ _SENSITIVE_SUFFIXES = (
     "ipaddress",
     "sessiontoken",
 )
-_BEARER = re.compile(r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]{12,}")
-_JWT = re.compile(r"\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{8,}\\b")
+_BEARER = re.compile(r"(?i)(?<![A-Za-z0-9])Bearer[ \t]+[A-Za-z0-9._~+/=-]{12,}")
+_JWT = re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
 
 
 def _normalized_key(value: Any) -> str:
