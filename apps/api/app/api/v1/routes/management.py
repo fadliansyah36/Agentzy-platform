@@ -607,13 +607,21 @@ async def invite_tenant_member(
         )
     role_result = await session.execute(
         text("""
-        select id from public.roles where key=:role_key and tenant_id is null
+        select id,scope_type from public.roles
+        where key=:role_key and (tenant_id is null or tenant_id=:tenant_id)
+        order by tenant_id nulls first
+        limit 1
     """),
-        {"role_key": role_key},
+        {"role_key": role_key, "tenant_id": tenant_id},
     )
-    role_id = role_result.scalar_one_or_none()
-    if role_id is None:
+    role_row = role_result.mappings().first()
+    if role_row is None:
         raise HTTPException(status_code=422, detail="Role template tidak ditemukan.")
+    if role_row["scope_type"] != "tenant":
+        raise HTTPException(
+            status_code=422, detail="Platform-scoped role tidak dapat diberikan ke tenant."
+        )
+    role_id = role_row["id"]
 
     async with engine.connect() as connection:
         existing_membership = await connection.execute(
