@@ -654,7 +654,7 @@ This section supersedes stale Phase 01 status rows above where they conflict wit
 ### Canonical current baseline
 
 - Repository: `fadliansyah36/Agentzy-platform`, branch `main`.
-- Code head before this documentation update: `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8`.
+- Code head before this documentation update: `5755d5bd87246d4240fe488624d1c7a07a853d82`.
 - Supabase: Agentzy-db, ref `cwhjdnkotuhueeudpgeu`.
 - Current remote migration history contains six versions: three original identity migrations, M010 `20261118062335`, M011 `20261118062647`, and M012 `20261118065058`.
 - The old 2026-11-17 audit and earlier Phase 01 report statements that M010 was source-only are historical and superseded by the current remote ledger and M010 post-migration report.
@@ -693,7 +693,7 @@ Reports:
 | Organization hierarchy | PARTIAL | Branch/department create/list/update/archive/restore exists; complete UI/membership assignment and all lifecycle invariants remain to be verified |
 | Admin RBAC | PARTIAL | Live permission registry is passed to Admin matrix; complete scope management, preview, revoke and portal parity remain |
 | Cross-portal integration | PARTIAL | Super Admin and Corporate use selected identity/hierarchy APIs; AI Workforce consumes tenant context but full registry/hierarchy wiring is incomplete |
-| Session/password recovery | PARTIAL | Session validation/revocation exists; password recovery across portal login flows is missing |
+| Session/password recovery | PARTIAL | Shared `/auth/recovery` page is linked from Admin, Corporate, AI Workforce and Workforce login surfaces; callback validation, non-enumerating request response, password update and originating portal return path are implemented. Hosted redirect/SMTP and live email delivery remain unverified. |
 | Auth provider event correlation | PARTIAL | Secret-protected, deduplicated event ingestion and session revocation handling exist; hosted webhook registration/secrets and provider runtime are unverified |
 | Break-glass | PARTIAL | Request/approval/rejection/activation/revoke/review API and UI actions exist; no real users/requests, scheduled expiry and full operating evidence |
 | Audit reader | PARTIAL | Scoped audit list/export APIs and Admin wiring exist; full tenant/resource redaction and all portal permission wiring remain |
