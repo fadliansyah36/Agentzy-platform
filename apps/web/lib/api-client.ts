@@ -13,6 +13,10 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
   if (!API_BASE_URL) throw new ApiError("API belum dikonfigurasi. Hubungi administrator.", 503, "API_NOT_CONFIGURED");
   const { accessToken, headers: inputHeaders, ...requestOptions } = options;
   const headers = new Headers(inputHeaders);
+  const requestId = createIdempotencyKey();
+  if (!headers.has("X-Request-ID")) headers.set("X-Request-ID", requestId);
+  if (!headers.has("X-Correlation-ID")) headers.set("X-Correlation-ID", requestId);
+  if (!headers.has("X-Trace-ID")) headers.set("X-Trace-ID", requestId);
   headers.set("Authorization", `Bearer ${accessToken}`);
   headers.set("Accept", "application/json");
   if (requestOptions.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
