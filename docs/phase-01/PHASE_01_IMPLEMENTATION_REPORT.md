@@ -139,3 +139,13 @@ Current live catalog checks:
 ### Current disposition
 
 **Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.** The implementation increment closes specific code-level gaps but does not establish complete legacy endpoint/object authorization coverage, hosted Supabase Auth configuration and email delivery, live user lifecycle evidence, full portal RBAC/hierarchy action parity, audit redaction/export acceptance, or all sensitive API contract/idempotency requirements. Phase 02 remains NOT STARTED.
+
+## 2026-11-18 execution continuation — Super Admin membership directory
+
+- `58be4e9dd9d8512459814afe9f9b86fc7ee5368c` — Super Admin membership directory now loads tenant membership records through `GET /tenants/{tenant_id}/memberships`, uses the existing FastAPI invitation command for new users, and revokes access through the membership revoke endpoint. The directory is permission/AAL2 gated and no longer inserts or deletes local demo users.
+- MFA state is represented as unknown when the membership API does not supply evidence; the UI now says “Status MFA belum diverifikasi” rather than incorrectly asserting that MFA is disabled.
+- Editing another user's profile is deliberately not simulated locally: the current identity API contract does not provide an admin profile-edit operation. Membership role replacement UI is also not complete.
+- `92bc296dc45839a155ff1124e0c64277ce232364` — changed the directory visibility guard to avoid synchronous state mutation inside a React effect and derive visible users from the verified platform membership grant.
+- `14699812969e0117a7fec98b90f1456b6021d3c4` — documentation-only comment clarifying the server-authorized membership visibility guard.
+- GitHub Actions run [44300592550](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300592550) completed **SUCCESS** at code commit `92bc296d`: frontend frozen install, ESLint, TypeScript; Python compile, Ruff, focused deterministic authorization tests, FastAPI import/OpenAPI generation; and migration source consistency all passed.
+- Run [44300279296](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300279296) also completed **SUCCESS** at `90be22e6`, validating the elevated membership-role validity/scope hardening.
