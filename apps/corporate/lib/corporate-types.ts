@@ -146,7 +146,7 @@ export interface CorporateUserMember {
   departmentId?: string | null;
   status: 'Aktif' | 'Menunggu Aktivasi' | 'Ditangguhkan' | 'Dicabut';
   mfaEnabled: boolean | null;
-  lastActive: string;
+  lastActive: string | null;
 }
 
 export interface CorporateAlertItem {
