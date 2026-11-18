@@ -15,6 +15,12 @@ export default function PasswordRecoveryPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const resolveReturnPath = () => {
+    const requested = new URLSearchParams(window.location.search).get('returnTo');
+    return ['/admin', '/corporate', '/ai-workforce', '/workforce'].includes(requested ?? '')
+      ? requested as string
+      : '/admin';
+  };
 
   useEffect(() => {
     const client = getSupabaseBrowserClient();
@@ -23,11 +29,6 @@ export default function PasswordRecoveryPage() {
     void client.auth.getSession().then(({ data }) => {
       if (!alive) return;
       const params = new URLSearchParams(window.location.search);
-      const requestedReturn = params.get('returnTo');
-      const allowedReturnPaths = new Set(['/admin', '/corporate', '/ai-workforce', '/workforce']);
-      if (requestedReturn && allowedReturnPaths.has(requestedReturn)) {
-        setReturnPath(requestedReturn);
-      }
       const recoveryHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
       const recoveryQuery = params.get('type');
       const isRecoveryCallback = recoveryHash === 'recovery' || recoveryQuery === 'recovery';
@@ -64,12 +65,14 @@ export default function PasswordRecoveryPage() {
       setError('Konfigurasi Supabase belum tersedia.');
       return;
     }
+    const nextPath = resolveReturnPath();
+    setReturnPath(nextPath);
     setLoading(true);
     setError(null);
     setMessage(null);
     try {
       await client.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/recovery?returnTo=${encodeURIComponent(returnPath)}`,
+        redirectTo: `${window.location.origin}/auth/recovery?returnTo=${encodeURIComponent(nextPath)}`,
       });
       setPhase('sent');
       setMessage('Jika alamat email terdaftar, instruksi pemulihan akan dikirim. Periksa inbox dan folder spam.');
@@ -100,6 +103,7 @@ export default function PasswordRecoveryPage() {
       setError('Konfirmasi kata sandi tidak sama.');
       return;
     }
+    setReturnPath(resolveReturnPath());
     setLoading(true);
     setError(null);
     try {
