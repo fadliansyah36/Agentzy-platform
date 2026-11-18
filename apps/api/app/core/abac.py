@@ -209,6 +209,8 @@ def evaluate_condition(node: dict[str, Any], context: dict[str, Any]) -> Conditi
         return ConditionResult(False, tuple(item for result in results for item in result.failed))
     if "not" in node:
         result = evaluate_condition(node["not"], context)
+        if any(item.get("reason") == "attribute_missing" for item in result.failed):
+            return ConditionResult(False, result.failed)
         return ConditionResult(
             not result.matched,
             ()
@@ -273,19 +275,26 @@ def evaluate_policies(
         "time": {"now": evaluated_at},
     }
     for policy in ordered:
-        if policy.get("status", "active") != "active":
+        policy_status = policy.get("status", "active")
+        if policy_status == "inactive":
             continue
         policy_tenant = policy.get("tenant_id")
         if policy_tenant is not None and str(policy_tenant) != str(tenant_id):
             continue
         if policy.get("resource") != resource.get("type") or policy.get("action") != action:
             continue
-        start = _as_datetime(policy.get("effective_from"))
-        end = _as_datetime(policy.get("effective_until"))
-        if (start and instant < start) or (end and instant >= end):
-            continue
         version = policy.get("version", 1)
         try:
+            if policy_status != "active":
+                raise PolicyValidationError("Policy status must be active or inactive")
+            start = _as_datetime(policy.get("effective_from"))
+            end = _as_datetime(policy.get("effective_until"))
+            if policy.get("effective_from") is not None and start is None:
+                raise PolicyValidationError("Policy effective_from is invalid")
+            if policy.get("effective_until") is not None and end is None:
+                raise PolicyValidationError("Policy effective_until is invalid")
+            if (start and instant < start) or (end and instant >= end):
+                continue
             if not isinstance(version, int) or isinstance(version, bool) or version < 1:
                 raise PolicyValidationError("Policy version must be a positive integer")
             effect = str(policy.get("effect", "")).lower()
