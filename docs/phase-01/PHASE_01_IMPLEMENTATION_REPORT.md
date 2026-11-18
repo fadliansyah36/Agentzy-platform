@@ -48,3 +48,66 @@ It adds organization units, branches, departments, scoped membership/role metada
 ## Acceptance decision
 
 Phase 01 is **PARTIAL**, not DONE. Acceptance blockers include migration application and post-migration catalog/Advisor evidence, complete ABAC policy evaluation, complete object-level enforcement across existing routes, portal UI wiring for role/organization management, full workforce domain API integration, and successful CI evidence.
+
+
+## Current live re-audit — 2026-11-18 (supersedes stale source-only migration notes above)
+
+The previous sections are historical implementation snapshots. The following live evidence is the current disposition and supersedes older statements that M010 was source-only.
+
+### Current repository state
+
+- Current branch: `main`.
+- Code head before this evidence-doc update: `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8`.
+- The latest implementation commits include hierarchy lifecycle/validation fixes (`e4a7168`, `bf7e79e`, `ce54787`, `c73d3a3`), identity idempotency, security lifecycle, Admin security UI and API-client wiring, and Ruff/lockfile remediation (`2e2c028`).
+- The live repository includes `apps/api/app/core/abac.py`, `apps/api/app/api/v1/routes/access_policies.py`, and `apps/api/app/api/v1/routes/security_lifecycle.py`.
+
+### Database status — verified
+
+Remote migration history contains six applied versions:
+- `20261117175948` — `phase_01_platform_core_identity_tenant`
+- `20261117181011` — `phase_01_system_roles_permissions_auth_profile`
+- `20261117182410` — `phase_01_profile_email_projection`
+- `20261118062335` — `phase_01_m010_identity_tenant_completion`
+- `20261118062647` — `phase_01_m011_abac_security_lifecycle`
+- `20261118065058` — `phase_01_m012_security_permissions`
+
+M010 is **APPLIED** and has a post-migration catalog report at `docs/phase-01/M010_POST_MIGRATION_VERIFICATION.md`. M011 and M012 are also **APPLIED** with reports at `M011_SECURITY_LIFECYCLE_VERIFICATION.md` and `M012_SECURITY_PERMISSION_VERIFICATION.md`.
+
+Current live catalog checks:
+- 18 public application tables; RLS enabled on 18/18; FORCE RLS on 0/18.
+- 67 permission definitions, 67 global baseline policies and 67 policy version snapshots.
+- All 67 current policies are `allow/active`; no live tenant DENY policy is configured.
+- Server-only tables `access_policies`, `access_policy_versions`, `auth_provider_events`, `break_glass_requests`, `idempotency_records`, and `revoked_sessions` have no grants to `anon`, `authenticated`, or `service_role`; RLS is enabled and there are no client policies.
+- `organization_units`, `branches`, and `departments` expose authenticated SELECT only.
+- `public.rls_auto_enable()` remains SECURITY DEFINER but EXECUTE is false for anon/authenticated/service_role; its body is fail-closed.
+- Security Advisor currently returns six INFO findings for intentionally server-only RLS tables with no client policies. The prior anon/authenticated SECURITY DEFINER EXECUTE WARN findings are not in the current payload.
+- Live Auth user count and security lifecycle record counts were zero when queried. This prevents live identity/lifecycle exercise; no production user or business test records were created.
+
+### Current task disposition
+
+| Workstream | Status | Evidence / remaining gap |
+|---|---|---|
+| M010 database | DONE (migration + catalog verification) | Remote version `20261118062335`; verification report exists. M010 does not complete Phase 01 by itself. |
+| M011/M012 security schema | DONE (migration + catalog verification) | Versions `20261118062647` and `20261118065058`; verification reports exist. |
+| Dynamic ABAC evaluator | PARTIAL | Data-only allowlisted evaluator supports nested all/any/not, comparison operators, effective dates, version validation, deny-by-default and DENY precedence. 18 deterministic evaluator cases exist. Policy administration CRUD/versioning exists. Full route coverage, real tenant DENY policy lifecycle, and end-to-end role/scope semantics remain incomplete. |
+| Central object authorization | PARTIAL | Central tenant/object/ABAC helpers are used by hierarchy and selected management/security routes. Legacy tenant, membership, role and other sensitive route coverage has not been proven complete; do not claim IDOR/BOLA closure across all endpoints. |
+| Organization hierarchy | PARTIAL | Branch and department create/list/update/archive/restore endpoints exist; recursive hierarchy checks and pending-membership archive guards were added. Full lifecycle and membership scope UI coverage still needs complete endpoint-to-screen verification. |
+| Admin RBAC | PARTIAL | Admin matrix receives the live permission registry and role-permission endpoints exist. Permission preview/save/revoke, complete scope editing, and all portal consumption are not fully verified. |
+| Cross-portal integration | PARTIAL | Super Admin and Corporate use some FastAPI tenant/hierarchy/permission endpoints; AI Workforce currently consumes tenant context but not the full registry/hierarchy workflow. Corporate/Admin operational collections still have local initial state in source. |
+| Session lifecycle | PARTIAL | JWT/session/account checks and server-side revocation exist; profile/session mutations have idempotency support. Password recovery UI and full provider event configuration/operation remain outstanding. |
+| Auth provider event correlation | PARTIAL | Secret-protected event ingestion, provider-event deduplication and session revocation correlation are implemented. Provider webhook registration/secret deployment and real event processing have not been verified. |
+| Break-glass | PARTIAL | Request/approve/reject/activate/revoke/review endpoints, distinct requester/approver guard, AAL2, scope and expiry checks, audit hooks and Admin actions exist. No real users/requests exist; scheduled expiry, post-incident operating controls and full scope enforcement remain unverified. |
+| Audit reader | PARTIAL | Scoped list/export APIs and Admin API wiring exist. Full tenant/resource redaction and complete permission/UI coverage have not been verified. |
+| API contracts/pagination/idempotency | PARTIAL | Pydantic schemas and cursor pagination exist on selected collections. Universal response/error envelopes, allowlisted filtering/sorting and idempotency for every sensitive mutation are not complete. |
+| Workforce Phase 01 | PARTIAL | Workforce identity, membership, invitation acceptance and hierarchy context are wired. Workforce operational domain APIs and full operational UI integration remain out of scope or incomplete; operational demo data is hidden from the production render path, but source fixtures remain. |
+
+### Engineering checks
+
+- GitHub Actions run [44292254340](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44292254340) passed frontend lint/TypeScript, Python compile/import, Ruff and OpenAPI schema checks, and migration source consistency at commit `fa4ecfcd5b748a6df116299ee2bdecb9b5d21bdf`.
+- A subsequent code-only Ruff/lockfile remediation commit `2e2c028d1eb8ec14d3b05fa79fe045af2bd307b8` was created with `[skip ci]`; it has not yet received a fresh CI run. Do not treat the earlier pass as evidence for that later commit.
+- Deterministic ABAC tests cover allow, deny, precedence, no-match, missing attributes, invalid operator/structure, expiry, disabled policy, cross-tenant resource, nested logic, conflicts, invalid version/effect/time, and missing-attribute NOT semantics. The latest CI job includes test discovery only if the workflow executes its focused test step; verify the workflow log before claiming test execution.
+- No UAT, staging, load/security acceptance, real-world identity test, or production release testing was performed.
+
+### Final disposition
+
+**Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.** The remaining blockers are complete legacy endpoint authorization coverage, password recovery, cross-portal registry/hierarchy integration, universal API contract/idempotency coverage, runtime/provider configuration, and Workforce/Corporate operational-data wiring. Phase 02 is not started or authorized.
