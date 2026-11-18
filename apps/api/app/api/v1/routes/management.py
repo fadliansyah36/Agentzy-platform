@@ -13,6 +13,8 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter()
+claims_dependency = Depends(current_claims)
+session_dependency = Depends(user_session)
 
 
 def _require_aal2(claims: dict) -> None:
@@ -88,8 +90,8 @@ async def _has_tenant_permission(session: AsyncSession, user_id: UUID, tenant_id
 async def create_tenant(
     payload: TenantCreate,
     request: Request,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     _require_aal2(claims)
     user_id = UUID(claims["sub"])
@@ -117,8 +119,8 @@ async def create_organization(
     tenant_id: UUID,
     payload: OrganizationCreate,
     request: Request,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage",))
@@ -157,8 +159,8 @@ async def invite_tenant_member(
     tenant_id: UUID,
     payload: MembershipInvite,
     request: Request,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.manage",))
@@ -232,8 +234,8 @@ async def invite_tenant_member(
 
 @router.get("/roles", tags=["Access Control"])
 async def list_role_templates(
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     allowed = await _has_platform_permission(session, user_id, "platform.roles.read")
@@ -266,8 +268,8 @@ async def list_role_templates(
 @router.get("/tenants/{tenant_id}/memberships", tags=["Membership"])
 async def list_tenant_memberships(
     tenant_id: UUID,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     allowed = await _has_tenant_permission(session, user_id, tenant_id, ("corporate.organization.read",))
@@ -293,8 +295,8 @@ async def list_tenant_memberships(
 
 @router.get("/tenants/directory", tags=["Tenant Administration"])
 async def list_platform_tenants(
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     _require_aal2(claims)
@@ -320,8 +322,8 @@ async def update_tenant(
     tenant_id: UUID,
     payload: TenantUpdate,
     request: Request,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     _require_aal2(claims)
@@ -355,8 +357,8 @@ async def update_tenant(
 async def archive_tenant(
     tenant_id: UUID,
     request: Request,
-    claims: dict = Depends(current_claims),
-    session: AsyncSession = Depends(user_session),
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
 ):
     user_id = UUID(claims["sub"])
     _require_aal2(claims)
