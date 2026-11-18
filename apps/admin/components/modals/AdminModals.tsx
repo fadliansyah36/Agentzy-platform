@@ -154,6 +154,7 @@ export interface AdminModalsProps {
   onSetModal: (next: AdminModalState) => void;
 
   tenants: AdminTenantRecord[];
+  roles: RbacRoleRecord[];
   permissionRegistry: AgentzyPermissionDefinition[];
   corporateSchemas: CorporateCompensationSchema[];
   invoices: PlatformInvoiceRecord[];
@@ -424,6 +425,7 @@ function AdminModalSwitch(props: AdminModalsProps) {
       <OrgUnitCrudModal
         initial={modal.unit}
         tenants={props.tenants}
+        roles={props.roles}
         onClose={onClose}
         onSubmit={props.onUpsertOrgUnit}
       />
@@ -1713,134 +1715,83 @@ function OrgUnitCrudModal({
 function UserCrudModal({
   initial,
   tenants,
+  roles,
   onClose,
   onSubmit,
 }: {
   initial?: PlatformUserRecord;
   tenants: AdminTenantRecord[];
+  roles: RbacRoleRecord[];
   onClose: () => void;
   onSubmit: (p: Omit<PlatformUserRecord, 'id' | 'lastLogin'> & { id?: string }) => void;
 }) {
-  const [tenantId, setTenantId] = useState(
-    initial?.tenantId ?? tenants[0]?.id ?? 'ten-isp-nusantara'
-  );
+  const [tenantId, setTenantId] = useState(initial?.tenantId ?? tenants[0]?.id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
-  const [roleName, setRoleName] = useState(initial?.roleName ?? 'Tenant Admin');
-  const [department, setDepartment] = useState(initial?.department ?? 'Kantor Pusat');
-  const [mfaEnabled, setMfaEnabled] = useState(initial?.mfaEnabled ?? true);
-  const [status, setStatus] = useState<PlatformUserRecord['status']>(
-    initial?.status ?? 'Aktif'
-  );
+  const [roleKey, setRoleKey] = useState(initial?.roleKey ?? '');
+  const tenantRoles = roles.filter((role) => role.scopeType === 'Tenant');
+  const selectedRole = tenantRoles.find((role) => role.key === roleKey);
 
   return (
     <ModalFrame
       title={initial ? `Edit Pengguna: ${initial.name}` : 'Undang Pengguna Platform'}
+      subtitle="Undangan dan role membership diproses oleh FastAPI; status akhir dibaca kembali dari Supabase."
       onClose={onClose}
     >
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const tName =
-            tenants.find((t) => t.id === tenantId)?.name ?? 'ISP Nusantara';
+        onSubmit={(event) => {
+          event.preventDefault();
+          const tenant = tenants.find((item) => item.id === tenantId);
+          if (!tenant || !selectedRole) return;
           onSubmit({
             id: initial?.id,
             tenantId,
-            tenantName: tName,
+            tenantName: tenant.name,
             name,
             email,
-            roleId: 'role-custom',
-            roleName,
-            department,
-            mfaEnabled,
-            status,
+            roleId: selectedRole.id,
+            roleKey: selectedRole.key,
+            roleName: selectedRole.name,
+            department: '',
+            branchScope: '',
+            organizationId: null,
+            organizationUnitId: null,
+            branchId: null,
+            departmentId: null,
+            mfaEnabled: null,
+            status: 'Pending',
           });
         }}
         className="space-y-3"
       >
         <div>
           <label className={labelCls}>Tenant Korporat</label>
-          <select
-            value={tenantId}
-            onChange={(e) => setTenantId(e.target.value)}
-            className={inputCls}
-          >
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+          <select required value={tenantId} onChange={(event) => setTenantId(event.target.value)} className={inputCls}>
+            <option value="" disabled>Pilih tenant</option>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Nama Lengkap</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputCls}
-            />
+            <input required value={name} onChange={(event) => setName(event.target.value)} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Email Kerja</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputCls}
-            />
+            <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className={inputCls} />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <label className={labelCls}>Role</label>
-            <select
-              value={roleName}
-              onChange={(e) => setRoleName(e.target.value)}
-              className={inputCls}
-            >
-              <option value="Tenant Admin">Tenant Admin</option>
-              <option value="Ops Manager">Ops Manager</option>
-              <option value="AI Manager">AI Manager</option>
-              <option value="Finance">Finance</option>
-              <option value="Viewer">Viewer</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>Departemen</label>
-            <input
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>Status</label>
-            <select
-              value={status}
-              onChange={(e) =>
-                setStatus(e.target.value as PlatformUserRecord['status'])
-              }
-              className={inputCls}
-            >
-              <option value="Aktif">Aktif</option>
-              <option value="Pending">Pending</option>
-              <option value="Suspended">Suspended</option>
-            </select>
-          </div>
+        <div>
+          <label className={labelCls}>Role Tenant dari Registry</label>
+          <select required value={roleKey} onChange={(event) => setRoleKey(event.target.value)} className={inputCls}>
+            <option value="" disabled>Pilih role yang tersedia</option>
+            {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
+          </select>
+          {tenantRoles.length === 0 && (
+            <p className="mt-1 text-[11px] text-[#B23A48]">Role tenant belum berhasil dimuat dari API. Undangan tidak dapat dikirim.</p>
+          )}
         </div>
-        <label className="flex items-center gap-2 text-xs text-[#172B3A]">
-          <input
-            type="checkbox"
-            checked={mfaEnabled}
-            onChange={(e) => setMfaEnabled(e.target.checked)}
-            className="accent-[#0284C7]"
-          />
-          <span>Wajibkan MFA (2FA) saat login pertama</span>
-        </label>
-        <ModalActions onClose={onClose} />
+        <ModalActions onClose={onClose} submitLabel="Kirim Undangan" />
       </form>
     </ModalFrame>
   );
