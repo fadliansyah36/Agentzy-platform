@@ -271,3 +271,26 @@ export const replaceRolePermissions = (
   `/roles/${encodeURIComponent(roleId)}/permissions`,
   { method: "PUT", accessToken, body: JSON.stringify({ permission_keys: permissionKeys }) },
 );
+
+
+export type CreateAgentzyRoleInput = {
+  key: string;
+  name: string;
+  description?: string | null;
+  scope_type: 'platform' | 'tenant';
+};
+export const createAgentzyRole = (accessToken: string, payload: CreateAgentzyRoleInput) =>
+  apiRequest<AgentzyRoleTemplate>("/roles", {
+    method: "POST", accessToken, body: JSON.stringify(payload),
+  });
+export const updateAgentzyRole = (
+  accessToken: string,
+  roleId: string,
+  payload: { name?: string; description?: string | null },
+) => apiRequest<AgentzyRoleTemplate>(`/roles/${encodeURIComponent(roleId)}`, {
+  method: "PATCH", accessToken, body: JSON.stringify(payload),
+});
+export const deleteAgentzyRole = (accessToken: string, roleId: string) =>
+  apiRequest<{ id: string; status: string }>(`/roles/${encodeURIComponent(roleId)}`, {
+    method: "DELETE", accessToken,
+  });
