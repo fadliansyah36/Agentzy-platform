@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.abac import PolicyValidationError, validate_condition
 from app.core.authorization import authorize_platform_action
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -237,6 +239,17 @@ async def create_access_policy(
 ):
     actor = await _require_security_admin(claims, session)
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=payload.tenant_id,
+            command_key="access_policy.create",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
         if payload.tenant_id:
             exists = await connection.execute(
                 text("select 1 from public.tenants where id=:id"), {"id": payload.tenant_id}
@@ -300,6 +313,17 @@ async def update_access_policy(
         f"{key}=cast(:{key} as jsonb)" if key == "conditions" else f"{key}=:{key}" for key in values
     ]
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=None,
+            command_key=f"access_policy.update:{policy_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 200,
+                content=reservation.replay_body or {},
+            )
         current = await connection.execute(
             text("select * from public.access_policies where id=:id for update"),
             {"id": policy_id},
