@@ -66,3 +66,16 @@ The authoritative frontend folder mapping is recorded in [`docs/phase-00/FRONTEN
 - Fresh Supabase read-only inspection confirms the existing `ensure_rls` event trigger and the `public.rls_auto_enable()` SECURITY DEFINER function/ACL. Two Security Advisor WARN findings remain; no ACL/function/trigger/schema change was applied pending privilege-semantics validation without violating the no-staging constraint.
 - Auth provider/security and Data API exposed-schema settings remain unverified because they are not exposed by the connected Supabase tool surface. Obtain authorized Dashboard evidence before sign-off.
 - Full detail: `docs/phase-00/PHASE00_CONTINUATION_EVIDENCE_2026-11-18.md`.
+
+
+## Live delta — 2026-11-19
+
+The repository and database were rechecked after the 17 November audit. The live database now contains 28 public application tables (19 prior tables plus 9 Phase 02 tables). The nine Phase 02 migrations are additive and applied in order:
+- `20261119082627_phase_02_public_partnership_acquisition`
+- `20261119082643_phase_02_public_application_capabilities`
+- `20261119082716_phase_02_partnership_authorization_policies`
+- `20261119083254_phase_02_submission_fingerprint`
+
+All nine new tables have RLS enabled and no grants to anon, authenticated or service_role. The private Storage bucket `partnership-quarantine` exists with a 10 MB limit and PDF/JPG/PNG allowlist. Public catalogue contains 9 Human Workforce and 10 AI Workforce entries; FAQ contains 10 entries. No partnership application, prospect, Auth user, session, MFA factor or notification was fabricated.
+
+Security Advisor INFO notices now include the nine server-only tables without client policies. They are not exposed to client roles; no WARN finding was returned in this check. FORCE RLS remains disabled, and no full security acceptance is claimed.
