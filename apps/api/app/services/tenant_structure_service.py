@@ -58,6 +58,13 @@ async def update_organization_unit(
                 status_code=404,
                 detail="Parent organization unit tidak aktif atau berada di luar organisasi.",
             )
+        if authorization_context is not None:
+            authorize_object(
+                authorization_context,
+                resource_tenant_id=tenant_id,
+                organization_id=current["organization_id"],
+                organization_unit_id=parent_unit_id,
+            )
         if parent_unit_id == unit_id:
             raise HTTPException(
                 status_code=409, detail="Unit tidak dapat menjadi induknya sendiri."
@@ -136,6 +143,13 @@ async def set_organization_unit_status(
                 raise HTTPException(
                     status_code=409,
                     detail="Parent unit harus aktif sebelum unit ini dipulihkan.",
+                )
+            if authorization_context is not None:
+                authorize_object(
+                    authorization_context,
+                    resource_tenant_id=tenant_id,
+                    organization_id=current["organization_id"],
+                    organization_unit_id=current["parent_unit_id"],
                 )
     row = await set_organization_unit_status_row(
         connection,
