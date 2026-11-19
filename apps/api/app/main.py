@@ -13,8 +13,8 @@ from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
 from app.core.redaction import redact_audit_value
 from app.db.session import engine
-from app.services.notification_dispatcher import run_notification_worker
 from app.services.attachment_scanner import run_attachment_scanner_worker
+from app.services.notification_dispatcher import run_notification_worker
 
 settings = get_settings()
 logger = structlog.get_logger()
