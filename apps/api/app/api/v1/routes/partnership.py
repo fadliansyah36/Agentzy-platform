@@ -451,6 +451,7 @@ async def upload_partnership_attachment(
     request: Request,
     upload_token: str | None = Header(default=None, alias="X-Application-Upload-Token"),
     filename: str | None = Header(default=None, alias="X-File-Name"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     await _rate_limit(request, action="partnership-attachment", limit=20)
     if not upload_token:
@@ -480,7 +481,23 @@ async def upload_partnership_attachment(
     if not content or not content.startswith(allowed[1]):
         raise HTTPException(status_code=400, detail="File tidak valid atau melebihi 10 MB.")
 
+    if not idempotency_key or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", idempotency_key):
+        raise HTTPException(status_code=400, detail="Idempotency-Key yang valid wajib dikirim.")
     token_hash = hashlib.sha256(upload_token.encode()).hexdigest()
+    file_hash = hashlib.sha256(content).hexdigest()
+    request_fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "application_id": str(application_id),
+                "filename": safe_filename[:255],
+                "content_type": allowed[0],
+                "file_size": len(content),
+                "sha256": file_hash,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
     object_path = f"{application_id}/{uuid4().hex}{extension}"
     storage_url = (
         f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
@@ -525,6 +542,32 @@ async def upload_partnership_attachment(
                     status_code=404, detail="Pengajuan atau akses upload tidak tersedia."
                 )
 
+            prior_result = await connection.execute(
+                text("""
+                    select id,scan_status,request_fingerprint
+                    from public.public_partnership_attachments
+                    where application_id=:application_id
+                      and upload_idempotency_key=:idempotency_key
+                """),
+                {"application_id": application_id, "idempotency_key": idempotency_key},
+            )
+            prior = prior_result.mappings().first()
+            if prior:
+                if prior["request_fingerprint"] != request_fingerprint:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Idempotency-Key lampiran telah digunakan untuk file berbeda.",
+                    )
+                return {
+                    "data": {
+                        "id": str(prior["id"]),
+                        "application_id": str(application_id),
+                        "scan_status": prior["scan_status"],
+                        "download_available": prior["scan_status"] == "clean",
+                    },
+                    "meta": _request_context(request),
+                }
+
             attachment_count = await connection.execute(
                 text("""
                     select count(*) from public.public_partnership_attachments
@@ -550,10 +593,11 @@ async def upload_partnership_attachment(
                 text("""
                     insert into public.public_partnership_attachments(
                       id,application_id,object_path,original_filename,
-                      content_type,file_size,sha256,scan_status
+                      content_type,file_size,sha256,scan_status,
+                      upload_idempotency_key,request_fingerprint
                     ) values(
                       :id,:application_id,:path,:filename,:content_type,
-                      :size,:sha256,'pending_scan'
+                      :size,:sha256,'pending_scan',:idempotency_key,:fingerprint
                     )
                 """),
                 {
@@ -563,7 +607,9 @@ async def upload_partnership_attachment(
                     "filename": safe_filename[:255],
                     "content_type": allowed[0],
                     "size": len(content),
-                    "sha256": hashlib.sha256(content).hexdigest(),
+                    "sha256": file_hash,
+                    "idempotency_key": idempotency_key,
+                    "fingerprint": request_fingerprint,
                 },
             )
     except Exception:
