@@ -504,17 +504,22 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
               <input id="partnership-fax" tabIndex={-1} autoComplete="off" value={faxNumber} onChange={(e) => setFaxNumber(e.target.value)} />
             </div>
 
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-xs text-[#526675]">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#0284C7]"
-              />
-              <span>
-                Saya menyetujui Kebijakan Privasi Agentzy (v2026-01) serta mengizinkan tim Agentzy menghubungi saya untuk proses kualifikasi kemitraan.
-              </span>
-            </label>
+            <div className="space-y-2">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-xs text-[#526675]">
+                <input type="checkbox" checked={privacyConsent} onChange={(e) => setPrivacyConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#0284C7]" />
+                <span>Saya menyetujui Kebijakan Privasi Agentzy (v2026-01) untuk pemrosesan data pengajuan kemitraan.</span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-xs text-[#526675]">
+                <input type="checkbox" checked={communicationConsent} onChange={(e) => setCommunicationConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#0284C7]" />
+                <span>Saya mengizinkan tim Agentzy menghubungi saya untuk proses kualifikasi dan tindak lanjut kemitraan.</span>
+              </label>
+            </div>
+            {TURNSTILE_SITE_KEY && (
+              <div className="rounded-[10px] border border-[#D8E3E9] p-3">
+                <div id="agentzy-partnership-turnstile" />
+                <p className="mt-1 text-[10px] text-[#718391]">Verifikasi keamanan Cloudflare Turnstile.</p>
+              </div>
+            )}
 
             {error && (
               <p className="rounded-[10px] bg-red-50 px-3 py-2 text-xs font-medium text-[#B23A48]">
