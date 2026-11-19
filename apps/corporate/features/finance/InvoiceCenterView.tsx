@@ -38,8 +38,14 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
       setInvoices(invoiceResult.data);
       setContracts(contractResult.data);
       setEntitlements(entitlementResult.data);
-      const nextContractId = form.contract_id || contractResult.data.find(c=>c.status==='active')?.id || '';
-      setForm(p=>({...p,contract_id:nextContractId,service_key:p.service_key || entitlementResult.data.find(e=>e.contract_id===nextContractId && e.monthly_fee!==null)?.service_key || ''}));
+      setForm(p=>{
+        const nextContractId = p.contract_id || contractResult.data.find(c=>c.status==='active')?.id || '';
+        return {
+          ...p,
+          contract_id:nextContractId,
+          service_key:p.service_key || entitlementResult.data.find(e=>e.contract_id===nextContractId && e.monthly_fee!==null)?.service_key || '',
+        };
+      });
       setSelected(current=>current ? invoiceResult.data.find(i=>i.id===current.id) ?? null : null);
     } catch(e) { setError(e instanceof Error?e.message:'Gagal memuat invoice dari FastAPI.'); }
     finally { setLoading(false); }
