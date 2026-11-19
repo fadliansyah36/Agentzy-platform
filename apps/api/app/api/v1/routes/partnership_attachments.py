@@ -120,7 +120,8 @@ async def create_attachment_download(
     if not signed_path:
         raise HTTPException(status_code=502, detail="Storage tidak mengembalikan signed URL.")
     signed_url = (
-        signed_path if signed_path.startswith("http")
+        signed_path
+        if signed_path.startswith("http")
         else f"{settings.supabase_url.rstrip('/')}/storage/v1{signed_path}"
     )
     async with engine.begin() as connection:
@@ -137,12 +138,14 @@ async def create_attachment_download(
                 "actor": actor,
                 "id": str(attachment_id),
                 "request_id": getattr(request.state, "request_id", None),
-                "metadata": json.dumps({
-                    "prospect_id": str(row["prospect_id"]),
-                    "expires_in_seconds": 60,
-                    "scan_status": "clean",
-                    "issued_at": datetime.now(UTC).isoformat(),
-                }),
+                "metadata": json.dumps(
+                    {
+                        "prospect_id": str(row["prospect_id"]),
+                        "expires_in_seconds": 60,
+                        "scan_status": "clean",
+                        "issued_at": datetime.now(UTC).isoformat(),
+                    }
+                ),
             },
         )
     return {

@@ -453,9 +453,7 @@ async def upload_partnership_attachment(
             {"id": application_id},
         )
         stored_application = app_result.mappings().first()
-        stored_token_hash = (
-            stored_application["upload_token_hash"] if stored_application else None
-        )
+        stored_token_hash = stored_application["upload_token_hash"] if stored_application else None
         token_expires_at = (
             stored_application["upload_token_expires_at"] if stored_application else None
         )

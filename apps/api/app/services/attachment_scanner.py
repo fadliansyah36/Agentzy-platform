@@ -91,10 +91,7 @@ async def _scan_one(row: dict) -> None:
     if not settings.supabase_service_role_key:
         raise RuntimeError("SUPABASE_STORAGE_CREDENTIALS_NOT_CONFIGURED")
     object_path = quote(str(row["object_path"]), safe="/")
-    url = (
-        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
-        f"{BUCKET}/{object_path}"
-    )
+    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{BUCKET}/{object_path}"
     headers = {
         "Authorization": f"Bearer {settings.supabase_service_role_key}",
         "apikey": settings.supabase_service_role_key,
@@ -106,17 +103,23 @@ async def _scan_one(row: dict) -> None:
 
     content_hash = hashlib.sha256(content).hexdigest()
     if len(content) != int(row["file_size"]) or content_hash != row["sha256"]:
-        await _finish(row["id"], "rejected", {
-            "state": "rejected", "reason": "stored_object_integrity_mismatch"
-        })
+        await _finish(
+            row["id"],
+            "rejected",
+            {"state": "rejected", "reason": "stored_object_integrity_mismatch"},
+        )
         return
 
     verdict, detail = await _clamav_scan(content)
     await _finish(
         row["id"],
         verdict,
-        {"state": verdict, "engine": "clamav", "result": detail,
-         "scanned_at": datetime.now(UTC).isoformat()},
+        {
+            "state": verdict,
+            "engine": "clamav",
+            "result": detail,
+            "scanned_at": datetime.now(UTC).isoformat(),
+        },
     )
 
 
@@ -142,11 +145,13 @@ async def _defer(attachment_id, error_code: str) -> None:
             """),
             {
                 "id": attachment_id,
-                "result": json.dumps({
-                    "state": "retrying",
-                    "error_code": error_code,
-                    "retry_after": (datetime.now(UTC)).isoformat(),
-                }),
+                "result": json.dumps(
+                    {
+                        "state": "retrying",
+                        "error_code": error_code,
+                        "retry_after": (datetime.now(UTC)).isoformat(),
+                    }
+                ),
             },
         )
         await connection.execute(
@@ -170,9 +175,11 @@ async def dispatch_attachment_scan_batch() -> int:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            error_code = str(exc) if str(exc).startswith(
-                ("CLAMAV_", "SUPABASE_")
-            ) else "ATTACHMENT_SCAN_UNAVAILABLE"
+            error_code = (
+                str(exc)
+                if str(exc).startswith(("CLAMAV_", "SUPABASE_"))
+                else "ATTACHMENT_SCAN_UNAVAILABLE"
+            )
             await _defer(row["id"], error_code)
             logger.warning(
                 "partnership_attachment_scan_deferred",
