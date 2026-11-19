@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, ReceiptText } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { createCorporateInvoice, issueCorporateInvoice, listCorporateContracts, listCorporateInvoices, type ContractInvoice, type CorporateContract } from '@/apps/web/lib/api-client';
+import { createCorporateInvoice, getCorporateInvoice, issueCorporateInvoice, listCorporateContracts, listCorporateInvoices, type ContractInvoice, type CorporateContract } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader } from '../../components/data-display/CorporateDataDisplay';
 
 const inputClass = 'h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
@@ -17,6 +17,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
   const [invoices,setInvoices] = useState<ContractInvoice[]>([]);
   const [contracts,setContracts] = useState<CorporateContract[]>([]);
   const [selected,setSelected] = useState<ContractInvoice | null>(null);
+  const [selectedLines,setSelectedLines] = useState<Array<Record<string,unknown>>>([]);
   const [loading,setLoading] = useState(false);
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
@@ -58,6 +59,16 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
     finally { setSaving(false); }
   };
 
+  const selectInvoice = async (invoice:ContractInvoice) => {
+    setSelected(invoice); setSelectedLines([]);
+    try {
+      const detail = await getCorporateInvoice(token,tenantId,invoice.id);
+      setSelectedLines(detail.data.lines);
+    } catch(e) {
+      setError(e instanceof Error?e.message:'Gagal memuat invoice detail.');
+    }
+  };
+
   const issue = async (invoiceId:string) => {
     setSaving(true); setError(''); setNotice('');
     try {
@@ -90,7 +101,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
     <section className="grid gap-5 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-7">
         <h2 className="text-sm font-bold text-[#17324D]">Invoice Records</h2>
-        {invoices.map(invoice=><button key={invoice.id} onClick={()=>setSelected(invoice)} className={'w-full rounded-xl border p-4 text-left '+(selected?.id===invoice.id?'border-[#0284C7] bg-[#F2FAFD]':'border-[#D8E3E9] bg-white')}>
+        {invoices.map(invoice=><button key={invoice.id} onClick={()=>void selectInvoice(invoice)} className={'w-full rounded-xl border p-4 text-left '+(selected?.id===invoice.id?'border-[#0284C7] bg-[#F2FAFD]':'border-[#D8E3E9] bg-white')}>
           <div className="flex items-center justify-between gap-3"><span className="font-mono text-xs font-bold text-[#0284C7]">{invoice.invoice_number}</span><span className="text-[11px] font-semibold text-[#526675]">{invoice.status}</span></div>
           <p className="mt-1 text-sm font-bold text-[#17324D]">{invoice.title}</p>
           <p className="mt-1 text-xs text-[#718391]">{formatMoney(invoice.total_amount)} · Jatuh tempo {invoice.due_at ?? '—'}</p>
@@ -103,6 +114,10 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
           <p className="mt-2 text-sm font-semibold">{selected.title}</p>
           <p className="mt-3 text-xl font-bold text-[#17324D]">{formatMoney(selected.total_amount)}</p>
           <div className="mt-3 space-y-2 text-xs text-[#526675]"><p>Subtotal: {formatMoney(selected.subtotal)}</p><p>Pajak: {formatMoney(selected.tax_amount)}</p><p>Status: {selected.status}</p><p>Diterbitkan: {selected.issued_at ?? 'Belum diterbitkan'}</p><p>Jatuh tempo: {selected.due_at ?? '—'}</p></div>
+          <div className="mt-4 border-t border-[#EAF2F6] pt-3"><p className="text-xs font-bold text-[#17324D]">Invoice lines</p>
+            {selectedLines.map((line,index)=><div key={String(line.id ?? index)} className="flex justify-between gap-2 py-2 text-xs"><span>{String(line.description)} · qty {String(line.quantity)}</span><span>{formatMoney(String(line.line_amount))}</span></div>)}
+            {!selectedLines.length && <p className="mt-2 text-xs text-[#718391]">Detail line item belum tersedia.</p>}
+          </div>
           {canManage && selected.status==='draft' && <button className={buttonClass+' mt-4'} disabled={saving} onClick={()=>void issue(selected.id)}>Terbitkan Invoice</button>}
         </> : <p className="py-16 text-center text-xs text-[#718391]">Pilih invoice untuk melihat rincian.</p>}
       </div>
