@@ -494,6 +494,7 @@ export function AdminPortalClient({
         onNavigate={portal.navigateTo}
         onSetModal={portal.setModal}
         tenants={portal.tenants}
+        organizationsByTenant={portal.organizationsByTenant}
         roles={portal.roles}
         permissionRegistry={portal.permissionRegistry}
         corporateSchemas={portal.corporateSchemas}
