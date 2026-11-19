@@ -10,11 +10,11 @@ import {
   getContractDocumentDownload, getEffectiveContractEntitlements,
   listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
   requestContractRenewal, listContractVersions, listContractRenewals, decideContractRenewal,
-  submitContractPolicyReview, updateCorporateProfileStatus,
+  getPublicCatalogue, submitContractPolicyReview, updateCorporateProfileStatus,
   upsertCorporateProfile, uploadContractDocument,
   changeContractLifecycle,
   type CorporateContract, type CorporateProfile, type ContractDocument,
-  type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord,
+  type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord, type PublicCatalogueItem,
   type ContractApprovalDelegation,
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
@@ -49,6 +49,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [delegationForm,setDelegationForm] = useState({delegatee_user_id:'',starts_at:'',ends_at:'',reason:''});
   const [entitlements,setEntitlements] = useState<ContractEntitlement[]>([]);
   const [policies,setPolicies] = useState<Array<Record<string,unknown>>>([]);
+  const [catalogue,setCatalogue] = useState<PublicCatalogueItem[]>([]);
   const [loading,setLoading] = useState(false);
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
@@ -85,6 +86,12 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     } else setError(results[1].reason instanceof Error ? results[1].reason.message : 'Gagal memuat kontrak.');
     if (results[2].status === 'fulfilled') setEntitlements(results[2].value.data);
     if (results[3].status === 'fulfilled') setPolicies(results[3].value.data);
+    try {
+      const catalogueResult = await getPublicCatalogue();
+      setCatalogue([...catalogueResult.data.human_workforce, ...catalogueResult.data.ai_workforce]);
+    } catch {
+      setCatalogue([]);
+    }
     setLoading(false);
   },[token,tenant.id]);
 
@@ -272,7 +279,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
           <label><span className={label}>Ringkasan scope</span><textarea className="min-h-20 rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.scope_summary} onChange={(e)=>setNewContract(p=>({...p,scope_summary:e.target.value}))}/></label>
           <label><span className={label}>Terms</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.terms} onChange={(e)=>setNewContract(p=>({...p,terms:e.target.value}))}/></label>
           <div className="rounded-lg bg-[#F5F8FA] p-3"><p className="mb-2 text-xs font-bold text-[#17324D]">Service scope / SLA entitlement</p>
-            <label><span className={label}>Service key katalog</span><input className={field} value={newContract.service_key} onChange={(e)=>setNewContract(p=>({...p,service_key:e.target.value}))}/></label>
+            <label><span className={label}>Service catalogue</span><select className={field} value={newContract.service_key} onChange={(e)=>{const item=catalogue.find(x=>x.service_key===e.target.value);setNewContract(p=>({...p,service_key:e.target.value,service_scope:item?.scope ?? p.service_scope}));}}><option value="">Pilih service catalogue</option>{catalogue.map(item=><option key={item.service_key} value={item.service_key}>{item.name} · {item.service_key}</option>)}</select></label>
             <label className="mt-2 block"><span className={label}>Deskripsi scope</span><textarea className="min-h-16 w-full rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.service_scope} onChange={(e)=>setNewContract(p=>({...p,service_scope:e.target.value}))}/></label>
             <div className="mt-2 grid grid-cols-3 gap-2">
               <label><span className={label}>Fee/bulan</span><input type="number" min="0" className={field} value={newContract.monthly_fee} onChange={(e)=>setNewContract(p=>({...p,monthly_fee:e.target.value}))}/></label>
