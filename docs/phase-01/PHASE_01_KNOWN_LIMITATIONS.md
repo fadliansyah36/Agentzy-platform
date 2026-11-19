@@ -19,3 +19,19 @@
 15. No staging, UAT, real-world testing, load testing, penetration testing, security acceptance or production deployment is claimed.
 
 16. **Latest membership lifecycle increment:** role replacement and suspended-membership activation APIs plus Corporate UI wiring are committed through `2560e24369da21a755bdf253c537e329f7c2f6a4`. GitHub Actions minimum engineering run [44302719914](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44302719914) completed SUCCESS: frontend install/lint/TypeScript, Python compile, Ruff, deterministic authorization checks, FastAPI import/OpenAPI and migration consistency passed.
+
+
+## Execution continuation — 2026-11-19
+
+The Phase 01 status remains **PARTIAL / IN PROGRESS — NOT DONE**.
+
+New live evidence:
+- Supabase project: `cwhjdnkotuhueeudpgeu`, `ACTIVE_HEALTHY`, PostgreSQL 17.12.
+- Live Auth counts: 0 users, 0 sessions, 0 MFA factors. No identity was fabricated.
+- Public schema contains 28 application tables after Phase 02 migrations.
+- The new Phase 02 tables also have RLS enabled and no grants to anon/authenticated/service_role.
+- Supabase Security Advisor INFO notices for RLS-enabled server-only tables without policies are expected from the server-only/no-client-grant design; FORCE RLS and full security acceptance remain separate gaps.
+
+The Supabase connector does not provide hosted Auth configuration management. Provider enablement, Site URL/redirect allowlists, SMTP, MFA enforcement, session settings and webhook registration cannot be changed or verified through the available actions in this execution. The user-facing API/portal lifecycle must still be exercised with real identities after that configuration is available.
+
+The current source review also does not claim complete cross-portal role/membership lifecycle parity or universal object-level authorization closure.
