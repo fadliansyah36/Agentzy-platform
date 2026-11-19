@@ -90,8 +90,15 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     } catch(e) { setError(e instanceof Error ? e.message : 'Gagal memuat detail kontrak.'); }
   },[token,tenant.id]);
 
-  useEffect(() => { void refresh(); },[refresh]);
-  useEffect(() => { if(selectedId) void loadDetail(selectedId); },[selectedId,loadDetail]);
+  useEffect(() => {
+    const task = Promise.resolve().then(() => refresh());
+    return () => { void task; };
+  },[refresh]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const task = Promise.resolve().then(() => loadDetail(selectedId));
+    return () => { void task; };
+  },[selectedId,loadDetail]);
 
   const action = async (fn:()=>Promise<unknown>,message:string) => {
     setSaving(true); setError(''); setNotice('');
