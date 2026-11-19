@@ -1064,7 +1064,7 @@ export const listCorporateInvoices = (accessToken: string, tenantId: string) =>
 export const createCorporateInvoice = (
   accessToken: string, contractId: string, payload: {
     tenant_id: string; invoice_number: string; title: string; currency: string;
-    tax_amount: string; due_at?: string | null;
+    due_at?: string | null;
     lines: Array<{ service_key: string; quantity: string }>;
   },
 ) => apiRequest<{ data: { id: string; status: string; total_amount: string } }>(
