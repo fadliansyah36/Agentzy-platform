@@ -1096,6 +1096,9 @@ async def revoke_membership(
         target = target_result.mappings().first()
         if target is None:
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        await ensure_tenant_owner_retained(
+            connection, tenant_id=tenant_id, membership_id=membership_id
+        )
         if context is not None:
             authorize_object(
                 context,
