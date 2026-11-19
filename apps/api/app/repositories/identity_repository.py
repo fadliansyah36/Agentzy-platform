@@ -51,7 +51,7 @@ async def revoke_session_record(
               session_id,user_id,revoked_at,expires_at,reason,request_id
             ) values(
               :session_id,:user_id,now(),
-              coalesce(:not_after,now()+interval '24 hours'),
+              coalesce(:not_after,'infinity'::timestamptz),
               'user_requested_session_revocation',:request_id
             )
             on conflict(session_id) do update
