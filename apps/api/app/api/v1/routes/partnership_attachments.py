@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.authorization import authorize_platform_action
 from app.core.config import get_settings
 from app.core.security import current_claims
-from app.db.session import user_session
+from app.db.session import engine, user_session
 
 router = APIRouter(tags=["Partnership Attachments"])
 settings = get_settings()
@@ -53,18 +53,19 @@ async def list_prospect_attachments(
     session: AsyncSession = session_dependency,
 ):
     await _authorize_attachment_read(request, claims, session, str(prospect_id))
-    result = await session.execute(
-        text("""
-            select a.id,a.original_filename,a.content_type,a.file_size,a.sha256,
-                   a.scan_status,a.uploaded_at,a.scanned_at
-            from public.public_partnership_attachments a
-            join public.crm_prospects p on p.application_id=a.application_id
-            where p.id=:prospect_id
-            order by a.uploaded_at
-        """),
-        {"prospect_id": prospect_id},
-    )
-    rows = [dict(row) for row in result.mappings().all()]
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select a.id,a.original_filename,a.content_type,a.file_size,a.sha256,
+                       a.scan_status,a.uploaded_at,a.scanned_at
+                from public.public_partnership_attachments a
+                join public.crm_prospects p on p.application_id=a.application_id
+                where p.id=:prospect_id
+                order by a.uploaded_at
+            """),
+            {"prospect_id": prospect_id},
+        )
+        rows = [dict(row) for row in result.mappings().all()]
     for row in rows:
         row["id"] = str(row["id"])
         row["uploaded_at"] = row["uploaded_at"].isoformat()
@@ -81,17 +82,18 @@ async def create_attachment_download(
     session: AsyncSession = session_dependency,
 ):
     actor = await _authorize_attachment_read(request, claims, session, str(attachment_id))
-    result = await session.execute(
-        text("""
-            select a.id,a.application_id,a.object_path,a.original_filename,a.scan_status,
-                   p.id as prospect_id
-            from public.public_partnership_attachments a
-            join public.crm_prospects p on p.application_id=a.application_id
-            where a.id=:id
-        """),
-        {"id": attachment_id},
-    )
-    row = result.mappings().first()
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select a.id,a.application_id,a.object_path,a.original_filename,a.scan_status,
+                       p.id as prospect_id
+                from public.public_partnership_attachments a
+                join public.crm_prospects p on p.application_id=a.application_id
+                where a.id=:id
+            """),
+            {"id": attachment_id},
+        )
+        row = result.mappings().first()
     if row is None:
         raise HTTPException(status_code=404, detail="Lampiran tidak ditemukan.")
     if row["scan_status"] != "clean":
@@ -121,27 +123,28 @@ async def create_attachment_download(
         signed_path if signed_path.startswith("http")
         else f"{settings.supabase_url.rstrip('/')}/storage/v1{signed_path}"
     )
-    await session.execute(
-        text("""
-            insert into public.audit_logs(
-              actor_user_id,action,resource_type,resource_id,request_id,metadata
-            ) values(
-              :actor,'partnership.attachment.download_url_issued',
-              'partnership_attachment',:id,:request_id,cast(:metadata as jsonb)
-            )
-        """),
-        {
-            "actor": actor,
-            "id": str(attachment_id),
-            "request_id": getattr(request.state, "request_id", None),
-            "metadata": json.dumps({
-                "prospect_id": str(row["prospect_id"]),
-                "expires_in_seconds": 60,
-                "scan_status": "clean",
-                "issued_at": datetime.now(UTC).isoformat(),
-            }),
-        },
-    )
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(
+                  :actor,'partnership.attachment.download_url_issued',
+                  'partnership_attachment',:id,:request_id,cast(:metadata as jsonb)
+                )
+            """),
+            {
+                "actor": actor,
+                "id": str(attachment_id),
+                "request_id": getattr(request.state, "request_id", None),
+                "metadata": json.dumps({
+                    "prospect_id": str(row["prospect_id"]),
+                    "expires_in_seconds": 60,
+                    "scan_status": "clean",
+                    "issued_at": datetime.now(UTC).isoformat(),
+                }),
+            },
+        )
     return {
         "data": {
             "attachment_id": str(attachment_id),
