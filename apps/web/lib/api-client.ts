@@ -448,12 +448,21 @@ export const getWorkforceTenantContext = (accessToken: string, tenantId: string)
     { method: "GET", accessToken },
   );
 
-export const listOrganizationUnits = (accessToken: string, tenantId: string) =>
-  fetchAllAgentzyPages<AgentzyOrganizationUnit>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/organization-units`);
-export const listBranches = (accessToken: string, tenantId: string) =>
-  fetchAllAgentzyPages<AgentzyBranch>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/branches`);
-export const listDepartments = (accessToken: string, tenantId: string) =>
-  fetchAllAgentzyPages<AgentzyDepartment>(accessToken, `/tenants/${encodeURIComponent(tenantId)}/departments`);
+export const listOrganizationUnits = (accessToken: string, tenantId: string, includeArchived = false) =>
+  fetchAllAgentzyPages<AgentzyOrganizationUnit>(
+    accessToken,
+    `/tenants/${encodeURIComponent(tenantId)}/organization-units${includeArchived ? '?include_archived=true' : ''}`,
+  );
+export const listBranches = (accessToken: string, tenantId: string, includeArchived = false) =>
+  fetchAllAgentzyPages<AgentzyBranch>(
+    accessToken,
+    `/tenants/${encodeURIComponent(tenantId)}/branches${includeArchived ? '?include_archived=true' : ''}`,
+  );
+export const listDepartments = (accessToken: string, tenantId: string, includeArchived = false) =>
+  fetchAllAgentzyPages<AgentzyDepartment>(
+    accessToken,
+    `/tenants/${encodeURIComponent(tenantId)}/departments${includeArchived ? '?include_archived=true' : ''}`,
+  );
 
 
 export const updateBranch = (
