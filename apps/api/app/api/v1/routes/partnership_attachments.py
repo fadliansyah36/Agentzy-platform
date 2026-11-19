@@ -235,6 +235,10 @@ async def retry_attachment_scan(
             },
         )
     return {
-        "data": {"attachment_id": str(attachment_id), "scan_status": "pending_scan", "scan_state": "retrying"},
+        "data": {
+            "attachment_id": str(attachment_id),
+            "scan_status": "pending_scan",
+            "scan_state": "retrying",
+        },
         "meta": {"request_id": getattr(request.state, "request_id", None)},
     }
