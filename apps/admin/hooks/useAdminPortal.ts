@@ -26,6 +26,9 @@ import {
   listBranches,
   listDepartments,
   listTenantOrganizations,
+  createOrganizationUnit,
+  updateOrganizationUnit,
+  archiveOrganizationUnit,
   createBranch,
   createDepartment,
   updateBranch,
@@ -141,6 +144,22 @@ async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): 
   const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
   const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
   return [
+    ...unitRows.map((item) => ({
+      id: item.id,
+      tenantId,
+      name: item.name,
+      unitType: 'Unit Organisasi' as const,
+      parentName: item.parent_unit_id ? unitNames.get(item.parent_unit_id) ?? null : null,
+      headName: null,
+      memberCount: null,
+      status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+      code: item.code,
+      organizationId: item.organization_id,
+      organizationUnitId: item.id,
+      parentUnitId: item.parent_unit_id,
+      branchId: null,
+      departmentId: null,
+    })),
     ...branchRows.map((item) => ({
       id: item.id,
       tenantId,
@@ -1018,7 +1037,20 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           listDepartments(accessToken, tenant.id),
         ]);
         if (payload.id) {
-          if (payload.unitType === 'Cabang / Regional') {
+          if (payload.unitType === 'Unit Organisasi') {
+            const existing = units.find((item) => item.id === payload.id);
+            if (!existing) throw new Error('Unit organisasi tidak ditemukan pada tenant terpilih.');
+            const parentName = payload.parentName?.trim();
+            const parent = parentName
+              ? units.find((item) => item.id !== existing.id && item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            if (parentName && !parent) throw new Error('Parent unit tidak ditemukan.');
+            await updateOrganizationUnit(accessToken, tenant.id, existing.id, {
+              name: payload.name.trim(),
+              code: existing.code,
+              parent_unit_id: parent?.id ?? null,
+            });
+          } else if (payload.unitType === 'Cabang / Regional') {
             const existing = branches.find((item) => item.id === payload.id);
             if (!existing) throw new Error('Cabang tidak ditemukan pada tenant terpilih.');
             await updateBranch(accessToken, tenant.id, existing.id, {
@@ -1044,7 +1076,20 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
             );
           }
           const organizationId = activeOrganizations[0].id;
-          if (payload.unitType === 'Cabang / Regional') {
+          if (payload.unitType === 'Unit Organisasi') {
+            const parentName = payload.parentName?.trim();
+            const parent = parentName
+              ? units.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            if (parentName && !parent) throw new Error('Parent unit organisasi tidak ditemukan.');
+            await createOrganizationUnit(accessToken, tenant.id, {
+              organization_id: organizationId,
+              parent_unit_id: parent?.id ?? null,
+              name: payload.name.trim(),
+              code,
+              unit_type: 'unit',
+            });
+          } else if (payload.unitType === 'Cabang / Regional') {
             const parentName = payload.parentName?.trim();
             const parentUnit = parentName
               ? units.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
@@ -1101,7 +1146,9 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
         return;
       }
       try {
-        if (target.unitType === 'Cabang / Regional') {
+        if (target.unitType === 'Unit Organisasi') {
+          await archiveOrganizationUnit(accessToken, target.tenantId, target.id);
+        } else if (target.unitType === 'Cabang / Regional') {
           await archiveBranch(accessToken, target.tenantId, target.id);
         } else {
           await archiveDepartment(accessToken, target.tenantId, target.id);
