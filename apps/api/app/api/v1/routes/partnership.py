@@ -14,14 +14,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.authorization import authorize_platform_action, has_platform_permission
 from app.adapters.supabase_storage import delete_quarantined_object, upload_quarantined_object
+from app.core.authorization import authorize_platform_action, has_platform_permission
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.redaction import redact_audit_value
-from app.services.partnership_acquisition_service import submit_partnership_application
 from app.core.security import current_claims
 from app.db.session import engine, user_session
+from app.services.partnership_acquisition_service import submit_partnership_application
 
 router = APIRouter()
 logger = structlog.get_logger()
