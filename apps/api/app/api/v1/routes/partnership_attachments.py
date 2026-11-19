@@ -68,7 +68,8 @@ async def list_prospect_attachments(
         rows = [dict(row) for row in result.mappings().all()]
     for row in rows:
         row["id"] = str(row["id"])
-        row["scan_state"] = (row.get("scan_result") or {}).get("state", "queued")
+        scan_result = row.pop("scan_result", None) or {}
+        row["scan_state"] = scan_result.get("state", "queued")
         row["uploaded_at"] = row["uploaded_at"].isoformat()
         row["scanned_at"] = row["scanned_at"].isoformat() if row["scanned_at"] else None
         row["download_available"] = row["scan_status"] == "clean"
