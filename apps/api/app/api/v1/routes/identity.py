@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 from app.schemas.identity import (
@@ -147,7 +148,7 @@ async def update_identity(
                 "actor": user_id,
                 "resource_id": str(user_id),
                 "request_id": _request_id(request),
-                "metadata": json.dumps(values, default=str),
+                "metadata": json.dumps(redact_audit_value(values), default=str),
             },
         )
 
