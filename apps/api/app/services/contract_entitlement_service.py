@@ -108,8 +108,8 @@ async def assert_membership_entitlement_capacity(
             where m.tenant_id=:tenant and m.status in ('active','invited','pending')
               and (:exclude_membership_id is null or m.id<>:exclude_membership_id)
               and r.key=any(:role_keys)
-              and mr.scope_type='tenant' and mr.scope_id is null
-              and mr.valid_from<=now() and (mr.valid_until is null or mr.valid_until>now())
+              and (mr.valid_from is null or mr.valid_from<=now())
+              and (mr.valid_until is null or mr.valid_until>now())
         """),
         {
             "tenant": tenant_id,
