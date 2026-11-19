@@ -45,7 +45,11 @@ class ContractCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_start and self.effective_end and self.effective_end < self.effective_start:
+        if (
+            self.effective_start
+            and self.effective_end
+            and self.effective_end < self.effective_start
+        ):
             raise ValueError("Tanggal akhir kontrak tidak boleh sebelum tanggal mulai.")
         return self
 
@@ -82,10 +86,24 @@ async def _require_permission(user_id: UUID, tenant_id: UUID, permission: str) -
             {"user_id": user_id, "tenant_id": tenant_id, "permission": permission},
         )
     if not result.scalar_one():
-        raise HTTPException(status_code=403, detail="Akses kontrak untuk tenant ini tidak diizinkan.")
+        raise HTTPException(
+            status_code=403,
+            detail="Akses kontrak untuk tenant ini tidak diizinkan.",
+        )
 
 
-async def _audit_event(connection, *, tenant_id, actor, contract_id, event_type, from_status, to_status, request_id, metadata=None):
+async def _audit_event(
+    connection,
+    *,
+    tenant_id,
+    actor,
+    contract_id,
+    event_type,
+    from_status,
+    to_status,
+    request_id,
+    metadata=None,
+):
     await connection.execute(
         text("""
             insert into public.contract_events(
@@ -149,7 +167,10 @@ async def create_contract(
         existing = replay.mappings().first()
         if existing:
             if existing["idempotency_fingerprint"] != fingerprint:
-                raise HTTPException(status_code=409, detail="Idempotency-Key sudah digunakan untuk payload berbeda.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Idempotency-Key sudah digunakan untuk payload berbeda.",
+                )
             return {"data": {"id": str(existing["id"]), "status": existing["status"],
                              "version": existing["current_version"], "replayed": True}}
         contract_result = await connection.execute(
@@ -183,7 +204,9 @@ async def create_contract(
             "title": payload.title,
             "contract_type": payload.contract_type,
             "currency": payload.currency.upper(),
-            "effective_start": payload.effective_start.isoformat() if payload.effective_start else None,
+            "effective_start": (
+                payload.effective_start.isoformat() if payload.effective_start else None
+            ),
             "effective_end": payload.effective_end.isoformat() if payload.effective_end else None,
             "scope_summary": payload.scope_summary,
             "terms": payload.terms,
@@ -257,7 +280,12 @@ async def create_contract(
 @router.get("")
 async def list_contracts(
     tenant_id: UUID,
-    status: str | None = Query(default=None, pattern="^(draft|review_pending|approved|active|suspended|expired|terminated|rejected)$"),
+    status: str | None = Query(
+        default=None,
+        pattern=(
+            "^(draft|review_pending|approved|active|suspended|expired|terminated|rejected)$"
+        ),
+    ),
     limit: int = Query(default=25, ge=1, le=100),
     claims: dict = claims_dependency,
 ):
@@ -327,7 +355,12 @@ async def get_contract(contract_id: UUID, tenant_id: UUID, claims: dict = claims
         elif hasattr(value, "isoformat"):
             data[key] = value.isoformat()
     data["services"] = [
-        {**dict(item), "monthly_fee": str(item["monthly_fee"]) if item["monthly_fee"] is not None else None}
+        {
+            **dict(item),
+            "monthly_fee": (
+                str(item["monthly_fee"]) if item["monthly_fee"] is not None else None
+            ),
+        }
         for item in services.mappings().all()
     ]
     data["approvals"] = [
@@ -479,7 +512,11 @@ async def decide_contract_approval(
                           approved_at=case when :status='approved' then now() else approved_at end
                         where contract_id=:id and version_number=:version
                     """),
-                    {"status": next_status, "id": contract_id, "version": approval["current_version"]},
+                    {
+                        "status": next_status,
+                        "id": contract_id,
+                        "version": approval["current_version"],
+                    },
                 )
         await _audit_event(
             connection, tenant_id=tenant_id, actor=actor, contract_id=contract_id,
