@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     supabase_service_role_key: str | None = None
     auth_provider_webhook_secret: str | None = None
     turnstile_secret_key: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_starttls: bool = True
     platform_bootstrap_token: str | None = None
     app_base_url: str = "http://localhost:3000"
     database_url: str
@@ -37,6 +43,10 @@ class Settings(BaseSettings):
                     "PLATFORM_BOOTSTRAP_TOKEN must be at least 32 characters when configured."
                 )
         return self
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
     @field_validator("database_url")
     @classmethod
