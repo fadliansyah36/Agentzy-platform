@@ -1021,7 +1021,7 @@ async def list_role_templates(
                     permission_key="corporate.organization.read",
                     platform_permission="",
                     aal=None,
-                    resource_type="corporate.role_catalogue",
+                    resource_type="corporate.organization",
                     action="read",
                     resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
                     request_id=_request_id(request),
