@@ -438,18 +438,28 @@ async def upload_partnership_attachment(
     async with engine.connect() as connection:
         app_result = await connection.execute(
             text("""
-                select id from public.public_partnership_applications
-                where id=:id and upload_token_hash=:token_hash
-                  and status not in ('closed','disqualified')
+                select upload_token_hash from public.public_partnership_applications
+                where id=:id and status not in ('closed','disqualified')
             """),
-            {"id": application_id, "token_hash": token_hash},
+            {"id": application_id},
         )
-        if not app_result.first():
+        stored_token_hash = app_result.scalar_one_or_none()
+        if not stored_token_hash or not hmac.compare_digest(stored_token_hash, token_hash):
             raise HTTPException(
                 status_code=404, detail="Pengajuan atau akses upload tidak tersedia."
             )
+        attachment_count = await connection.execute(
+            text("""
+                select count(*) from public.public_partnership_attachments
+                where application_id=:id
+            """),
+            {"id": application_id},
+        )
+        if int(attachment_count.scalar_one()) >= 5:
+            raise HTTPException(status_code=409, detail="Batas lima lampiran per pengajuan tercapai.")
 
     safe_filename = unquote((filename or "").strip()).replace("\\", "/").rsplit("/", 1)[-1]
+    safe_filename = re.sub(r"[\\x00-\\x1f\\x7f]", "", safe_filename)
     extension = "." + safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     allowed = ALLOWED_UPLOADS.get(extension)
