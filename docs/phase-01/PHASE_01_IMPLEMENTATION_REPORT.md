@@ -189,3 +189,13 @@ The latest Phase 01 gaps remain:
 - Final least-privilege and audit export/redaction verification against real identities.
 
 No staging, UAT, security acceptance or production deployment was performed.
+
+## 2026-11-19 continuation — global platform read ABAC
+
+- Added central `authorize_platform_action` checks to the platform permission registry, platform role catalogue (for platform readers), and platform tenant directory. These reads now require the matching platform permission and global ABAC decision; platform-reader paths retain AAL2.
+- Existing ABAC checks for tenant update/archive and platform role create/update/delete/permission replacement remain in place. Tenant-scoped organization, branch, department and membership commands continue to enforce tenant context and object/hierarchy scope.
+- Endpoint authorization inventory updated in `docs/phase-01/PHASE_01_ENDPOINT_AUTHORIZATION_INVENTORY.md`.
+- Code commit: `990d40d5b428c13792b0c7c4e7e730e88eb3967c`. GitHub Actions minimum engineering run [44492293451](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44492293451) completed SUCCESS: frontend ESLint/TypeScript, Python compile/Ruff, focused authorization checks, FastAPI import/OpenAPI and migration consistency.
+- This closes the identified global platform read ABAC gap, but does not establish complete machine-generated endpoint/nested repository coverage, live ABAC decision evidence, real Auth lifecycle, hosted Supabase Auth configuration or final audit export/redaction acceptance.
+
+**Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.**
