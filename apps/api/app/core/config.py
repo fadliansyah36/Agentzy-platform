@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:3000"
     database_url: str
     cors_origins: list[str] = ["http://localhost:3000"]
+    contract_lifecycle_worker_enabled: bool = True
+    contract_lifecycle_poll_seconds: int = 900
     log_level: str = "INFO"
 
     @model_validator(mode="after")
