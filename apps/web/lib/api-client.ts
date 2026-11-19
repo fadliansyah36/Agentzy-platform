@@ -183,6 +183,7 @@ export type PublicPartnershipApplicationInput = {
   privacy_consent: true;
   communication_consent: true;
   policy_version: string;
+  captcha_token?: string;
   fax_number: string;
 };
 
