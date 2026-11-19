@@ -156,6 +156,7 @@ async def complete_idempotency(
         },
     )
 
+
 async def fail_idempotency(
     connection: AsyncConnection,
     *,

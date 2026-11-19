@@ -727,7 +727,6 @@ async def invite_tenant_member(
                 status_code=502, detail="Gagal mengirim undangan melalui Supabase Auth."
             ) from exc
 
-
     try:
         async with engine.begin() as connection:
             membership_result = await connection.execute(
