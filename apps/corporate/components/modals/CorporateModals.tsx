@@ -776,30 +776,18 @@ export function CorporateModals({
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onShowToast(`Faktur ${invoice.id} berhasil diunduh.`);
-              }}
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-[#D8E3E9] px-4 font-semibold text-[#17324D]"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>Unduh Faktur</span>
-            </button>
-
-            {!isPaid && (
+          {!isPaid && (
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
                 onClick={() => onPayInvoice(invoice.id, paymentMethod)}
                 className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#0284C7] px-5 font-semibold text-white hover:bg-[#0369A1]"
               >
                 <CreditCard className="h-3.5 w-3.5" />
-                <span>Bayar Sekarang</span>
+                <span>Buat Referensi Pembayaran</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </ModalContainer>
     );
@@ -814,13 +802,13 @@ export function CorporateModals({
 
     return (
       <ModalContainer
-        title="Konfirmasi & Rekonsiliasi Pembayaran"
+        title="Buat Referensi Pembayaran"
         subtitle={`Faktur ${targetInv.id} · ${formatIDR(targetInv.amount)}`}
         onClose={onClose}
       >
         <div className="space-y-4 text-xs">
           <p className="text-[#526675]">
-            Pembayaran akan dicocokkan otomatis dengan settlement bank dan mencatat jurnal ke ledger pembayaran.
+            Sistem hanya membuat referensi pembayaran. Invoice tidak akan ditandai lunas sampai bukti pembayaran diverifikasi dan direkonsiliasi melalui proses keuangan.
           </p>
           <div>
             <label className="mb-1.5 block font-semibold text-[#172B3A]">
@@ -852,7 +840,7 @@ export function CorporateModals({
               onClick={() => onPayInvoice(targetInv.id, paymentMethod)}
               className="h-10 rounded-[10px] bg-[#247A55] px-5 font-semibold text-white"
             >
-              Verifikasi &amp; Rekon
+              Buat Referensi
             </button>
           </div>
         </div>
