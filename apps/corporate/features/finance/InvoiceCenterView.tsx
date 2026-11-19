@@ -94,8 +94,8 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
 
   return <div className="space-y-5">
     <CorporatePageHeader title="Invoice Center" subtitle="Invoice kontrak, item tagihan, penerbitan dan due date melalui FastAPI" onBack={onBack}
-    <NetworkStatusBanner stale={Boolean(error && !loading)} />
       actions={<button className={secondaryClass} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
+    <NetworkStatusBanner stale={Boolean(error && !loading)} />
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
     {canManage && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
