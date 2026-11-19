@@ -166,7 +166,7 @@ async def ensure_tenant_owner_retained(
               join public.membership_roles mr on mr.membership_id=m.id
               join public.roles r on r.id=mr.role_id
               where m.id=:membership_id and m.tenant_id=:tenant_id
-                and m.status='active' and r.key='corporate_owner'
+                and m.status in ('active','invited','suspended') and r.key='corporate_owner'
                 and (r.tenant_id is null or r.tenant_id=:tenant_id)
                 and mr.scope_type='tenant'
                 and (mr.valid_from is null or mr.valid_from<=now())
