@@ -1151,12 +1151,13 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           }
         } else {
           const activeOrganizations = organizations.filter((item) => item.status === 'active');
-          if (activeOrganizations.length !== 1) {
-            throw new Error(
-              'Pembuatan struktur membutuhkan tepat satu organisasi aktif pada tenant. Pilih/kelola organisasi terlebih dahulu.',
-            );
+          const selectedOrganization = activeOrganizations.find(
+            (item) => item.id === payload.organizationId,
+          ) ?? (activeOrganizations.length === 1 ? activeOrganizations[0] : undefined);
+          if (!selectedOrganization) {
+            throw new Error('Pilih organisasi aktif yang menjadi induk struktur.');
           }
-          const organizationId = activeOrganizations[0].id;
+          const organizationId = selectedOrganization.id;
           if (payload.unitType === 'Unit Organisasi') {
             const parentName = payload.parentName?.trim();
             const parent = parentName
