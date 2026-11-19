@@ -158,11 +158,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
-    if (!accessToken || !activeTenantId) {
-      setInvoices([]);
-      setPayments([]);
-      return;
-    }
+    if (!accessToken || !activeTenantId) return;
     let active = true;
     void listCorporateInvoices(accessToken, activeTenantId).then(async (result) => {
       const mappedInvoices: CorporateInvoice[] = result.data.map((invoice) => ({
@@ -239,13 +235,6 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     idCounter.current += 1;
     return `${prefix}-${idCounter.current}`;
   };
-
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3600);
-  }, []);
 
   useEffect(() => {
     const accessToken = auth.session?.access_token;
