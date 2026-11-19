@@ -104,7 +104,8 @@ async def _scan_one(row: dict) -> None:
         response.raise_for_status()
         content = response.content
 
-    if len(content) != int(row["file_size"]) or hashlib.sha256(content).hexdigest() != row["sha256"]:
+    content_hash = hashlib.sha256(content).hexdigest()
+    if len(content) != int(row["file_size"]) or content_hash != row["sha256"]:
         await _finish(row["id"], "rejected", {
             "state": "rejected", "reason": "stored_object_integrity_mismatch"
         })
