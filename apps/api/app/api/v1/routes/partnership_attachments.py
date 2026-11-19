@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.supabase_storage import create_quarantined_signed_url
 from app.core.authorization import authorize_platform_action
 from app.core.config import get_settings
 from app.core.security import current_claims
@@ -105,27 +106,12 @@ async def create_attachment_download(
         )
     if not settings.supabase_service_role_key:
         raise HTTPException(status_code=503, detail="Storage access belum dikonfigurasi.")
-    object_path = quote(str(row["object_path"]), safe="/")
-    url = (
-        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/sign/"
-        f"partnership-quarantine/{object_path}"
-    )
-    headers = {
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
-        "apikey": settings.supabase_service_role_key,
-    }
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(url, headers=headers, json={"expiresIn": 60})
-    if response.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail="Signed download tidak dapat dibuat.")
-    signed_path = response.json().get("signedURL")
-    if not signed_path:
-        raise HTTPException(status_code=502, detail="Storage tidak mengembalikan signed URL.")
-    signed_url = (
-        signed_path
-        if signed_path.startswith("http")
-        else f"{settings.supabase_url.rstrip('/')}/storage/v1{signed_path}"
-    )
+    try:
+        signed_url = await create_quarantined_signed_url(str(row["object_path"]), 60)
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Signed download tidak dapat dibuat."
+        ) from exc
     async with engine.begin() as connection:
         await connection.execute(
             text("""
