@@ -29,12 +29,15 @@ import {
   createOrganizationUnit,
   updateOrganizationUnit,
   archiveOrganizationUnit,
+  restoreOrganizationUnit,
   createBranch,
   createDepartment,
   updateBranch,
   updateDepartment,
   archiveBranch,
+  restoreBranch,
   archiveDepartment,
+  restoreDepartment,
   updateTenant as updateTenantApi,
   archiveTenant as archiveTenantApi,
   createAgentzyRole,
@@ -137,9 +140,9 @@ export type AdminModalState =
 
 async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): Promise<OrgUnitRecord[]> {
   const [unitRows, branchRows, departmentRows] = await Promise.all([
-    listOrganizationUnits(accessToken, tenantId),
-    listBranches(accessToken, tenantId),
-    listDepartments(accessToken, tenantId),
+    listOrganizationUnits(accessToken, tenantId, true),
+    listBranches(accessToken, tenantId, true),
+    listDepartments(accessToken, tenantId, true),
   ]);
   const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
   const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
@@ -152,7 +155,7 @@ async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): 
       parentName: item.parent_unit_id ? unitNames.get(item.parent_unit_id) ?? null : null,
       headName: null,
       memberCount: null,
-      status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+      status: item.status === 'active' ? 'Aktif' as const : item.status === 'archived' ? 'Diarsipkan' as const : 'Nonaktif' as const,
       code: item.code,
       organizationId: item.organization_id,
       organizationUnitId: item.id,
@@ -168,7 +171,7 @@ async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): 
       parentName: item.organization_unit_id ? unitNames.get(item.organization_unit_id) ?? null : null,
       headName: null,
       memberCount: null,
-      status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+      status: item.status === 'active' ? 'Aktif' as const : item.status === 'archived' ? 'Diarsipkan' as const : 'Nonaktif' as const,
       code: item.code,
       organizationId: item.organization_id,
       organizationUnitId: item.organization_unit_id,
@@ -187,7 +190,7 @@ async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): 
           : null,
       headName: null,
       memberCount: null,
-      status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+      status: item.status === 'active' ? 'Aktif' as const : item.status === 'archived' ? 'Diarsipkan' as const : 'Nonaktif' as const,
       code: item.code,
       organizationId: item.organization_id,
       organizationUnitId: null,
