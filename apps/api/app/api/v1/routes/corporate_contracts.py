@@ -2096,3 +2096,77 @@ async def verify_payment_reference(
             "payment_confirmed": next_status == "reconciled",
         }
     }
+
+
+class ContractSignatureInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: UUID
+    status: str = Field(pattern="^(pending|signed|rejected|cancelled|expired)$")
+    provider: str | None = Field(default=None, max_length=80)
+    signature_reference: str | None = Field(default=None, max_length=240)
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+@router.patch("/contracts/{contract_id}/signature-status")
+async def update_contract_signature_status(
+    contract_id: UUID,
+    payload: ContractSignatureInput,
+    request: Request,
+    claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, payload.tenant_id, "corporate.contracts.manage")
+    if payload.status == "signed" and (
+        not payload.provider or not payload.signature_reference
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Provider dan signature reference wajib untuk status signed.",
+        )
+    if payload.status in ("rejected", "cancelled", "expired") and not payload.reason:
+        raise HTTPException(status_code=422, detail="Alasan wajib untuk status terminal non-signed.")
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                select signature_status from public.contracts
+                where id=:id and tenant_id=:tenant for update
+            """),
+            {"id": contract_id, "tenant": payload.tenant_id},
+        )
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Kontrak tidak ditemukan.")
+        current = row["signature_status"]
+        if current == "signed":
+            raise HTTPException(status_code=409, detail="Status signed bersifat terminal untuk versi kontrak ini.")
+        if payload.status != "pending" and current != "pending":
+            raise HTTPException(status_code=409, detail="Signature decision hanya dapat dilakukan dari status pending.")
+        await connection.execute(
+            text("""
+                update public.contracts set
+                  signature_status=:status,
+                  signature_provider=coalesce(:provider,signature_provider),
+                  signature_reference=coalesce(:reference,signature_reference),
+                  signature_requested_at=case when :status='pending' then now() else signature_requested_at end,
+                  signed_at=case when :status='signed' then now() else signed_at end,
+                  signature_failure_reason=:reason,
+                  updated_by=:actor,updated_at=now(),row_version=row_version+1
+                where id=:id and tenant_id=:tenant
+            """),
+            {
+                "status": payload.status, "provider": payload.provider,
+                "reference": payload.signature_reference, "reason": payload.reason,
+                "actor": actor, "id": contract_id, "tenant": payload.tenant_id,
+            },
+        )
+        await _audit_contract_event(
+            connection, tenant_id=payload.tenant_id, actor=actor,
+            contract_id=contract_id, event_type=f"contract.signature.{payload.status}",
+            from_status=current, to_status=payload.status, request_id=_request_id(request),
+            metadata={
+                "provider": payload.provider,
+                "signature_reference": payload.signature_reference,
+                "reason": payload.reason,
+            },
+        )
+    return {"data": {"id": str(contract_id), "signature_status": payload.status}}
