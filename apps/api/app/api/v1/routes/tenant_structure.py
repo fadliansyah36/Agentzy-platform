@@ -487,6 +487,18 @@ async def create_organization_unit(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        organization = await connection.execute(
+            text("""
+                select 1 from public.organizations
+                where id=:organization_id and tenant_id=:tenant_id and status='active'
+            """),
+            {"organization_id": payload.organization_id, "tenant_id": tenant_id},
+        )
+        if organization.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Organization harus aktif sebelum membuat organization unit.",
+            )
         if payload.parent_unit_id is not None:
             parent = await connection.execute(
                 text("""
@@ -2425,6 +2437,18 @@ async def update_organization_unit(
                 organization_id=current["organization_id"],
                 organization_unit_id=unit_id,
             )
+        organization = await connection.execute(
+            text("""
+                select status from public.organizations
+                where id=:organization_id and tenant_id=:tenant_id
+            """),
+            {"organization_id": current["organization_id"], "tenant_id": tenant_id},
+        )
+        if organization.scalar_one_or_none() != "active":
+            raise HTTPException(
+                status_code=409,
+                detail="Organization harus aktif sebelum struktur unit diubah.",
+            )
 
         parent_unit_id = (
             payload.parent_unit_id
@@ -2475,6 +2499,28 @@ async def update_organization_unit(
                     detail="Parent baru berada di bawah unit ini dan akan membentuk siklus.",
                 )
 
+        if values_status := payload.status:
+            if values_status == "inactive":
+                dependents = await connection.execute(
+                    text("""
+                        select
+                          exists(select 1 from public.organization_units
+                            where tenant_id=:tenant_id and parent_unit_id=:id and status='active')
+                          or exists(select 1 from public.branches
+                            where tenant_id=:tenant_id and organization_unit_id=:id and status='active')
+                          or exists(select 1 from public.memberships
+                            where tenant_id=:tenant_id and organization_unit_id=:id
+                              and status in ('invited','active','suspended'))
+                    """),
+                    {"tenant_id": tenant_id, "id": unit_id},
+                )
+                if dependents.scalar_one():
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Unit dengan child, cabang, atau membership aktif tidak dapat dinonaktifkan."
+                        ),
+                    )
         values = {
             "name": payload.name.strip() if payload.name is not None else current["name"],
             "code": payload.code.strip().upper() if payload.code is not None else current["code"],
@@ -2577,7 +2623,20 @@ async def _set_organization_unit_status(
                         "Unit masih memiliki child unit, cabang, atau membership yang ditugaskan."
                     ),
                 )
-        elif current["parent_unit_id"] is not None:
+        else:
+            organization = await connection.execute(
+                text("""
+                    select status from public.organizations
+                    where id=:organization_id and tenant_id=:tenant_id
+                """),
+                {"organization_id": current["organization_id"], "tenant_id": tenant_id},
+            )
+            if organization.scalar_one_or_none() != "active":
+                raise HTTPException(
+                    status_code=409,
+                    detail="Organization harus aktif sebelum unit dipulihkan.",
+                )
+        if status_value == "active" and current["parent_unit_id"] is not None:
             parent = await connection.execute(
                 text("""
                     select status from public.organization_units
