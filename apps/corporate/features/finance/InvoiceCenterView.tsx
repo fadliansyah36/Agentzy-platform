@@ -59,7 +59,8 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
     try {
       const result = await createCorporateInvoice(token,form.contract_id,{
         tenant_id:tenantId,invoice_number:form.invoice_number,title:form.title,
-        currency:'IDR',due_at:form.due_at || null,
+        currency:contracts.find(contract=>contract.id===form.contract_id)?.currency ?? 'IDR',
+        due_at:form.due_at || null,
         lines:[{service_key:form.service_key,quantity:form.quantity}],
       });
       setNotice('Draft invoice tersimpan di database. Terbitkan setelah detail diverifikasi.');
