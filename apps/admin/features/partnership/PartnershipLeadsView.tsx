@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, RefreshCw, UserCheck, Clock3, Building2, Activity } from 'lucide-react';
+import { ArrowLeft, RefreshCw, UserCheck, Clock3, Building2, Activity, Download, Paperclip } from 'lucide-react';
 import {
   ApiError,
   listPartnershipProspects,
   listPartnershipProspectActivities,
+  listPartnershipProspectAttachments,
+  createPartnershipAttachmentDownload,
   updatePartnershipProspect,
+  type PartnershipAttachment,
   type PartnershipProspect,
 } from '@/apps/web/lib/api-client';
 
@@ -48,6 +51,8 @@ export function PartnershipLeadsView({
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<PartnershipProspect | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [attachments, setAttachments] = useState<PartnershipAttachment[]>([]);
+  const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -75,6 +80,29 @@ export function PartnershipLeadsView({
     }
   }, [accessToken]);
 
+  const loadAttachments = useCallback(async (prospectId: string) => {
+    try {
+      const response = await listPartnershipProspectAttachments(accessToken, prospectId);
+      setAttachments(response.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Daftar lampiran tidak dapat dimuat.');
+    }
+  }, [accessToken]);
+
+  const downloadAttachment = async (attachment: PartnershipAttachment) => {
+    if (!attachment.download_available) return;
+    setDownloadingAttachment(attachment.id);
+    setError(null);
+    try {
+      const response = await createPartnershipAttachmentDownload(accessToken, attachment.id);
+      window.open(response.data.signed_url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Lampiran tidak dapat diunduh.');
+    } finally {
+      setDownloadingAttachment(null);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(() => active ? load() : undefined);
@@ -84,7 +112,7 @@ export function PartnershipLeadsView({
   const selectProspect = async (item: PartnershipProspect) => {
     setSelected(item);
     setNote('');
-    await loadActivities(item.id);
+    await Promise.all([loadActivities(item.id), loadAttachments(item.id)]);
   };
 
   const update = async (payload: { status?: string; assigned_to?: string | null; note?: string }) => {
@@ -185,6 +213,32 @@ export function PartnershipLeadsView({
                 <label className="mb-1 block text-xs font-semibold text-[#17324D]">Catatan aktivitas</label>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Catat hasil follow-up atau kebutuhan discovery…" className="w-full rounded-[8px] border border-[#D8E3E9] p-3 text-xs text-[#17324D]" />
                 <button onClick={() => void update({ note })} disabled={updating || !note.trim()} className="mt-2 h-9 w-full rounded-[8px] border border-[#B8C9D3] bg-white px-3 text-xs font-semibold text-[#17324D] disabled:opacity-50">Simpan Catatan</button>
+              </div>
+              <div className="border-t border-[#EAF2F6] pt-4">
+                <h3 className="mb-2 flex items-center gap-2 text-xs font-bold text-[#17324D]"><Paperclip className="h-4 w-4 text-[#0284C7]" /> Lampiran Pengajuan</h3>
+                <div className="space-y-2">
+                  {attachments.map((attachment) => (
+                    <div key={attachment.id} className="flex items-center justify-between gap-3 rounded-[8px] bg-[#F5F8FA] p-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[11px] font-semibold text-[#17324D]">{attachment.original_filename}</p>
+                        <p className="mt-1 text-[10px] text-[#718391]">
+                          {(attachment.file_size / 1024).toFixed(0)} KB · {attachment.scan_status === 'clean' ? 'Lolos pemindaian' : attachment.scan_status === 'pending_scan' ? 'Menunggu pemindaian' : attachment.scan_status === 'infected' ? 'Terdeteksi berbahaya' : 'Ditolak'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void downloadAttachment(attachment)}
+                        disabled={!attachment.download_available || downloadingAttachment === attachment.id}
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-[#B8C9D3] bg-white px-2.5 text-[10px] font-semibold text-[#17324D] disabled:cursor-not-allowed disabled:opacity-40"
+                        title={attachment.download_available ? 'Unduh lampiran' : 'Unduhan dibuka setelah lolos pemindaian'}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {downloadingAttachment === attachment.id ? 'Menyiapkan…' : 'Unduh'}
+                      </button>
+                    </div>
+                  ))}
+                  {attachments.length === 0 && <p className="text-[11px] text-[#718391]">Tidak ada lampiran pada pengajuan ini.</p>}
+                </div>
               </div>
               <div className="border-t border-[#EAF2F6] pt-4">
                 <h3 className="mb-2 flex items-center gap-2 text-xs font-bold text-[#17324D]"><Activity className="h-4 w-4 text-[#0284C7]" /> Activity Timeline</h3>
