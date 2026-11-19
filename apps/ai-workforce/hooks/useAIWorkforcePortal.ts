@@ -208,9 +208,15 @@ export function useAIWorkforcePortal(
   }, [auth.session?.access_token, activeTenantId, canManageMemberships]);
 
   useEffect(() => {
-    if (!canManageMemberships || !auth.session?.access_token || !activeTenantId) return;
+    const accessToken = auth.session?.access_token;
+    if (!canManageMemberships || !accessToken || !activeTenantId) return;
     let active = true;
-    void refreshAccessManagement().catch((error) => {
+    void Promise.all([
+      listTenantMemberships(accessToken, activeTenantId),
+      listRoleTemplates(accessToken),
+    ]).then(([memberships, roles]) => {
+      if (active) setAccessManagementResult({ tenantId: activeTenantId, memberships, roles });
+    }).catch((error) => {
       if (active) setAccessManagementResult({
         tenantId: activeTenantId,
         memberships: [],
@@ -219,7 +225,7 @@ export function useAIWorkforcePortal(
       });
     });
     return () => { active = false; };
-  }, [refreshAccessManagement, canManageMemberships, auth.session?.access_token, activeTenantId]);
+  }, [canManageMemberships, auth.session?.access_token, activeTenantId]);
 
   const runMembershipCommand = useCallback(async (action: () => Promise<unknown>, successMessage: string) => {
     await action();
