@@ -800,3 +800,74 @@ Phase 01 remains **PARTIAL / IN PROGRESS — NOT DONE**. No Phase 02 work is aut
 - Final code commit: `2560e24369da21a755bdf253c537e329f7c2f6a4`.
 - GitHub Actions run [44302719914](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44302719914) completed SUCCESS: frozen frontend dependency install, ESLint, TypeScript, Python compile, Ruff, focused deterministic authorization checks, FastAPI import/OpenAPI generation and migration source consistency.
 - This verifies engineering checks only. It does not prove all seven Phase 01 workstreams are complete, hosted Supabase Auth settings are configured, or live user lifecycle was exercised.
+
+
+## 23. Phase 01 → Phase 02 execution continuation — 2026-11-19
+
+This section supersedes earlier statements that Phase 02 must not start from the prior continuation. The user explicitly authorized Phase 01 completion followed by Phase 02 implementation in the current execution. Phase 01 closure remains a hard prerequisite for declaring Phase 02 DONE.
+
+### Phase status
+
+| Phase | Current status | Disposition |
+|---|---|---|
+| Phase 01 — Platform Core, Identity & Tenant | **PARTIAL** | Existing source work was continued; hosted Supabase Auth settings and real identity lifecycle evidence are unavailable, and full cross-portal authorization/lifecycle parity is not closed. |
+| Phase 02 — Public Landing & Partnership Acquisition | **PARTIAL** | Database, FastAPI, public landing catalogue/FAQ, application flow, private quarantine upload, CRM lead inbox and notification outbox were implemented. External runtime configuration and scan/delivery completion remain open. |
+| Phase 03 — Corporate & Contract Management | NOT STARTED | Do not start without a separate instruction and Phase 01/02 closure. |
+| Phase 09 | OUT OF SCOPE | Not modified. |
+
+### Phase 01 continuation findings
+
+- Current Auth live counts: zero `auth.users`, zero `auth.sessions`, zero MFA factors. No test identity or fake activity was created.
+- The available Supabase connector supports project/schema/migration/SQL inspection and migration application, but does not expose hosted Auth provider, redirect allowlist, SMTP, MFA enforcement, session configuration or webhook management.
+- Existing Super Admin membership role replacement and activation controls are present in the current code; earlier documentation that said those controls were missing is stale. Full lifecycle parity and object-level authorization coverage across all portal and nested resource paths remain unproven.
+- Audit export/redaction and security event/provider correlation source paths exist, but no real identity runtime evidence is available.
+- Phase 01 remains PARTIAL; no claim of DONE.
+
+### Phase 02 implementation delta
+
+**Frontend**
+- Existing public landing service catalogue and FAQ now load from FastAPI.
+- Existing Partnership Modal now submits to FastAPI, supports file attachments and renders backend-generated application reference; fake client-generated ticket behavior was removed.
+- Super Admin has a Partnership Lead Inbox section using the existing design system, live prospect data, status lifecycle, self-assignment and activity timeline.
+
+**FastAPI**
+- Added public catalogue, partnership submission, attachment upload, CRM prospect list/update and activity endpoints.
+- Submission writes application, consent, CRM prospect, activity, audit and notification outbox records transactionally.
+- Added request fingerprint idempotency, IP-hash rate limiting, honeypot, strict payload validation and optional Turnstile server verification.
+- Attachment upload uses a one-time server-derived capability, MIME/magic-byte/size checks, per-application count cap and private Storage upload. No download endpoint exists while files are quarantined.
+- CRM mutations use platform permission + global ABAC, state transition validation, audit trail and idempotency.
+- Added SMTP outbox worker with retry/dead-letter and encrypted transport; it only starts when SMTP host/sender are configured.
+
+**Database**
+- Four additive Phase 02 migrations applied; no existing migration was edited.
+- New tables: `public_catalogue_items`, `public_faq_entries`, `public_partnership_applications`, `public_partnership_consents`, `crm_prospects`, `crm_prospect_activities`, `public_partnership_attachments`, `notification_outbox`, `public_api_rate_limits`.
+- Live public table count: 28. All nine new tables have RLS enabled and no grants to `anon`, `authenticated` or `service_role`.
+- Private bucket `partnership-quarantine` is present with 10 MB limit and PDF/JPG/PNG allowlist.
+- Public catalogue contains 9 Human Workforce and 10 AI Workforce entries; FAQ contains 10 entries.
+- Added `platform.partnership.read` and `platform.partnership.manage` permissions, assigned to `platform_super_admin`, with matching global ABAC policy keys.
+- No application, prospect, notification or Auth user was fabricated.
+
+### Remaining Phase 02 blockers
+
+1. SMTP host/sender/credentials are not configured/verified. The notification outbox worker remains disabled; no real email delivery is claimed.
+2. Turnstile site/secret keys are not configured. Honeypot and rate limiting are implemented; CAPTCHA is not claimed active.
+3. Malware scanner is not configured. Attachments remain `pending_scan` in private quarantine and are not downloadable.
+4. Production FastAPI URL, CORS origin allowlist and frontend API environment binding are not verified against a deployed runtime.
+5. Super Admin CRM access requires a real AAL2 platform identity; the Auth project currently has zero users.
+
+### Migration ledger
+
+| Version | Name | Applied |
+|---|---|---|
+| 20261119082627 | `phase_02_public_partnership_acquisition` | YES |
+| 20261119082643 | `phase_02_public_application_capabilities` | YES |
+| 20261119082716 | `phase_02_partnership_authorization_policies` | YES |
+| 20261119083254 | `phase_02_submission_fingerprint` | YES |
+
+### Engineering verification
+
+- GitHub Actions minimum engineering checks passed at commit `009dd621853e` and `1421b314a2af`: frontend ESLint/TypeScript, Python compile, Ruff, deterministic authorization tests, FastAPI import/OpenAPI generation and migration source consistency.
+- Additional backend upload-hardening commits followed; their exact final-head workflow result must be checked before final closure.
+- No staging, UAT, load, penetration/security acceptance or production deployment was run.
+
+**Final execution disposition: Phase 01 PARTIAL; Phase 02 PARTIAL. Phase 03 remains NOT STARTED.**
