@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { FileText, RefreshCw } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
-  createCorporateAmendment, createCorporateContract, createContractApprovalPolicy,
+  archiveContractDocument, createCorporateAmendment, createCorporateContract, createContractApprovalPolicy,
   createContractApprovalDelegation, listContractApprovalDelegations, revokeContractApprovalDelegation,
   decideContractApproval, getCorporateContract, getCorporateProfile,
   getContractDocumentDownload, getEffectiveContractEntitlements,
@@ -120,7 +120,14 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
 
   const action = async (fn:()=>Promise<unknown>,message:string) => {
     setSaving(true); setError(''); setNotice('');
-    try { await fn(); setNotice(message); await refresh(); if(selectedId) await loadDetail(selectedId); }
+    try {
+      await fn(); setNotice(message); await refresh();
+      if(selectedId) await loadDetail(selectedId);
+      if(canApprove) {
+        const result = await listContractApprovalDelegations(token,tenant.id);
+        setDelegations(result.data);
+      }
+    }
     catch(e) { setError(e instanceof Error ? e.message : 'Permintaan gagal.'); }
     finally { setSaving(false); }
   };
@@ -179,7 +186,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
 
   const uploadDoc = (file?:File) => {
     if(!file || !detail) return;
-    return action(() => uploadContractDocument(token,tenant.id,detail.id,file,documentType), 'Dokumen berhasil diunggah ke private storage.');
+    return action(() => uploadContractDocument(token,tenant.id,detail.id,file,documentType,detail.version_id), 'Dokumen berhasil diunggah ke private storage.');
   };
 
   const downloadDoc = async (id:string) => {
@@ -317,7 +324,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
 
     {tab === 'documents' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Dokumen Kontrak</h2><p className="mt-1 text-xs text-[#718391]">Upload melewati FastAPI; file disimpan pada private bucket Supabase Storage dan hash metadata direkam.</p>
       {detail && canManage && <div className="mt-4 flex flex-wrap items-end gap-3"><label><span className={label}>Jenis dokumen</span><select className={field} value={documentType} onChange={e=>setDocumentType(e.target.value as typeof documentType)}><option value="master_agreement">Master Agreement</option><option value="statement_of_work">SOW</option><option value="sla">SLA</option><option value="amendment">Amendment</option><option value="supporting">Supporting</option></select></label><label><span className={label}>File PDF/JPG/PNG/DOCX, max 25 MB</span><input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" disabled={saving} onChange={e=>{const file=e.target.files?.[0];if(file)void uploadDoc(file);e.currentTarget.value='';}}/></label></div>}
-      {documents.map(d=><div key={d.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAF2F6] py-3"><div className="flex items-center gap-3"><FileText className="h-4 w-4 text-[#0284C7]"/><div><p className="text-xs font-semibold">{d.original_filename}</p><p className="text-[11px] text-[#718391]">{d.document_type} · {Math.ceil(d.file_size/1024)} KB · {d.lifecycle_status}</p></div></div>{d.lifecycle_status==='available' && <button className={secondary} onClick={()=>void (async()=>{try{const url=await getContractDocumentDownload(token,tenant.id,d.id);window.open(url.data.signed_url,'_blank','noopener,noreferrer');}catch(e){setError(e instanceof Error?e.message:'Gagal membuat tautan.');}})()}>Secure Download</button>}</div>)}
+      {documents.map(d=><div key={d.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAF2F6] py-3"><div className="flex items-center gap-3"><FileText className="h-4 w-4 text-[#0284C7]"/><div><p className="text-xs font-semibold">{d.original_filename}</p><p className="text-[11px] text-[#718391]">{d.document_type} · {Math.ceil(d.file_size/1024)} KB · {d.lifecycle_status}</p></div></div>{d.lifecycle_status==='available' && <div className="flex gap-2"><button className={secondary} onClick={()=>void (async()=>{try{const url=await getContractDocumentDownload(token,tenant.id,d.id);window.open(url.data.signed_url,'_blank','noopener,noreferrer');}catch(e){setError(e instanceof Error?e.message:'Gagal membuat tautan.');}})()}>Secure Download</button>{canManage && <button className={secondary} disabled={saving} onClick={()=>void action(()=>archiveContractDocument(token,tenant.id,d.id),'Dokumen diarsipkan.')}>Archive</button>}</div>}</div>)}
       {!documents.length && <p className="mt-4 text-xs text-[#718391]">Belum ada dokumen.</p>}
     </section>}
 
