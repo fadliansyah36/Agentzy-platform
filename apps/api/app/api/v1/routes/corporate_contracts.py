@@ -247,6 +247,15 @@ async def audit_contract_event(
             "metadata": json.dumps(metadata or {}, default=str),
         },
     )
+    logger.info(
+        "contract.domain_event",
+        tenant_id=str(tenant_id),
+        contract_id=str(contract_id),
+        event_type=event_type,
+        from_status=from_status,
+        to_status=to_status,
+        request_id=request_id,
+    )
 
 
 async def enqueue_contract_event(connection, *, tenant_id, contract_id, event_type, payload):
@@ -261,6 +270,12 @@ async def enqueue_contract_event(connection, *, tenant_id, contract_id, event_ty
             "contract_id": contract_id,
             "payload": json.dumps({"tenant_id": str(tenant_id), **payload}, default=str),
         },
+    )
+    logger.info(
+        "contract.notification_enqueued",
+        tenant_id=str(tenant_id),
+        contract_id=str(contract_id),
+        event_type=event_type,
     )
 
 
