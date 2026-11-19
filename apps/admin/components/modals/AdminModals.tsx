@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import type { AgentzyPermissionDefinition } from '@/apps/web/lib/api-client';
+import React, { useEffect, useState } from 'react';
+import type { AgentzyOrganization, AgentzyPermissionDefinition } from '@/apps/web/lib/api-client';
 import {
   X,
   Plus,
@@ -154,6 +154,7 @@ export interface AdminModalsProps {
   onSetModal: (next: AdminModalState) => void;
 
   tenants: AdminTenantRecord[];
+  organizationsByTenant: Record<string, AgentzyOrganization[]>;
   roles: RbacRoleRecord[];
   permissionRegistry: AgentzyPermissionDefinition[];
   corporateSchemas: CorporateCompensationSchema[];
@@ -425,6 +426,7 @@ function AdminModalSwitch(props: AdminModalsProps) {
       <OrgUnitCrudModal
         initial={modal.unit}
         tenants={props.tenants}
+        organizationsByTenant={props.organizationsByTenant}
         onClose={onClose}
         onSubmit={props.onUpsertOrgUnit}
       />
@@ -1068,6 +1070,24 @@ function ProviderCrudModal({
             className={inputCls}
           />
         </div>
+        <div>
+          <label className={labelCls}>Organisasi Induk</label>
+          <select
+            required
+            value={organizationId}
+            disabled={Boolean(initial)}
+            onChange={(event) => setOrganizationId(event.target.value)}
+            className={inputCls}
+          >
+            <option value="" disabled>Pilih organisasi aktif</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>{organization.name}</option>
+            ))}
+          </select>
+          {organizations.length === 0 && !initial && (
+            <p className="mt-1 text-[10px] text-[#B23A48]">Tenant belum memiliki organisasi aktif yang dapat dipilih.</p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Mode Integrasi</label>
@@ -1600,17 +1620,24 @@ function CooperationPolicyCrudModal({
 function OrgUnitCrudModal({
   initial,
   tenants,
+  organizationsByTenant,
   onClose,
   onSubmit,
 }: {
   initial?: OrgUnitRecord;
   tenants: AdminTenantRecord[];
+  organizationsByTenant: Record<string, AgentzyOrganization[]>;
   onClose: () => void;
   onSubmit: (p: Omit<OrgUnitRecord, 'id'> & { id?: string }) => void;
 }) {
   const [tenantId, setTenantId] = useState(
     initial?.tenantId ?? tenants[0]?.id ?? 'ten-isp-nusantara'
   );
+  const [organizationId, setOrganizationId] = useState(initial?.organizationId ?? '');
+  const organizations = (organizationsByTenant[tenantId] ?? []).filter((item) => item.status === 'active');
+  useEffect(() => {
+    if (!organizationId && organizations.length === 1) setOrganizationId(organizations[0].id);
+  }, [organizationId, organizations]);
   const [name, setName] = useState(initial?.name ?? '');
   const [unitType, setUnitType] = useState<OrgUnitRecord['unitType']>(
     initial?.unitType ?? 'Cabang / Regional'
@@ -1628,6 +1655,7 @@ function OrgUnitCrudModal({
           onSubmit({
             id: initial?.id,
             tenantId,
+            organizationId,
             name,
             unitType,
             parentName,
@@ -1642,7 +1670,7 @@ function OrgUnitCrudModal({
           <label className={labelCls}>Tenant</label>
           <select
             value={tenantId}
-            onChange={(e) => setTenantId(e.target.value)}
+            onChange={(e) => { setTenantId(e.target.value); setOrganizationId(''); }}
             className={inputCls}
           >
             {tenants.map((t) => (
