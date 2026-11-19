@@ -706,8 +706,8 @@ async def update_partnership_prospect(
                 update public.crm_prospects
                 set status=:status,assigned_to=:assigned_to,
                     assigned_at=case
-                      when :assigned_to is distinct from assigned_to
-                        and :assigned_to is not null then now()
+                      when :assigned_to is distinct from assigned_to then
+                        case when :assigned_to is not null then now() else null end
                       else assigned_at end,
                     last_activity_at=now(),updated_at=now()
                 where id=:id
