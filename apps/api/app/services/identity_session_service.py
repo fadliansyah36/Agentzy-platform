@@ -4,8 +4,6 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncConnection
-
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.db.session import engine
 from app.repositories.identity_repository import (
