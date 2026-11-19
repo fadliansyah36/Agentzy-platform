@@ -34,7 +34,7 @@ async def _authorize_attachment_read(
         user_id=actor,
         permission_key="platform.partnership.read",
         resource_type="platform.partnership",
-        action="read_attachment",
+        action="read",
         resource={"id": resource_id},
         request_id=getattr(request.state, "request_id", None),
         request_context={
