@@ -16,8 +16,6 @@ from app.db.session import engine, user_session
 from app.services.tenant_structure_service import (
     ensure_tenant_owner_retained,
     set_organization_unit_status as set_organization_unit_status_service,
-)
-from app.services.tenant_structure_service import (
     update_organization_unit as update_organization_unit_service,
 )
 
