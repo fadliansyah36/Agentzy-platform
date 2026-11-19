@@ -8,10 +8,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.idempotency import complete_idempotency, reserve_idempotency
-from app.services.identity_session_service import list_sessions_for_user, revoke_session_for_user
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 from app.schemas.identity import IdentityRead, MembershipRead
+from app.services.identity_session_service import list_sessions_for_user, revoke_session_for_user
 
 router = APIRouter()
 
