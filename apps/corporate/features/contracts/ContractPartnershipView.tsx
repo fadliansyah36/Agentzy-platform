@@ -42,7 +42,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
   const token = auth.session?.access_token ?? '';
   const [tab,setTab] = useState<Tab>('contracts');
   const [profile,setProfile] = useState<CorporateProfile | null>(null);
-  const [profileForm,setProfileForm] = useState({legal_name:'',registration_number:'',billing_email:'',billing_phone:'',contact_name:'',contact_title:'',website:'',country_code:'ID',organization_id:'',branch_id:''});
+  const [profileForm,setProfileForm] = useState({legal_name:'',registration_number:'',billing_email:'',billing_phone:'',contact_name:'',contact_title:'',website:'',country_code:'ID',organization_id:'',branch_id:'',tax_rate:'0'});
   const [contracts,setContracts] = useState<CorporateContract[]>([]);
   const [selectedId,setSelectedId] = useState('');
   const [detail,setDetail] = useState<CorporateContract | null>(null);
@@ -91,7 +91,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
     ]);
     if (results[0].status === 'fulfilled') {
       const p = results[0].value.data; setProfile(p);
-      if (p) setProfileForm({legal_name:p.legal_name ?? '',registration_number:p.registration_number ?? '',billing_email:p.billing_email ?? '',billing_phone:p.billing_phone ?? '',contact_name:p.contact_name ?? '',contact_title:p.contact_title ?? '',website:p.website ?? '',country_code:p.country_code ?? 'ID',organization_id:p.organization_id ?? '',branch_id:p.branch_id ?? ''});
+      if (p) setProfileForm({legal_name:p.legal_name ?? '',registration_number:p.registration_number ?? '',billing_email:p.billing_email ?? '',billing_phone:p.billing_phone ?? '',contact_name:p.contact_name ?? '',contact_title:p.contact_title ?? '',website:p.website ?? '',country_code:p.country_code ?? 'ID',organization_id:p.organization_id ?? '',branch_id:p.branch_id ?? '',tax_rate:String(p.tax_profile?.tax_rate ?? '0')});
     } else setError(results[0].reason instanceof Error ? results[0].reason.message : 'Gagal memuat profile.');
     if (results[1].status === 'fulfilled') {
       const contractRows = results[1].value.data;
@@ -283,6 +283,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
         )}
         <label><span className={label}>Organization</span><select className={field} disabled={!canProfile || saving} value={profileForm.organization_id} onChange={e=>setProfileForm(p=>({...p,organization_id:e.target.value,branch_id:''}))}><option value="">Pilih organization</option>{organizations.filter(o=>o.status==='active').map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
         <label><span className={label}>Branch</span><select className={field} disabled={!canProfile || saving || !profileForm.organization_id} value={profileForm.branch_id} onChange={e=>setProfileForm(p=>({...p,branch_id:e.target.value}))}><option value="">Pilih branch</option>{branches.filter(b=>b.organization_id===profileForm.organization_id && b.status==='active').map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+        <label><span className={label}>Tax rate (%)</span><input type="number" min="0" max="100" step="0.01" className={field} disabled={!canProfile || saving} value={profileForm.tax_rate} onChange={e=>setProfileForm(p=>({...p,tax_rate:e.target.value}))}/></label>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3"><span className="text-xs text-[#718391]">Status: {profile?.profile_status ?? 'Belum dibuat'}</span>
         {canProfile && <button className={primary} disabled={saving || !profileForm.legal_name} onClick={()=>void saveProfile()}>Simpan Profile</button>}
