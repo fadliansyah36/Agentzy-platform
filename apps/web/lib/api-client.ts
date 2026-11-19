@@ -905,7 +905,8 @@ export type ContractPaymentReference = {
 export type ContractEntitlement = {
   id: string; contract_id: string; contract_version_id: string; service_key: string;
   service_scope: Record<string, unknown>; sla: Record<string, unknown>;
-  kpi: Record<string, unknown>; human_workforce_limit: number | null;
+  kpi: Record<string, unknown>; contract_service_id: string; monthly_fee: string | null;
+  quantity: number; human_workforce_limit: number | null;
   ai_worker_limit: number | null; ai_credits_limit: string | null;
   effective_start: string | null; effective_end: string | null;
 };
@@ -1064,7 +1065,7 @@ export const createCorporateInvoice = (
   accessToken: string, contractId: string, payload: {
     tenant_id: string; invoice_number: string; title: string; currency: string;
     tax_amount: string; due_at?: string | null;
-    lines: Array<{ contract_service_id?: string | null; description: string; quantity: string; unit_amount: string }>;
+    lines: Array<{ service_key: string; quantity: string }>;
   },
 ) => apiRequest<{ data: { id: string; status: string; total_amount: string } }>(
   `/corporate/contracts/${encodeURIComponent(contractId)}/invoices`,
