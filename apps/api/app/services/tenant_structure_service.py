@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.authorization import authorize_object
@@ -144,3 +145,57 @@ async def set_organization_unit_status(
         status=status,
     )
     return row, previous_status
+
+
+async def ensure_tenant_owner_retained(
+    connection: AsyncConnection,
+    *,
+    tenant_id: UUID,
+    membership_id: UUID,
+) -> None:
+    """Serialize owner lifecycle mutations and prevent ownerless active tenants."""
+    await connection.execute(
+        text("select pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"tenant-owner:{tenant_id}"},
+    )
+    target_owner = await connection.execute(
+        text("""
+            select exists(
+              select 1
+              from public.memberships m
+              join public.membership_roles mr on mr.membership_id=m.id
+              join public.roles r on r.id=mr.role_id
+              where m.id=:membership_id and m.tenant_id=:tenant_id
+                and m.status='active' and r.key='corporate_owner'
+                and (r.tenant_id is null or r.tenant_id=:tenant_id)
+                and mr.scope_type='tenant'
+                and (mr.valid_from is null or mr.valid_from<=now())
+                and (mr.valid_until is null or mr.valid_until>now())
+            )
+        """),
+        {"membership_id": membership_id, "tenant_id": tenant_id},
+    )
+    if not target_owner.scalar_one():
+        return
+    other_owner = await connection.execute(
+        text("""
+            select exists(
+              select 1
+              from public.memberships m
+              join public.membership_roles mr on mr.membership_id=m.id
+              join public.roles r on r.id=mr.role_id
+              where m.tenant_id=:tenant_id and m.id<>:membership_id
+                and m.status='active' and r.key='corporate_owner'
+                and (r.tenant_id is null or r.tenant_id=:tenant_id)
+                and mr.scope_type='tenant'
+                and (mr.valid_from is null or mr.valid_from<=now())
+                and (mr.valid_until is null or mr.valid_until>now())
+            )
+        """),
+        {"membership_id": membership_id, "tenant_id": tenant_id},
+    )
+    if not other_owner.scalar_one():
+        raise HTTPException(
+            status_code=409,
+            detail="Tenant harus mempertahankan minimal satu owner aktif.",
+        )
