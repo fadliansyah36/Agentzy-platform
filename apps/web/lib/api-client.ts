@@ -859,3 +859,237 @@ export const rejectBreakGlass = (accessToken: string, requestId: string) =>
   apiRequest<AgentzyBreakGlassRequest>(`/security/break-glass/requests/${encodeURIComponent(requestId)}/reject`, {
     method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
   });
+
+
+// Corporate & Contract Management — all business mutations are FastAPI commands.
+export type CorporateProfile = {
+  tenant_id: string; organization_id: string | null; branch_id: string | null;
+  legal_name: string; registration_number: string | null; billing_email: string | null;
+  billing_phone: string | null; billing_address: Record<string, unknown>;
+  tax_profile: Record<string, unknown>; contact_name: string | null;
+  contact_title: string | null; website: string | null; country_code: string;
+  profile_status: 'draft' | 'active' | 'suspended' | 'archived';
+};
+export type CorporateContractService = {
+  service_key: string; service_scope: string; quantity: number;
+  monthly_fee?: string | number | null; sla?: Record<string, unknown>;
+  kpi?: Record<string, unknown>; entitlement?: Record<string, unknown>;
+  human_workforce_limit?: number | null; ai_worker_limit?: number | null;
+  ai_credits_limit?: string | number | null;
+};
+export type CorporateContract = {
+  id: string; tenant_id?: string; contract_number: string; title: string;
+  contract_type: 'master' | 'statement_of_work' | 'amendment';
+  status: string; currency: string; effective_start: string | null;
+  effective_end: string | null; renewal_at: string | null; current_version: number;
+  row_version?: number; version_id?: string; scope_summary?: string;
+  terms?: string | null; services?: CorporateContractService[];
+  approvals?: Array<Record<string, unknown>>;
+};
+export type ContractDocument = {
+  id: string; document_type: string; original_filename: string; content_type: string;
+  file_size: number; sha256: string | null; lifecycle_status: string; created_at: string;
+};
+export type ContractInvoice = {
+  id: string; contract_id: string; invoice_number: string; title: string;
+  currency: string; subtotal: string; tax_amount: string; total_amount: string;
+  status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+  issued_at: string | null; due_at: string | null; created_at: string;
+};
+export type ContractPaymentReference = {
+  id: string; reference_number: string; payment_method: string; amount: string;
+  status: 'reference_created' | 'submitted' | 'confirmed' | 'rejected' | 'reconciled';
+  external_reference: string | null; submitted_at: string | null;
+  verified_at: string | null; reconciled_at: string | null; created_at: string;
+};
+export type ContractEntitlement = {
+  id: string; contract_id: string; contract_version_id: string; service_key: string;
+  service_scope: Record<string, unknown>; sla: Record<string, unknown>;
+  kpi: Record<string, unknown>; human_workforce_limit: number | null;
+  ai_worker_limit: number | null; ai_credits_limit: string | null;
+  effective_start: string | null; effective_end: string | null;
+};
+
+export const getCorporateProfile = (accessToken: string, tenantId: string) =>
+  apiRequest<{ data: CorporateProfile | null }>(
+    `/corporate/profile?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const upsertCorporateProfile = (
+  accessToken: string,
+  payload: Omit<CorporateProfile, 'profile_status'>,
+) => apiRequest<{ data: CorporateProfile }>('/corporate/profile', {
+  method: 'PUT', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  body: JSON.stringify(payload),
+});
+export const updateCorporateProfileStatus = (
+  accessToken: string, tenantId: string,
+  payload: { status: 'active' | 'suspended' | 'archived'; reason: string },
+) => apiRequest<{ data: { tenant_id: string; profile_status: string } }>('/corporate/profile/status', {
+  method: 'PATCH', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  body: JSON.stringify({ tenant_id: tenantId, ...payload }),
+});
+export const listCorporateContracts = (
+  accessToken: string, tenantId: string, status?: string,
+) => {
+  const query = new URLSearchParams({ tenant_id: tenantId, limit: '100' });
+  if (status) query.set('status', status);
+  return apiRequest<{ data: CorporateContract[]; meta?: { has_more: boolean } }>(
+    `/corporate/contracts?${query.toString()}`, { method: 'GET', accessToken },
+  );
+};
+export const getCorporateContract = (accessToken: string, tenantId: string, contractId: string) =>
+  apiRequest<{ data: CorporateContract }>(
+    `/corporate/contracts/${encodeURIComponent(contractId)}?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const createCorporateContract = (
+  accessToken: string,
+  payload: {
+    tenant_id: string; contract_number: string; title: string;
+    contract_type: 'master' | 'statement_of_work' | 'amendment'; currency: string;
+    effective_start?: string | null; effective_end?: string | null; renewal_at?: string | null;
+    scope_summary: string; terms?: string | null;
+    commercial_snapshot?: Record<string, unknown>; services: CorporateContractService[];
+  },
+) => apiRequest<{ data: { id: string; status: string; version: number } }>('/corporate/contracts', {
+  method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  body: JSON.stringify(payload),
+});
+export const patchCorporateContract = (
+  accessToken: string, contractId: string,
+  payload: {
+    tenant_id: string; expected_row_version: number; title?: string;
+    effective_start?: string | null; effective_end?: string | null;
+    renewal_at?: string | null; renewal_notice_days?: number;
+    organization_id?: string | null; branch_id?: string | null;
+  },
+) => apiRequest<{ data: { id: string; status: string; row_version: number } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}`,
+  { method: 'PATCH', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const createCorporateAmendment = (
+  accessToken: string, contractId: string,
+  payload: {
+    tenant_id: string; change_summary: string; scope_summary: string;
+    terms?: string | null; effective_from: string;
+    commercial_snapshot?: Record<string, unknown>; services: CorporateContractService[];
+  },
+) => apiRequest<{ data: { contract_id: string; version_id: string; version: number; status: string } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/amendments`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const listContractDocuments = (accessToken: string, tenantId: string, contractId: string) =>
+  apiRequest<{ data: ContractDocument[] }>(
+    `/corporate/contracts/${encodeURIComponent(contractId)}/documents?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const uploadContractDocument = (
+  accessToken: string, tenantId: string, contractId: string, file: File,
+  documentType: 'master_agreement' | 'statement_of_work' | 'sla' | 'amendment' | 'supporting',
+  versionId?: string,
+) => {
+  const query = new URLSearchParams({ tenant_id: tenantId, document_type: documentType });
+  if (versionId) query.set('contract_version_id', versionId);
+  return apiRequest<{ data: ContractDocument }>(
+    `/corporate/contracts/${encodeURIComponent(contractId)}/documents?${query.toString()}`,
+    { method: 'POST', accessToken, headers: {
+      'Content-Type': file.type, 'X-File-Name': file.name,
+      'Idempotency-Key': createIdempotencyKey(),
+    }, body: file },
+  );
+};
+export const getContractDocumentDownload = (accessToken: string, tenantId: string, documentId: string) =>
+  apiRequest<{ data: { signed_url: string; expires_in: number } }>(
+    `/corporate/documents/${encodeURIComponent(documentId)}/download?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'POST', accessToken },
+  );
+export const listContractApprovalPolicies = (accessToken: string, tenantId: string) =>
+  apiRequest<{ data: Array<Record<string, unknown>> }>(
+    `/corporate/approval-policies?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const createContractApprovalPolicy = (
+  accessToken: string, payload: {
+    tenant_id: string; policy_name: string; contract_type: 'master' | 'statement_of_work' | 'amendment';
+    currency: string; min_amount: string; max_amount?: string | null;
+    steps: Array<{ required_permission_key: string; required_role_key?: string | null; minimum_approvals: number }>;
+  },
+) => apiRequest<{ data: { id: string; policy_name: string } }>('/corporate/approval-policies', {
+  method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  body: JSON.stringify(payload),
+});
+export const submitContractPolicyReview = (accessToken: string, tenantId: string, contractId: string) =>
+  apiRequest<{ data: { id: string; status: string; approval_count: number } }>(
+    `/corporate/contracts/${encodeURIComponent(contractId)}/submit-policy-review?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
+  );
+export const decideContractApproval = (
+  accessToken: string, contractId: string, payload: {
+    tenant_id: string; approval_id: string; decision: 'approved' | 'rejected'; reason: string;
+  },
+) => apiRequest<{ data: { approval_id: string; contract_status: string } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/policy-decision`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const requestContractRenewal = (
+  accessToken: string, contractId: string, payload: {
+    tenant_id: string; renewal_type: 'renewal' | 'extension'; requested_start?: string | null;
+    requested_end: string; requested_terms?: string | null;
+  },
+) => apiRequest<{ data: { id: string; status: string } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/renewals`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const changeContractLifecycle = (
+  accessToken: string, tenantId: string, contractId: string,
+  action: 'suspend' | 'terminate', reason: string,
+) => apiRequest<{ data: { id: string; status: string } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/${action}`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify({ tenant_id: tenantId, reason }) },
+);
+export const listCorporateInvoices = (accessToken: string, tenantId: string) =>
+  apiRequest<{ data: ContractInvoice[] }>(
+    `/corporate/invoices?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const createCorporateInvoice = (
+  accessToken: string, contractId: string, payload: {
+    tenant_id: string; invoice_number: string; title: string; currency: string;
+    tax_amount: string; due_at?: string | null;
+    lines: Array<{ contract_service_id?: string | null; description: string; quantity: string; unit_amount: string }>;
+  },
+) => apiRequest<{ data: { id: string; status: string; total_amount: string } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/invoices`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const issueCorporateInvoice = (accessToken: string, tenantId: string, invoiceId: string) =>
+  apiRequest<{ data: { id: string; status: string; invoice_number: string } }>(
+    `/corporate/invoices/${encodeURIComponent(invoiceId)}/issue?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
+  );
+export const createPaymentReference = (
+  accessToken: string, invoiceId: string, payload: {
+    tenant_id: string; reference_number: string; payment_method: string; amount: string;
+  },
+) => apiRequest<{ data: { id: string; status: string; payment_confirmed: false } }>(
+  `/corporate/invoices/${encodeURIComponent(invoiceId)}/payment-references`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const listPaymentReferences = (accessToken: string, tenantId: string, invoiceId: string) =>
+  apiRequest<{ data: ContractPaymentReference[] }>(
+    `/corporate/invoices/${encodeURIComponent(invoiceId)}/payment-references?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const getEffectiveContractEntitlements = (accessToken: string, tenantId: string) =>
+  apiRequest<{ data: ContractEntitlement[] }>(
+    `/corporate/entitlements/effective?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
