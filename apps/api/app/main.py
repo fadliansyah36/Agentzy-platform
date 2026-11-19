@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.redaction import redact_audit_value
 from app.db.session import engine
 from app.services.notification_dispatcher import run_notification_worker
+from app.services.attachment_scanner import run_attachment_scanner_worker
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -22,17 +23,26 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     notification_task = None
+    attachment_scanner_task = None
     if settings.smtp_configured:
         notification_task = asyncio.create_task(run_notification_worker())
     else:
         logger.warning("notification_worker_disabled", reason="SMTP settings are not configured")
+    if settings.attachment_scanner_configured:
+        attachment_scanner_task = asyncio.create_task(run_attachment_scanner_worker())
+    else:
+        logger.warning(
+            "attachment_scanner_disabled",
+            reason="CLAMAV_HOST and server-side Supabase Storage credentials are required",
+        )
     try:
         yield
     finally:
-        if notification_task:
-            notification_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await notification_task
+        for task in (notification_task, attachment_scanner_task):
+            if task:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
         await engine.dispose()
 
 
