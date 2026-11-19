@@ -1652,6 +1652,20 @@ async def create_payment_reference(
             if previous["idempotency_fingerprint"] != fingerprint:
                 raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk payment reference berbeda.")
             return {"data": {"id": str(previous["id"]), "status": previous["status"], "payment_confirmed": False, "replayed": True}}
+        allocated = await connection.execute(
+            text("""
+                select coalesce(sum(amount),0)
+                from public.contract_payment_references
+                where tenant_id=:tenant and invoice_id=:invoice
+                  and status in ('reference_created','submitted','confirmed','reconciled')
+            """),
+            {"tenant": payload.tenant_id, "invoice": invoice_id},
+        )
+        if allocated.scalar_one() + payload.amount > row["total_amount"]:
+            raise HTTPException(
+                status_code=409,
+                detail="Total payment references aktif melebihi outstanding invoice.",
+            )
         result = await connection.execute(
             text("""
                 insert into public.contract_payment_references(
