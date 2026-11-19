@@ -2,10 +2,10 @@
 
 import hashlib
 import secrets
-from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 from uuid import UUID
 
+import structlog
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -16,6 +16,7 @@ from app.adapters.google_oauth import (
     build_authorization_url,
     create_pkce_pair,
     exchange_authorization_code,
+    refresh_access_token,
     revoke_token,
 )
 from app.core.config import get_settings
@@ -24,6 +25,7 @@ from app.db.session import engine
 
 router = APIRouter(prefix="/integrations", tags=["Provider Integrations"])
 claims_dependency = Depends(current_claims)
+logger = structlog.get_logger()
 
 ALLOWED_SCOPES = {
     "openid",
@@ -115,17 +117,16 @@ async def start_google_oauth(payload: OAuthStart, claims: dict = claims_dependen
         await connection.execute(
             text("""
                 insert into public.audit_logs(
-                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                  tenant_id,actor_user_id,action,resource_type,resource_id,metadata
                 ) values(
                   :tenant_id,:user_id,'integration.oauth.consent_started',
-                  'provider_connection',:tenant_id,:request_id,
+                  'provider_connection',:tenant_id,
                   jsonb_build_object('provider','google_workspace','scopes',to_jsonb(:scopes::text[]))
                 )
             """),
             {
                 "tenant_id": payload.tenant_id,
                 "user_id": user_id,
-                "request_id": None,
                 "scopes": payload.scopes,
             },
         )
@@ -142,7 +143,10 @@ async def google_oauth_callback(
     settings = get_settings()
     base = settings.app_base_url.rstrip("/")
     if error:
-        return RedirectResponse(f"{base}/integrations/callback?{urlencode({'provider':'google','status':'denied'})}")
+        logger.info("google_oauth_consent_denied", provider_error=error[:64])
+        return RedirectResponse(
+            f"{base}/integrations/callback?{urlencode({'provider': 'google', 'status': 'denied'})}"
+        )
     if not code:
         raise HTTPException(status_code=400, detail="OAuth authorization code is missing.")
     state_hash = hashlib.sha256(state.encode()).hexdigest()
@@ -210,22 +214,28 @@ async def google_oauth_callback(
             await connection.execute(
                 text("""
                     insert into public.audit_logs(
-                      tenant_id,actor_user_id,action,resource_type,resource_id,metadata
+                      tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
                     ) values(
                       :tenant_id,:user_id,'integration.oauth.connected',
-                      'provider_connection',:subject,
+                      'provider_connection',:subject,:request_id,
                       jsonb_build_object('provider','google_workspace','email',:email)
                     )
                 """),
-                {"tenant_id": tenant_id, "user_id": user_id,
-                 "subject": profile["sub"], "email": profile.get("email")},
+                {
+                    "tenant_id": tenant_id,
+                    "user_id": user_id,
+                    "subject": profile["sub"],
+                    "email": profile.get("email"),
+                    "request_id": getattr(request.state, "request_id", None),
+                },
             )
     except Exception:
+        logger.exception("google_oauth_callback_failed", tenant_id=str(tenant_id))
         return RedirectResponse(
-            f"{base}/integrations/callback?{urlencode({'provider':'google','status':'failed'})}"
+            f"{base}/integrations/callback?{urlencode({'provider': 'google', 'status': 'failed'})}"
         )
     return RedirectResponse(
-        f"{base}/integrations/callback?{urlencode({'provider':'google','status':'connected'})}"
+        f"{base}/integrations/callback?{urlencode({'provider': 'google', 'status': 'connected'})}"
     )
 
 
@@ -248,6 +258,77 @@ async def list_provider_connections(
             {"tenant_id": tenant_id},
         )
     return {"data": [dict(row) for row in result.mappings().all()]}
+
+
+@router.post("/connections/{connection_id}/refresh")
+async def refresh_provider_connection(
+    connection_id: UUID,
+    payload: OAuthRevoke,
+    claims: dict = claims_dependency,
+):
+    user_id = UUID(claims["sub"])
+    await _require_tenant_integration_permission(user_id, payload.tenant_id)
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select refresh_token_ciphertext
+                from public.provider_connections
+                where id=:id and tenant_id=:tenant_id and revoked_at is null
+            """),
+            {"id": connection_id, "tenant_id": payload.tenant_id},
+        )
+        row = result.mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Provider connection not found.")
+    if not row["refresh_token_ciphertext"]:
+        raise HTTPException(status_code=409, detail="Provider did not grant offline refresh consent.")
+    cipher = _cipher()
+    try:
+        refresh_token = cipher.decrypt(row["refresh_token_ciphertext"].encode()).decode()
+    except (InvalidToken, ValueError) as exc:
+        raise HTTPException(status_code=500, detail="Stored provider credential cannot be decrypted.") from exc
+    try:
+        tokens = await refresh_access_token(refresh_token)
+        access_cipher = cipher.encrypt(tokens["access_token"].encode()).decode()
+        expires_in = int(tokens.get("expires_in") or 3600)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("""
+                    update public.provider_connections
+                    set access_token_ciphertext=:access_token,
+                        refresh_token_ciphertext=coalesce(:refresh_token,refresh_token_ciphertext),
+                        access_token_expires_at=now()+(:expires||' seconds')::interval,
+                        last_refreshed_at=now(),updated_at=now()
+                    where id=:id and tenant_id=:tenant_id and revoked_at is null
+                """),
+                {
+                    "access_token": access_cipher,
+                    "refresh_token": (
+                        cipher.encrypt(tokens["refresh_token"].encode()).decode()
+                        if tokens.get("refresh_token")
+                        else None
+                    ),
+                    "expires": expires_in,
+                    "id": connection_id,
+                    "tenant_id": payload.tenant_id,
+                },
+            )
+            await connection.execute(
+                text("""
+                    insert into public.audit_logs(
+                      tenant_id,actor_user_id,action,resource_type,resource_id,metadata
+                    ) values(
+                      :tenant_id,:user_id,'integration.oauth.token_refreshed',
+                      'provider_connection',:id,
+                      jsonb_build_object('provider','google_workspace')
+                    )
+                """),
+                {"tenant_id": payload.tenant_id, "user_id": user_id, "id": str(connection_id)},
+            )
+    except Exception as exc:
+        logger.warning("google_oauth_token_refresh_failed", connection_id=str(connection_id))
+        raise HTTPException(status_code=502, detail="Google token refresh failed.") from exc
+    return {"data": {"id": str(connection_id), "status": "refreshed"}}
 
 
 @router.post("/connections/{connection_id}/revoke")
