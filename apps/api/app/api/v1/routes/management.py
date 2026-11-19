@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.supabase_auth_admin import invite_user as invite_supabase_auth_user
 from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, fail_idempotency, reserve_idempotency
-from app.adapters.supabase_auth_admin import invite_user as invite_supabase_auth_user
 from app.core.pagination import (
     PageMeta,
     PageResponse,
