@@ -5,6 +5,7 @@ import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import { createPaymentReference, listCorporateInvoices, listPaymentReferences, submitPaymentReference, verifyPaymentReference, type ContractInvoice, type ContractPaymentReference } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader } from '../../components/data-display/CorporateDataDisplay';
+import { NetworkStatusBanner } from '../../components/NetworkStatusBanner';
 
 const field='h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
 const button='inline-flex h-10 items-center rounded-[9px] bg-[#17324D] px-4 text-xs font-semibold text-white disabled:opacity-50';
@@ -91,6 +92,7 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
 
   return <div className="space-y-5">
     <CorporatePageHeader title="Payment References" subtitle="Pencatatan referensi, bukti eksternal dan rekonsiliasi pembayaran" onBack={onBack}
+    <NetworkStatusBanner stale={Boolean(error && !loading)} />
       actions={<button className={secondary} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
