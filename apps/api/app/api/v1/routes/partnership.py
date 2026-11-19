@@ -19,6 +19,7 @@ from app.adapters.supabase_storage import delete_quarantined_object, upload_quar
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.redaction import redact_audit_value
+from app.services.partnership_acquisition_service import submit_partnership_application
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 
@@ -249,199 +250,17 @@ async def create_partnership_application(
         ).encode()
     ).hexdigest()
     context = _request_context(request)
-    async with engine.begin() as connection:
-        existing = await connection.execute(
-            text("""
-                select id, reference_code, status, request_fingerprint, upload_token_expires_at
-                from public.public_partnership_applications
-                where submission_idempotency_key=:key
-            """),
-            {"key": idempotency_key},
-        )
-        prior = existing.mappings().first()
-        if prior:
-            if prior["request_fingerprint"] != request_fingerprint:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Idempotency-Key telah digunakan untuk payload yang berbeda.",
-                )
-            await connection.execute(
-                text("""
-                    update public.public_partnership_applications
-                    set upload_token_expires_at=now() + interval '2 hours'
-                    where id=:id
-                """),
-                {"id": prior["id"]},
-            )
-            return {
-                "data": {
-                    "id": str(prior["id"]),
-                    "reference_code": prior["reference_code"],
-                    "status": prior["status"],
-                    "upload_token": upload_token,
-                    "notification_status": "queued",
-                },
-                "meta": context,
-            }
-
-        duplicate = await connection.execute(
-            text("""
-                select 1 from public.public_partnership_applications
-                where lower(business_email)=:email
-                  and lower(company_name)=:company
-                  and created_at > now() - interval '24 hours'
-                limit 1
-            """),
-            {"email": payload.business_email, "company": payload.company_name.lower()},
-        )
-        if duplicate.first():
-            raise HTTPException(
-                status_code=409,
-                detail="Pengajuan dengan data perusahaan dan email tersebut baru saja diterima.",
-            )
-
-        application_id = uuid4()
-        reference_code = f"AGZ-{application_id.hex[:10].upper()}"
-        result = await connection.execute(
-            text("""
-                insert into public.public_partnership_applications(
-                  id,reference_code,company_name,company_type,contact_name,contact_title,
-                  business_email,business_phone,website,operating_locations,estimated_workforce,
-                  human_needs,ai_needs,provider_products,needs_summary,status,source,
-                  request_id,correlation_id,trace_id,upload_token_hash,upload_token_expires_at,
-                  submission_idempotency_key,request_fingerprint
-                ) values (
-                  :id,:reference,:company,:company_type,:contact,:title,:email,:phone,
-                  :website,:locations,:workforce,:human,:ai,:products,:summary,'submitted',
-                  'public_landing',:request_id,:correlation_id,:trace_id,
-                  :upload_hash,now() + interval '2 hours',:idempotency,:fingerprint
-                ) returning id,reference_code,status,created_at
-            """),
-            {
-                "id": application_id,
-                "reference": reference_code,
-                "company": payload.company_name,
-                "company_type": payload.company_type,
-                "contact": payload.contact_name,
-                "title": payload.contact_title,
-                "email": payload.business_email,
-                "phone": payload.business_phone,
-                "website": payload.website,
-                "locations": payload.operating_locations,
-                "workforce": payload.estimated_workforce,
-                "human": payload.human_needs,
-                "ai": payload.ai_needs,
-                "products": payload.provider_products,
-                "summary": payload.needs_summary,
-                "request_id": context["request_id"],
-                "correlation_id": context["correlation_id"],
-                "trace_id": context["trace_id"],
-                "upload_hash": upload_token_hash,
-                "idempotency": idempotency_key,
-                "fingerprint": request_fingerprint,
-            },
-        )
-        application = dict(result.mappings().one())
-        prospect_id = uuid4()
-        await connection.execute(
-            text("""
-                insert into public.crm_prospects(
-                  id,application_id,company_name,contact_name,business_email,business_phone,status
-                ) values(:id,:application_id,:company,:contact,:email,:phone,'submitted')
-            """),
-            {
-                "id": prospect_id,
-                "application_id": application_id,
-                "company": payload.company_name,
-                "contact": payload.contact_name,
-                "email": payload.business_email,
-                "phone": payload.business_phone,
-            },
-        )
-        await connection.execute(
-            text("""
-                insert into public.public_partnership_consents(
-                  application_id,consent_type,granted,policy_version
-                )
-                values(:id,'privacy',true,:version),(:id,'communication',true,:version)
-            """),
-            {"id": application_id, "version": payload.policy_version},
-        )
-        await connection.execute(
-            text("""
-                insert into public.crm_prospect_activities(
-                  prospect_id,activity_type,to_status,metadata
-                )
-                values(:prospect,'submitted','submitted',cast(:metadata as jsonb))
-            """),
-            {
-                "prospect": prospect_id,
-                "metadata": json.dumps(
-                    {"source": "public_landing", "reference_code": reference_code}
-                ),
-            },
-        )
-        await connection.execute(
-            text("""
-                insert into public.notification_outbox(
-                  event_type,aggregate_type,aggregate_id,recipient_email,payload
-                )
-                values(
-                  'partnership.application_received','partnership_application',
-                  :id,:email,cast(:payload as jsonb)
-                )
-            """),
-            {
-                "id": application_id,
-                "email": payload.business_email,
-                "payload": json.dumps(
-                    {
-                        "reference_code": reference_code,
-                        "company_name": payload.company_name,
-                        "contact_name": payload.contact_name,
-                        "event": "partnership.application_received",
-                    }
-                ),
-            },
-        )
-        await connection.execute(
-            text("""
-                insert into public.audit_logs(
-                  action,resource_type,resource_id,request_id,metadata
-                ) values(
-                  'partnership.application.submitted','partnership_application',:id,:request_id,
-                  cast(:metadata as jsonb)
-                )
-            """),
-            {
-                "id": str(application_id),
-                "request_id": context["request_id"],
-                "metadata": json.dumps(
-                    redact_audit_value(
-                        {
-                            "reference_code": reference_code,
-                            "company_type": payload.company_type,
-                            "email_hash": hashlib.sha256(
-                                payload.business_email.encode()
-                            ).hexdigest(),
-                            "correlation_id": context["correlation_id"],
-                            "trace_id": context["trace_id"],
-                        }
-                    )
-                ),
-            },
-        )
-
-    return {
-        "data": {
-            "id": str(application["id"]),
-            "reference_code": application["reference_code"],
-            "status": application["status"],
-            "upload_token": upload_token,
-            "notification_status": "queued",
-        },
-        "meta": context,
-    }
+    return await submit_partnership_application(
+        payload=payload.model_dump(
+            exclude={"captcha_token", "fax_number"},
+            mode="json",
+        ),
+        request_context=context,
+        idempotency_key=idempotency_key,
+        request_fingerprint=request_fingerprint,
+        upload_token=upload_token,
+        upload_token_hash=upload_token_hash,
+    )
 
 
 @router.post(
