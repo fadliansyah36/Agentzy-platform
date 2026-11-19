@@ -721,7 +721,8 @@ async def list_departments(
     query = text(f"""
         select id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,
                created_at,updated_at
-        from public.departments where tenant_id=:tenant_id and (:include_archived or status='active')
+        from public.departments
+        where tenant_id=:tenant_id and (:include_archived or status='active')
           and (:organization_id is null or organization_id=:organization_id)
           and (:branch_id is null or branch_id=:branch_id)
           and (:department_id is null or id=:department_id)
@@ -2449,7 +2450,10 @@ async def update_organization_unit(
                     detail="Parent organization unit tidak aktif atau berada di luar organisasi.",
                 )
             if parent_unit_id == unit_id:
-                raise HTTPException(status_code=409, detail="Unit tidak dapat menjadi induknya sendiri.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Unit tidak dapat menjadi induknya sendiri.",
+                )
             cycle = await connection.execute(
                 text("""
                     with recursive descendants(id) as (
@@ -2558,7 +2562,8 @@ async def _set_organization_unit_status(
                       exists(select 1 from public.organization_units
                         where tenant_id=:tenant_id and parent_unit_id=:id and status<>'archived')
                       or exists(select 1 from public.branches
-                        where tenant_id=:tenant_id and organization_unit_id=:id and status<>'archived')
+                        where tenant_id=:tenant_id and organization_unit_id=:id
+                          and status<>'archived')
                       or exists(select 1 from public.memberships
                         where tenant_id=:tenant_id and organization_unit_id=:id
                           and status in ('invited','active','suspended'))
@@ -2568,7 +2573,9 @@ async def _set_organization_unit_status(
             if dependents.scalar_one():
                 raise HTTPException(
                     status_code=409,
-                    detail="Unit masih memiliki child unit, cabang, atau membership yang ditugaskan.",
+                    detail=(
+                        "Unit masih memiliki child unit, cabang, atau membership yang ditugaskan."
+                    ),
                 )
         elif current["parent_unit_id"] is not None:
             parent = await connection.execute(
