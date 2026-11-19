@@ -35,6 +35,24 @@ def _message_for(event_type: str, payload: dict) -> tuple[str, str]:
             f"Prospek {company} ({reference}) telah ditugaskan kepada Anda. "
             "Silakan tindak lanjuti melalui Super Admin Partnership Lead Inbox.",
         )
+    if event_type == "contract.expired":
+        contract_number = str(payload.get("contract_number") or "—")
+        title = str(payload.get("title") or "Kontrak")
+        effective_end = str(payload.get("effective_end") or "—")
+        return (
+            "Kontrak Agentzy Telah Berakhir",
+            f"Kontrak {contract_number} — {title} berakhir pada {effective_end}. "
+            "Silakan hubungi pengelola Corporate Portal untuk tindak lanjut.",
+        )
+    if event_type == "contract.renewal_reminder":
+        contract_number = str(payload.get("contract_number") or "—")
+        title = str(payload.get("title") or "Kontrak")
+        effective_end = str(payload.get("effective_end") or "—")
+        return (
+            "Pengingat Renewal Kontrak Agentzy",
+            f"Kontrak {contract_number} — {title} memiliki tanggal akhir {effective_end}. "
+            "Silakan ajukan renewal melalui Corporate Portal.",
+        )
     raise ValueError("Unsupported notification event type")
 
 
