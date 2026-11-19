@@ -168,7 +168,6 @@ class InvoiceInput(BaseModel):
     invoice_number: str = Field(min_length=3, max_length=80)
     title: str = Field(min_length=3, max_length=240)
     currency: str = Field(default="IDR", min_length=3, max_length=3)
-    tax_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=18, decimal_places=2)
     due_at: date | None = None
     lines: list[InvoiceLineInput] = Field(min_length=1, max_length=50)
 
@@ -1520,8 +1519,10 @@ async def create_contract_invoice(
             }
         contract_result = await connection.execute(
             text("""
-                select status,currency from public.contracts
-                where id=:id and tenant_id=:tenant for update
+                select c.status,c.currency,coalesce(cp.tax_profile,'{}'::jsonb) as tax_profile
+                from public.contracts c
+                left join public.corporate_profiles cp on cp.tenant_id=c.tenant_id
+                where c.id=:id and c.tenant_id=:tenant for update of c
             """),
             {"id": contract_id, "tenant": payload.tenant_id},
         )
@@ -1584,7 +1585,11 @@ async def create_contract_invoice(
                 "line_amount": line_amount,
             })
         subtotal = subtotal.quantize(Decimal("0.01"))
-        total = (subtotal + payload.tax_amount).quantize(Decimal("0.01"))
+        tax_rate = Decimal(str((contract["tax_profile"] or {}).get("tax_rate", "0")))
+        if tax_rate < 0 or tax_rate > 100:
+            raise HTTPException(status_code=409, detail="Corporate tax profile rate is invalid.")
+        tax_amount = (subtotal * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+        total = (subtotal + tax_amount).quantize(Decimal("0.01"))
         invoice = await connection.execute(
             text("""
                 insert into public.contract_invoices(
@@ -1602,7 +1607,7 @@ async def create_contract_invoice(
                 "title": payload.title,
                 "currency": contract["currency"],
                 "subtotal": subtotal,
-                "tax": payload.tax_amount,
+                "tax": tax_amount,
                 "total": total,
                 "due": payload.due_at,
                 "key": idempotency_key,
@@ -1640,6 +1645,7 @@ async def create_contract_invoice(
                 "total": str(total),
                 "fingerprint": fingerprint,
                 "line_count": len(resolved_lines),
+                "tax_rate": str(tax_rate),
             },
             idempotency_key=idempotency_key,
         )
