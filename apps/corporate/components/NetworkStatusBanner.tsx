@@ -3,10 +3,9 @@
 import { useEffect, useState } from 'react';
 
 export function NetworkStatusBanner({ stale = false }: { stale?: boolean }) {
-  const [online,setOnline]=useState(true);
+  const [online,setOnline]=useState(()=>typeof navigator==='undefined' ? true : navigator.onLine);
   useEffect(()=>{
     const update=()=>setOnline(navigator.onLine);
-    update();
     window.addEventListener('online',update);
     window.addEventListener('offline',update);
     return ()=>{
