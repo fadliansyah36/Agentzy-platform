@@ -1615,9 +1615,7 @@ function OrgUnitCrudModal({
   const [unitType, setUnitType] = useState<OrgUnitRecord['unitType']>(
     initial?.unitType ?? 'Cabang / Regional'
   );
-  const [parentName, setParentName] = useState(initial?.parentName ?? 'Kantor Pusat');
-  const [headName, setHeadName] = useState(initial?.headName ?? '');
-  const [memberCount, setMemberCount] = useState(initial?.memberCount ?? 45);
+  const [parentName, setParentName] = useState(initial?.parentName ?? '');
 
   return (
     <ModalFrame
@@ -1633,8 +1631,8 @@ function OrgUnitCrudModal({
             name,
             unitType,
             parentName,
-            headName,
-            memberCount: Number(memberCount) || 0,
+            headName: null,
+            memberCount: null,
             status: 'Aktif',
           });
         }}
@@ -1678,33 +1676,14 @@ function OrgUnitCrudModal({
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <label className={labelCls}>Induk</label>
-            <input
-              value={parentName}
-              onChange={(e) => setParentName(e.target.value)}
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>Kepala Unit</label>
-            <input
-              required
-              value={headName}
-              onChange={(e) => setHeadName(e.target.value)}
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>Jumlah Anggota</label>
-            <input
-              type="number"
-              value={memberCount}
-              onChange={(e) => setMemberCount(Number(e.target.value))}
-              className={inputCls}
-            />
-          </div>
+        <div>
+          <label className={labelCls}>Induk (nama unit/cabang/departemen terdaftar, opsional untuk cabang)</label>
+          <input
+            value={parentName}
+            onChange={(e) => setParentName(e.target.value)}
+            className={inputCls}
+            placeholder="Masukkan nama induk yang sudah terdaftar"
+          />
         </div>
         <ModalActions onClose={onClose} />
       </form>
