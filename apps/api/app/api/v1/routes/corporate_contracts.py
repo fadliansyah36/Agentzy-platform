@@ -3,7 +3,6 @@
 import hashlib
 import io
 import json
-import re
 import zipfile
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -532,6 +531,9 @@ async def create_contract_amendment(
                 "version": next_version, "scope": payload.scope_summary,
                 "terms": payload.terms, "snapshot": json.dumps(snapshot),
                 "hash": digest, "actor": actor,
+                "parent_version": prior["id"],
+                "change_summary": payload.change_summary,
+                "effective_from": payload.effective_from,
             },
         )
         version_id = version_result.scalar_one()
@@ -679,7 +681,7 @@ async def submit_policy_review(
         contract_result = await connection.execute(
             text("""
                 select c.status,c.current_version,c.contract_type,c.currency,
-                  v.version_status
+                  v.version_status,v.commercial_snapshot
                 from public.contracts c
                 join public.contract_versions v
                   on v.contract_id=c.id and v.version_number=c.current_version
@@ -716,7 +718,8 @@ async def submit_policy_review(
                   and (max_amount is null or max_amount>=:amount)
                 order by min_amount desc limit 1
             """),
-            {"tenant": tenant_id, "type": contract["contract_type"],
+            {"tenant": tenant_id,
+             "type": "amendment" if contract["commercial_snapshot"].get("parent_version_id") else contract["contract_type"],
              "currency": contract["currency"], "amount": amount},
         )
         policy_id = policy_result.scalar_one_or_none()
@@ -904,6 +907,12 @@ async def decide_policy_approval(
                 where c.id=:contract and c.tenant_id=:tenant
                   and a.id=:approval and a.status='pending'
                   and v.version_number=c.current_version
+                  and not exists (
+                    select 1 from public.contract_approvals previous
+                    where previous.contract_version_id=a.contract_version_id
+                      and previous.approval_step<a.approval_step
+                      and previous.status<>'approved'
+                  )
                   and (
                     a.approver_user_id=:actor
                     or exists(
@@ -943,50 +952,46 @@ async def decide_policy_approval(
                 "actor": actor, "id": payload.approval_id,
             },
         )
+        final_decision = payload.decision == "rejected"
         if payload.decision == "rejected":
-            next_status = "rejected"
+            version_next_status = "rejected"
+            contract_next_status = (
+                "active" if approval["status"] == "active" else "rejected"
+            )
         else:
             pending = await connection.execute(
                 text("""
                     select count(*) from public.contract_approvals
-                    where contract_id=:contract and contract_version_id=(
-                      select id from public.contract_versions
-                      where contract_id=:contract and version_number=:version
-                    ) and status='pending'
+                    where contract_id=:contract and contract_version_id=:version_id
+                      and status='pending'
                 """),
-                {"contract": contract_id, "version": approval["current_version"]},
+                {"contract": contract_id, "version_id": approval["version_id"]},
             )
-            next_status = "approved" if pending.scalar_one() == 0 else "review_pending"
-        contract_next_status = next_status
-        if next_status in ("approved", "rejected"):
-            if approval["status"] == "active" and next_status == "approved":
-                contract_next_status = "active"
-                await connection.execute(
-                    text("""
-                        update public.contracts set updated_by=:actor,updated_at=now(),
-                          row_version=row_version+1
-                        where id=:id and tenant_id=:tenant
-                    """),
-                    {"actor": actor, "id": contract_id, "tenant": payload.tenant_id},
-                )
-            else:
-                await connection.execute(
-                    text("""
-                        update public.contracts set status=:status,updated_by=:actor,
-                          updated_at=now(),row_version=row_version+1
-                        where id=:id and tenant_id=:tenant
-                    """),
-                    {"status": next_status, "actor": actor, "id": contract_id, "tenant": payload.tenant_id},
-                )
+            final_decision = pending.scalar_one() == 0
+            version_next_status = "approved" if final_decision else "submitted"
+            contract_next_status = (
+                ("active" if approval["status"] == "active" else "approved")
+                if final_decision else approval["status"]
+            )
+        if final_decision:
             await connection.execute(
                 text("""
-                    update public.contract_versions set version_status=:status,
-                      approved_at=case when :status='approved' then now() else approved_at end
-                    where id=:version_id
+                    update public.contracts set status=:status,updated_by=:actor,
+                      updated_at=now(),row_version=row_version+1
+                    where id=:id and tenant_id=:tenant
                 """),
-                {"status": next_status, "version_id": approval["version_id"]},
+                {"status": contract_next_status, "actor": actor,
+                 "id": contract_id, "tenant": payload.tenant_id},
             )
-            if approval["status"] == "active" and next_status == "approved":
+        await connection.execute(
+            text("""
+                update public.contract_versions set version_status=:status,
+                  approved_at=case when :status='approved' then now() else approved_at end
+                where id=:version_id
+            """),
+            {"status": version_next_status, "version_id": approval["version_id"]},
+        )
+        if approval["status"] == "active" and version_next_status == "approved":
                 await connection.execute(
                     text("""
                         update public.contract_entitlement_grants set status='revoked',updated_at=now()
@@ -1022,12 +1027,13 @@ async def decide_policy_approval(
             connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
             event_type=f"contract.approval.{payload.decision}", request_id=_request_id(request),
             from_status=approval["status"], to_status=contract_next_status,
-            metadata={"approval_id": str(payload.approval_id), "reason": payload.reason},
+            metadata={"approval_id": str(payload.approval_id), "reason": payload.reason,
+                      "version_status": version_next_status},
             idempotency_key=idempotency_key,
         )
     return {"data": {"approval_id": str(payload.approval_id),
                      "contract_status": contract_next_status,
-                     "version_status": next_status}}
+                     "version_status": version_next_status}}
 
 
 @router.post("/contracts/{contract_id}/documents", status_code=201)
