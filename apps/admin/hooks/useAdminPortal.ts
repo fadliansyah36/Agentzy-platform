@@ -56,6 +56,8 @@ import {
   reviewBreakGlass,
   listAuditLogs,
   listMySessions,
+  revokeMySession,
+  type AgentzyAuthSession,
   exportAuditLogs,
   listSecurityAlerts,
   acknowledgeSecurityAlert as acknowledgeSecurityAlertApi,
@@ -326,6 +328,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogRecord[]>(initial.webhookLogs);
   const [mfaEnforced] = useState<boolean | null>(null);
   const [activeSessionsCount, setActiveSessionsCount] = useState<number | null>(null);
+  const [mySessions, setMySessions] = useState<AgentzyAuthSession[]>([]);
   const [ipAllowlistEnabled] = useState<boolean | null>(null);
   const [sessionTtlMinutes] = useState<number | null>(null);
   const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>([]);
@@ -520,7 +523,10 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     if (!accessToken || auth.aal !== 'aal2') return;
     let active = true;
     void listMySessions(accessToken).then((result) => {
-      if (active) setActiveSessionsCount(result.meta.active_count);
+      if (active) {
+        setActiveSessionsCount(result.meta.active_count);
+        setMySessions(result.data);
+      }
     }).catch((error) => {
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat sesi autentikasi.');
     });
@@ -583,6 +589,28 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     }
     return () => { active = false; };
   }, [auth.session?.access_token, auth.aal, platformPermissions, showToast]);
+
+  const handleRevokeMySession = useCallback(async (sessionId: string) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || auth.aal !== 'aal2') {
+      showToast('Session AAL2 diperlukan untuk mencabut sesi.');
+      return;
+    }
+    try {
+      const result = await revokeMySession(accessToken, sessionId);
+      const refreshed = await listMySessions(accessToken);
+      setMySessions(refreshed.data);
+      setActiveSessionsCount(refreshed.meta.active_count);
+      showToast(
+        result.current_session_revoked
+          ? 'Sesi saat ini dicabut. Anda akan keluar dari portal.'
+          : 'Sesi berhasil dicabut.',
+      );
+      if (result.current_session_revoked) await auth.signOut();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Sesi tidak dapat dicabut.');
+    }
+  }, [auth.session?.access_token, auth.aal, auth.signOut, showToast]);
 
   const acknowledgeSecurityAlert = useCallback(async (alertId: string) => {
     const accessToken = auth.session?.access_token;
@@ -2452,6 +2480,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     testWebhookConnector,
     mfaEnforced,
     activeSessionsCount,
+    mySessions,
+    handleRevokeMySession,
     ipAllowlistEnabled,
     sessionTtlMinutes,
     breakGlassRequests,
