@@ -3,8 +3,8 @@ import hashlib
 import hmac
 import json
 import re
-from urllib.parse import unquote
 from datetime import UTC, datetime
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 import httpx
@@ -26,8 +26,14 @@ claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
 
 APPLICATION_STATUSES = {
-    "submitted", "assigned", "contacted", "qualified",
-    "disqualified", "proposal", "contracted", "closed",
+    "submitted",
+    "assigned",
+    "contacted",
+    "qualified",
+    "disqualified",
+    "proposal",
+    "contracted",
+    "closed",
 }
 ALLOWED_TRANSITIONS = {
     "submitted": {"assigned", "contacted", "disqualified", "closed"},
@@ -175,16 +181,20 @@ async def _verify_turnstile(token: str | None, request: Request) -> None:
 @router.get("/public/catalogue", tags=["Public Catalogue"])
 async def public_catalogue():
     async with engine.connect() as connection:
-        services = await connection.execute(text("""
+        services = await connection.execute(
+            text("""
             select audience,service_key,name,summary,scope,output,boundary,governance,sort_order
             from public.public_catalogue_items
             where is_published=true order by audience,sort_order,name
-        """))
-        faqs = await connection.execute(text("""
+        """)
+        )
+        faqs = await connection.execute(
+            text("""
             select faq_key,question,answer,sort_order
             from public.public_faq_entries
             where is_published=true order by sort_order,faq_key
-        """))
+        """)
+        )
     service_rows = [dict(row) for row in services.mappings().all()]
     return {
         "data": {
@@ -215,10 +225,13 @@ async def create_partnership_application(
 
     upload_token = _upload_token_for_key(idempotency_key)
     upload_token_hash = hashlib.sha256(upload_token.encode()).hexdigest()
-    request_fingerprint = hashlib.sha256(json.dumps(
-        payload.model_dump(exclude={"captcha_token", "fax_number"}, mode="json"),
-        sort_keys=True, separators=(",", ":"),
-    ).encode()).hexdigest()
+    request_fingerprint = hashlib.sha256(
+        json.dumps(
+            payload.model_dump(exclude={"captcha_token", "fax_number"}, mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
     context = _request_context(request)
     async with engine.begin() as connection:
         existing = await connection.execute(
@@ -357,12 +370,14 @@ async def create_partnership_application(
             {
                 "id": application_id,
                 "email": payload.business_email,
-                "payload": json.dumps({
-                    "reference_code": reference_code,
-                    "company_name": payload.company_name,
-                    "contact_name": payload.contact_name,
-                    "event": "partnership.application_received",
-                }),
+                "payload": json.dumps(
+                    {
+                        "reference_code": reference_code,
+                        "company_name": payload.company_name,
+                        "contact_name": payload.contact_name,
+                        "event": "partnership.application_received",
+                    }
+                ),
             },
         )
         await connection.execute(
@@ -377,13 +392,19 @@ async def create_partnership_application(
             {
                 "id": str(application_id),
                 "request_id": context["request_id"],
-                "metadata": json.dumps(redact_audit_value({
-                    "reference_code": reference_code,
-                    "company_type": payload.company_type,
-                    "email_hash": hashlib.sha256(payload.business_email.encode()).hexdigest(),
-                    "correlation_id": context["correlation_id"],
-                    "trace_id": context["trace_id"],
-                })),
+                "metadata": json.dumps(
+                    redact_audit_value(
+                        {
+                            "reference_code": reference_code,
+                            "company_type": payload.company_type,
+                            "email_hash": hashlib.sha256(
+                                payload.business_email.encode()
+                            ).hexdigest(),
+                            "correlation_id": context["correlation_id"],
+                            "trace_id": context["trace_id"],
+                        }
+                    )
+                ),
             },
         )
 
@@ -444,9 +465,7 @@ async def upload_partnership_attachment(
             raise HTTPException(status_code=413, detail="File melebihi batas 10 MB.")
     content = bytes(chunks)
     if not content or not content.startswith(allowed[1]):
-        raise HTTPException(
-            status_code=400, detail="File tidak valid atau melebihi 10 MB."
-        )
+        raise HTTPException(status_code=400, detail="File tidak valid atau melebihi 10 MB.")
     if not settings.supabase_service_role_key:
         raise HTTPException(
             status_code=503, detail="Private attachment storage belum dikonfigurasi."
@@ -509,6 +528,7 @@ async def upload_partnership_attachment(
         "meta": _request_context(request),
     }
 
+
 async def _authorize_partnership(
     request: Request,
     claims: dict,
@@ -545,8 +565,12 @@ async def list_partnership_prospects(
     session: AsyncSession = session_dependency,
 ):
     await _authorize_partnership(
-        request, claims, session, permission="platform.partnership.read",
-        action="read", resource={"id": "prospect_inbox"},
+        request,
+        claims,
+        session,
+        permission="platform.partnership.read",
+        action="read",
+        resource={"id": "prospect_inbox"},
     )
     if status_filter and status_filter not in APPLICATION_STATUSES:
         raise HTTPException(status_code=422, detail="Filter status tidak valid.")
@@ -585,9 +609,18 @@ async def list_partnership_prospects(
     next_cursor = None
     if has_more and records:
         last = records[-1]
-        next_cursor = base64.urlsafe_b64encode(json.dumps({
-            "created_at": last["created_at"].isoformat(), "id": str(last["id"]),
-        }).encode()).decode().rstrip("=")
+        next_cursor = (
+            base64.urlsafe_b64encode(
+                json.dumps(
+                    {
+                        "created_at": last["created_at"].isoformat(),
+                        "id": str(last["id"]),
+                    }
+                ).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
     for item in records:
         for key, value in list(item.items()):
             if isinstance(value, UUID):
@@ -609,8 +642,12 @@ async def update_partnership_prospect(
     session: AsyncSession = session_dependency,
 ):
     actor = await _authorize_partnership(
-        request, claims, session, permission="platform.partnership.manage",
-        action="manage", resource={"id": str(prospect_id)},
+        request,
+        claims,
+        session,
+        permission="platform.partnership.manage",
+        action="manage",
+        resource={"id": str(prospect_id)},
     )
     response_body = None
     async with engine.begin() as connection:
@@ -682,8 +719,11 @@ async def update_partnership_prospect(
                     ) values(:id,:actor,'status_changed',:from_status,:to_status,:note,'{}'::jsonb)
                 """),
                 {
-                    "id": prospect_id, "actor": actor, "from_status": current["status"],
-                    "to_status": next_status, "note": payload.note,
+                    "id": prospect_id,
+                    "actor": actor,
+                    "from_status": current["status"],
+                    "to_status": next_status,
+                    "note": payload.note,
                 },
             )
         elif payload.note:
@@ -703,7 +743,8 @@ async def update_partnership_prospect(
                     ) values(:id,:actor,'assigned',cast(:metadata as jsonb))
                 """),
                 {
-                    "id": prospect_id, "actor": actor,
+                    "id": prospect_id,
+                    "actor": actor,
                     "metadata": json.dumps(
                         {"assigned_to": str(assigned_to) if assigned_to else None}
                     ),
@@ -719,13 +760,19 @@ async def update_partnership_prospect(
                 )
             """),
             {
-                "actor": actor, "id": str(prospect_id),
+                "actor": actor,
+                "id": str(prospect_id),
                 "request_id": getattr(request.state, "request_id", None),
-                "metadata": json.dumps(redact_audit_value({
-                    "status": next_status, "assigned_to": str(assigned_to) if assigned_to else None,
-                    "correlation_id": getattr(request.state, "correlation_id", None),
-                    "trace_id": getattr(request.state, "trace_id", None),
-                })),
+                "metadata": json.dumps(
+                    redact_audit_value(
+                        {
+                            "status": next_status,
+                            "assigned_to": str(assigned_to) if assigned_to else None,
+                            "correlation_id": getattr(request.state, "correlation_id", None),
+                            "trace_id": getattr(request.state, "trace_id", None),
+                        }
+                    )
+                ),
             },
         )
         if payload.status or ("assigned_to" in payload.model_fields_set):
@@ -739,12 +786,15 @@ async def update_partnership_prospect(
                     )
                 """),
                 {
-                    "id": prospect_id, "email": current["business_email"],
-                    "payload": json.dumps({
-                        "reference_code": current["reference_code"],
-                        "status": next_status,
-                        "event": "partnership.prospect.updated",
-                    }),
+                    "id": prospect_id,
+                    "email": current["business_email"],
+                    "payload": json.dumps(
+                        {
+                            "reference_code": current["reference_code"],
+                            "status": next_status,
+                            "event": "partnership.prospect.updated",
+                        }
+                    ),
                 },
             )
         response_body = {
@@ -773,8 +823,12 @@ async def list_prospect_activities(
     session: AsyncSession = session_dependency,
 ):
     await _authorize_partnership(
-        request, claims, session, permission="platform.partnership.read",
-        action="read", resource={"id": str(prospect_id)},
+        request,
+        claims,
+        session,
+        permission="platform.partnership.read",
+        action="read",
+        resource={"id": str(prospect_id)},
     )
     async with engine.connect() as connection:
         result = await connection.execute(
