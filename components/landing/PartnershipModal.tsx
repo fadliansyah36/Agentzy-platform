@@ -76,10 +76,7 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   const [faxNumber, setFaxNumber] = useState('');
 
   useEffect(() => {
-    if (!isOpen || !TURNSTILE_SITE_KEY) {
-      setCaptchaToken('');
-      return;
-    }
+    if (!isOpen || !TURNSTILE_SITE_KEY) return;
     let disposed = false;
     let widgetId: string | null = null;
     const renderWidget = () => {
