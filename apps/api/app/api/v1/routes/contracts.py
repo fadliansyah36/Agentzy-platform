@@ -174,8 +174,14 @@ async def create_contract(
                     status_code=409,
                     detail="Idempotency-Key sudah digunakan untuk payload berbeda.",
                 )
-            return {"data": {"id": str(existing["id"]), "status": existing["status"],
-                             "version": existing["current_version"], "replayed": True}}
+            return {
+                "data": {
+                    "id": str(existing["id"]),
+                    "status": existing["status"],
+                    "version": existing["current_version"],
+                    "replayed": True,
+                }
+            }
         contract_result = await connection.execute(
             text("""
                 insert into public.contracts(
@@ -235,12 +241,14 @@ async def create_contract(
                 "contract_id": contract_id,
                 "scope": payload.scope_summary,
                 "terms": payload.terms,
-                "commercial": json.dumps({
-                    "currency": payload.currency.upper(),
-                    "commercial": payload.commercial_snapshot,
-                    "effective_start": snapshot["effective_start"],
-                    "effective_end": snapshot["effective_end"],
-                }),
+                "commercial": json.dumps(
+                    {
+                        "currency": payload.currency.upper(),
+                        "commercial": payload.commercial_snapshot,
+                        "effective_start": snapshot["effective_start"],
+                        "effective_end": snapshot["effective_end"],
+                    }
+                ),
                 "content_hash": content_hash,
                 "actor": actor,
             },
@@ -271,13 +279,25 @@ async def create_contract(
                 },
             )
         await _audit_event(
-            connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
-            event_type="contract.created", from_status=None, to_status="draft",
+            connection,
+            tenant_id=payload.tenant_id,
+            actor=actor,
+            contract_id=contract_id,
+            event_type="contract.created",
+            from_status=None,
+            to_status="draft",
             request_id=getattr(request.state, "request_id", None),
             metadata={"version": 1, "content_hash": content_hash},
         )
-    return {"data": {"id": str(contract_id), "version_id": str(version_id),
-                     "contract_number": payload.contract_number, "status": "draft", "version": 1}}
+    return {
+        "data": {
+            "id": str(contract_id),
+            "version_id": str(version_id),
+            "contract_number": payload.contract_number,
+            "status": "draft",
+            "version": 1,
+        }
+    }
 
 
 @router.get("")
@@ -285,9 +305,7 @@ async def list_contracts(
     tenant_id: UUID,
     status: str | None = Query(
         default=None,
-        pattern=(
-            "^(draft|review_pending|approved|active|suspended|expired|terminated|rejected)$"
-        ),
+        pattern=("^(draft|review_pending|approved|active|suspended|expired|terminated|rejected)$"),
     ),
     limit: int = Query(default=25, ge=1, le=100),
     claims: dict = claims_dependency,
@@ -360,15 +378,17 @@ async def get_contract(contract_id: UUID, tenant_id: UUID, claims: dict = claims
     data["services"] = [
         {
             **dict(item),
-            "monthly_fee": (
-                str(item["monthly_fee"]) if item["monthly_fee"] is not None else None
-            ),
+            "monthly_fee": (str(item["monthly_fee"]) if item["monthly_fee"] is not None else None),
         }
         for item in services.mappings().all()
     ]
     data["approvals"] = [
-        {**dict(item), "id": str(item["id"]), "approver_user_id": str(item["approver_user_id"]),
-         "decided_at": item["decided_at"].isoformat() if item["decided_at"] else None}
+        {
+            **dict(item),
+            "id": str(item["id"]),
+            "approver_user_id": str(item["approver_user_id"]),
+            "decided_at": item["decided_at"].isoformat() if item["decided_at"] else None,
+        }
         for item in approvals.mappings().all()
     ]
     return {"data": data}
@@ -428,8 +448,13 @@ async def submit_contract_review(
                       from public.contract_versions
                       where contract_id=:contract_id and version_number=:version
                 """),
-                {"tenant_id": tenant_id, "contract_id": contract_id,
-                 "step": step, "approver": approver, "version": contract["current_version"]},
+                {
+                    "tenant_id": tenant_id,
+                    "contract_id": contract_id,
+                    "step": step,
+                    "approver": approver,
+                    "version": contract["current_version"],
+                },
             )
         await connection.execute(
             text("""
@@ -447,9 +472,14 @@ async def submit_contract_review(
             {"id": contract_id, "version": contract["current_version"]},
         )
         await _audit_event(
-            connection, tenant_id=tenant_id, actor=actor, contract_id=contract_id,
-            event_type="contract.submitted_for_review", from_status="draft",
-            to_status="review_pending", request_id=getattr(request.state, "request_id", None),
+            connection,
+            tenant_id=tenant_id,
+            actor=actor,
+            contract_id=contract_id,
+            event_type="contract.submitted_for_review",
+            from_status="draft",
+            to_status="review_pending",
+            request_id=getattr(request.state, "request_id", None),
             metadata={"approver_count": len(payload.approver_user_ids)},
         )
     return {"data": {"id": str(contract_id), "status": "review_pending"}}
@@ -488,8 +518,11 @@ async def decide_contract_approval(
                 set status=:decision,decision_reason=:reason,decided_at=now()
                 where id=:approval_id
             """),
-            {"decision": payload.decision, "reason": payload.reason,
-             "approval_id": approval["approval_id"]},
+            {
+                "decision": payload.decision,
+                "reason": payload.reason,
+                "approval_id": approval["approval_id"],
+            },
         )
         if payload.decision == "rejected":
             next_status = "rejected"
@@ -524,9 +557,13 @@ async def decide_contract_approval(
                     },
                 )
         await _audit_event(
-            connection, tenant_id=tenant_id, actor=actor, contract_id=contract_id,
+            connection,
+            tenant_id=tenant_id,
+            actor=actor,
+            contract_id=contract_id,
             event_type=f"contract.approval.{payload.decision}",
-            from_status=approval["status"], to_status=next_status,
+            from_status=approval["status"],
+            to_status=next_status,
             request_id=getattr(request.state, "request_id", None),
             metadata={"reason": payload.reason},
         )
@@ -568,8 +605,13 @@ async def activate_contract(
             {"id": contract_id, "tenant_id": tenant_id, "actor": actor},
         )
         await _audit_event(
-            connection, tenant_id=tenant_id, actor=actor, contract_id=contract_id,
-            event_type="contract.activated", from_status="approved", to_status="active",
+            connection,
+            tenant_id=tenant_id,
+            actor=actor,
+            contract_id=contract_id,
+            event_type="contract.activated",
+            from_status="approved",
+            to_status="active",
             request_id=getattr(request.state, "request_id", None),
         )
     return {"data": {"id": str(contract_id), "status": "active"}}
