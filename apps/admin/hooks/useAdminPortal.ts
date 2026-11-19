@@ -1107,6 +1107,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           if (payload.unitType === 'Unit Organisasi') {
             const existing = units.find((item) => item.id === payload.id);
             if (!existing) throw new Error('Unit organisasi tidak ditemukan pada tenant terpilih.');
+            if (existing.organization_id !== payload.organizationId) throw new Error('Pemindahan unit antar organisasi tidak didukung.');
             const parentName = payload.parentName?.trim();
             const parent = parentName
               ? units.find((item) => item.status === 'active' && item.id !== existing.id && item.name.toLowerCase() === parentName.toLowerCase())
@@ -1120,6 +1121,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           } else if (payload.unitType === 'Cabang / Regional') {
             const existing = branches.find((item) => item.id === payload.id);
             if (!existing) throw new Error('Cabang tidak ditemukan pada tenant terpilih.');
+            if (existing.organization_id !== payload.organizationId) throw new Error('Pemindahan cabang antar organisasi tidak didukung.');
             const parentName = payload.parentName?.trim();
             const parentUnit = parentName
               ? units.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
@@ -1133,6 +1135,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           } else {
             const existing = departments.find((item) => item.id === payload.id);
             if (!existing) throw new Error('Departemen tidak ditemukan pada tenant terpilih.');
+            if (existing.organization_id !== payload.organizationId) throw new Error('Pemindahan departemen antar organisasi tidak didukung.');
             const parentName = payload.parentName?.trim();
             const parentBranch = parentName
               ? branches.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
