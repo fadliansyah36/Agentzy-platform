@@ -92,8 +92,8 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
 
   return <div className="space-y-5">
     <CorporatePageHeader title="Payment References" subtitle="Pencatatan referensi, bukti eksternal dan rekonsiliasi pembayaran" onBack={onBack}
-    <NetworkStatusBanner stale={Boolean(error && !loading)} />
       actions={<button className={secondary} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
+    <NetworkStatusBanner stale={Boolean(error && !loading)} />
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
     <div className="grid gap-3 md:grid-cols-3">
