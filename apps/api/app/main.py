@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
 import structlog
@@ -12,6 +13,7 @@ from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
 from app.core.redaction import redact_audit_value
 from app.db.session import engine
+from app.services.notification_dispatcher import run_notification_worker
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -19,8 +21,19 @@ logger = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    yield
-    await engine.dispose()
+    notification_task = None
+    if settings.smtp_configured:
+        notification_task = asyncio.create_task(run_notification_worker())
+    else:
+        logger.warning("notification_worker_disabled", reason="SMTP settings are not configured")
+    try:
+        yield
+    finally:
+        if notification_task:
+            notification_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await notification_task
+        await engine.dispose()
 
 
 app = FastAPI(
