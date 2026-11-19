@@ -199,3 +199,10 @@ No staging, UAT, security acceptance or production deployment was performed.
 - This closes the identified global platform read ABAC gap, but does not establish complete machine-generated endpoint/nested repository coverage, live ABAC decision evidence, real Auth lifecycle, hosted Supabase Auth configuration or final audit export/redaction acceptance.
 
 **Phase 01 remains PARTIAL / IN PROGRESS — NOT DONE.**
+## Backend-first continuation — 2026-11-19
+
+- Membership invitation now validates tenant hierarchy, role eligibility and existing membership before reserving the idempotency command. The command uses a durable failed state on Auth provider or membership commit failure; retries reconcile an Auth identity created when an earlier provider response was lost.
+- Existing Auth identities are reused by exact normalized email lookup; no duplicate user is created and no synthetic identity is inserted. The response distinguishes `identity_exists` from a newly sent invite.
+- Membership invitation audit metadata now passes through recursive redaction so the invitee email is not retained in clear text in JSON metadata.
+- Added `fail_idempotency` to the shared idempotency module for recoverable external-command sagas. Other transactional commands continue to commit their idempotency reservation and state mutation in one database transaction.
+- Code head for this increment: `766538b7d68512a8cd4dd70b3ef817081a3e9c15`; engineering workflow result is pending.
