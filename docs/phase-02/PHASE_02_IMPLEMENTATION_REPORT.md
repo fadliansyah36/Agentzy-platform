@@ -43,7 +43,7 @@
 
 ## 2. Database changes applied
 
-Five additive migrations were committed and applied to Agentzy-db:
+Seven additive migrations were committed and applied to Agentzy-db:
 
 | Version | Migration |
 |---|---|
@@ -87,6 +87,7 @@ The Supabase Security Advisor reports INFO notices for server-only RLS-enabled t
 - `GET /api/v1/partnership/prospects/{prospect_id}/activities`
 - `GET /api/v1/partnership/prospects/{prospect_id}/attachments`
 - `POST /api/v1/partnership/attachments/{attachment_id}/download` (AAL2; clean-scan only; 60-second signed URL)
+- `POST /api/v1/partnership/attachments/{attachment_id}/retry-scan` (AAL2 + manage permission; dead-letter recovery)
 - `POST /api/v1/partnership/attachments/{attachment_id}/retry-scan` (AAL2 + manage permission; dead-letter recovery)
 
 All business writes are performed by FastAPI. The frontend uses typed API-client methods and does not write directly to Supabase.
@@ -136,3 +137,14 @@ Phase 03 — Corporate & Contract Management is the next roadmap phase, but it m
 - New applied migrations: `20261119091102_phase_02_attachment_upload_idempotency` and `20261119091305_phase_02_attachment_scan_retry_budget`.
 - New APIs include `POST /api/v1/partnership/attachments/{attachment_id}/retry-scan`; attachment list includes scanner state and attempt count.
 - Current code head before documentation updates: `766538b7d68512a8cd4dd70b3ef817081a3e9c15`. Engineering checks are pending for this combined continuation.
+### Backend-first continuation — final code head and evidence
+
+- Production Turnstile is fail-closed: missing server secret or provider/network outage returns HTTP 503; a configured provider response must verify successfully.
+- Attachment quota checks are serialized per application through advisory + row locks. A Storage upload is compensated with a delete attempt if metadata persistence fails, including ambiguous network outcomes.
+- Upload idempotency is required and bound to application, filename, MIME, size and SHA-256. Same key/same file returns the existing attachment; same key/different file returns 409.
+- Scanner retry budget is eight attempts with exponential backoff. Dead-letter attachments remain quarantined; AAL2 + `platform.partnership.manage` can requeue them through the retry-scan endpoint. CRM hides internal scanner metadata and exposes only scan state/attempt count.
+- CRM assignment now enqueues a separate internal assignee notification event when an Auth email exists.
+- Applied Phase 02 migration ledger now includes seven migrations: `20261119082627`, `20261119082643`, `20261119082716`, `20261119083254`, `20261119084924`, `20261119091102`, `20261119091305`.
+- Live schema check confirms all 28 public tables have RLS enabled; upload idempotency columns/index/constraint and non-negative scan attempt constraint exist. No negative scan attempt rows were found.
+- Final code head `899a981026fa04331e7dbc0e39d921d945774e70` passed GitHub Actions [44495060635](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44495060635): frozen frontend install, ESLint, TypeScript, Python compile, Ruff, deterministic authorization checks, FastAPI import/OpenAPI and migration consistency.
+- Phase 02 remains PARTIAL until SMTP delivery, Turnstile keys, ClamAV endpoint, deployed FastAPI/frontend binding and real AAL2 CRM access are available and verified.
