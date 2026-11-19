@@ -271,8 +271,8 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
 
   return <div className="space-y-5">
     <CorporatePageHeader title="Kontrak & Kerja Sama" subtitle="Corporate profile, kontrak, SOW, amendment, approval, dokumen, SLA, entitlement dan lifecycle" onBack={onBack}
-    <NetworkStatusBanner stale={Boolean(error && !loading)} />
       actions={<button className={secondary} onClick={() => void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
+    <NetworkStatusBanner stale={Boolean(error && !loading)} />
     <CorporateSegmentedTabs tabs={[
       {id:'profile',label:'Corporate Profile'},{id:'contracts',label:'Kontrak'},
       {id:'sow',label:'SOW / Amendment'},{id:'sla',label:'SLA & KPI'},
