@@ -62,7 +62,10 @@ AI_WORKFORCE_ROLE_KEYS = ("ai_workforce_operator", "ai_worker_supervisor")
 
 
 async def assert_membership_entitlement_capacity(
-    session: AsyncSession, tenant_id: UUID, role_key: str
+    session: AsyncSession,
+    tenant_id: UUID,
+    role_key: str,
+    exclude_membership_id: UUID | None = None,
 ) -> None:
     if role_key in HUMAN_WORKFORCE_ROLE_KEYS:
         limit_column = "human_workforce_limit"
@@ -103,11 +106,16 @@ async def assert_membership_entitlement_capacity(
             join public.membership_roles mr on mr.membership_id=m.id
             join public.roles r on r.id=mr.role_id
             where m.tenant_id=:tenant and m.status in ('active','invited','pending')
+              and (:exclude_membership_id is null or m.id<>:exclude_membership_id)
               and r.key=any(:role_keys)
               and mr.scope_type='tenant' and mr.scope_id is null
               and mr.valid_from<=now() and (mr.valid_until is null or mr.valid_until>now())
         """),
-        {"tenant": tenant_id, "role_keys": role_keys},
+        {
+            "tenant": tenant_id,
+            "role_keys": role_keys,
+            "exclude_membership_id": exclude_membership_id,
+        },
     )
     current_usage = usage.scalar_one()
     if current_usage >= grant["entitlement_limit"]:
