@@ -919,26 +919,138 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
 
   // Org & User CRUD
   const upsertOrgUnit = useCallback(
-    (payload: Omit<OrgUnitRecord, 'id'> & { id?: string }) => {
-      if (payload.id) {
-        setOrgUnits((prev) => prev.map((u) => (u.id === payload.id ? { ...u, ...payload } : u)));
-        showToast(`Unit ${payload.name} diperbarui.`);
-      } else {
-        setOrgUnits((prev) => [{ ...payload, id: nextId('org') }, ...prev]);
-        showToast(`Unit ${payload.name} ditambahkan.`);
+    async (payload: Omit<OrgUnitRecord, 'id'> & { id?: string }) => {
+      const accessToken = auth.session?.access_token;
+      if (!accessToken || auth.aal !== 'aal2') {
+        showToast('Session AAL2 diperlukan untuk mengelola struktur tenant.');
+        return;
       }
-      setModal({ type: 'none' });
+      const tenant = tenants.find((item) => item.id === payload.tenantId);
+      if (!tenant) {
+        showToast('Tenant tidak ditemukan. Struktur tidak diubah.');
+        return;
+      }
+      const code = (payload.code || payload.name)
+        .normalize('NFKD')
+        .replace(/[\\u0300-\\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+      if (!code) {
+        showToast('Kode struktur tidak valid.');
+        return;
+      }
+
+      try {
+        const [organizations, units, branches, departments] = await Promise.all([
+          listTenantOrganizations(accessToken, tenant.id),
+          listOrganizationUnits(accessToken, tenant.id),
+          listBranches(accessToken, tenant.id),
+          listDepartments(accessToken, tenant.id),
+        ]);
+        if (payload.id) {
+          if (payload.unitType === 'Cabang / Regional') {
+            const existing = branches.find((item) => item.id === payload.id);
+            if (!existing) throw new Error('Cabang tidak ditemukan pada tenant terpilih.');
+            await updateBranch(accessToken, tenant.id, existing.id, {
+              name: payload.name.trim(),
+              code: existing.code,
+              organization_unit_id: existing.organization_unit_id,
+            });
+          } else {
+            const existing = departments.find((item) => item.id === payload.id);
+            if (!existing) throw new Error('Departemen tidak ditemukan pada tenant terpilih.');
+            await updateDepartment(accessToken, tenant.id, existing.id, {
+              name: payload.name.trim(),
+              code: existing.code,
+              branch_id: existing.branch_id,
+              parent_department_id: existing.parent_department_id,
+            });
+          }
+        } else {
+          const activeOrganizations = organizations.filter((item) => item.status === 'active');
+          if (activeOrganizations.length !== 1) {
+            throw new Error(
+              'Pembuatan struktur membutuhkan tepat satu organisasi aktif pada tenant. Pilih/kelola organisasi terlebih dahulu.',
+            );
+          }
+          const organizationId = activeOrganizations[0].id;
+          if (payload.unitType === 'Cabang / Regional') {
+            const parentName = payload.parentName?.trim();
+            const parentUnit = parentName
+              ? units.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            if (parentName && !parentUnit) {
+              throw new Error('Unit organisasi induk tidak ditemukan. Gunakan nama unit yang terdaftar atau kosongkan induk.');
+            }
+            await createBranch(accessToken, tenant.id, {
+              organization_id: organizationId,
+              organization_unit_id: parentUnit?.id ?? null,
+              name: payload.name.trim(),
+              code,
+            });
+          } else {
+            const parentName = payload.parentName?.trim();
+            const parentBranch = parentName
+              ? branches.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            const parentDepartment = parentName
+              ? departments.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            if (!parentBranch && !parentDepartment) {
+              throw new Error('Induk departemen harus berupa cabang atau departemen aktif yang terdaftar.');
+            }
+            await createDepartment(accessToken, tenant.id, {
+              organization_id: organizationId,
+              branch_id: parentBranch?.id ?? parentDepartment?.branch_id ?? null,
+              parent_department_id: parentDepartment?.id ?? null,
+              name: payload.name.trim(),
+              code,
+            });
+          }
+        }
+        const refreshed = await loadAdminTenantHierarchy(accessToken, tenant.id);
+        setOrgUnits((previous) => [
+          ...previous.filter((item) => item.tenantId !== tenant.id),
+          ...refreshed,
+        ]);
+        setModal({ type: 'none' });
+        showToast('Struktur organisasi tersimpan melalui FastAPI.');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Struktur organisasi gagal disimpan.');
+      }
     },
-    [showToast]
+    [auth.session?.access_token, auth.aal, tenants, showToast],
   );
 
   const deleteOrgUnit = useCallback(
-    (id: string) => {
-      setOrgUnits((prev) => prev.filter((u) => u.id !== id));
-      showToast('Unit organisasi dihapus.');
+    async (id: string) => {
+      const accessToken = auth.session?.access_token;
+      const target = orgUnits.find((item) => item.id === id);
+      if (!accessToken || auth.aal !== 'aal2' || !target) {
+        showToast('Session AAL2 atau data struktur yang valid tidak tersedia.');
+        return;
+      }
+      try {
+        if (target.unitType === 'Cabang / Regional') {
+          await archiveBranch(accessToken, target.tenantId, target.id);
+        } else {
+          await archiveDepartment(accessToken, target.tenantId, target.id);
+        }
+        const refreshed = await loadAdminTenantHierarchy(accessToken, target.tenantId);
+        setOrgUnits((previous) => [
+          ...previous.filter((item) => item.tenantId !== target.tenantId),
+          ...refreshed,
+        ]);
+        showToast('Struktur diarsipkan melalui FastAPI.');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Struktur tidak dapat diarsipkan.');
+      }
     },
-    [showToast]
+    [auth.session?.access_token, auth.aal, orgUnits, showToast],
   );
+
 
   const upsertPlatformUser = useCallback(
     async (payload: Omit<PlatformUserRecord, 'id' | 'lastLogin'> & { id?: string }) => {
