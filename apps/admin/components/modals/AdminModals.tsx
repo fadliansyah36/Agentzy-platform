@@ -1671,6 +1671,7 @@ function OrgUnitCrudModal({
               }
               className={inputCls}
             >
+              <option value="Unit Organisasi">Unit Organisasi</option>
               <option value="Cabang / Regional">Cabang / Regional</option>
               <option value="Departemen">Departemen</option>
             </select>
