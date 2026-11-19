@@ -36,6 +36,9 @@ async def invite_user(email: str, full_name: str, redirect_to: str) -> AuthInvit
     if response.status_code >= 400:
         return AuthInviteResult(user_id=None, status_code=response.status_code)
     try:
-        return AuthInviteResult(user_id=UUID(response.json()["id"]), status_code=response.status_code)
+        return AuthInviteResult(
+            user_id=UUID(response.json()["id"]),
+            status_code=response.status_code,
+        )
     except (KeyError, ValueError) as exc:
         raise RuntimeError("SUPABASE_AUTH_ADMIN_INVALID_RESPONSE") from exc
