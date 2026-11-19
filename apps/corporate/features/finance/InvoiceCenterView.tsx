@@ -23,7 +23,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
-  const [form,setForm] = useState({contract_id:'',invoice_number:'',title:'',service_key:'',quantity:'1',tax_amount:'0',due_at:''});
+  const [form,setForm] = useState({contract_id:'',invoice_number:'',title:'',service_key:'',quantity:'1',due_at:''});
   const canManage = auth.identity?.memberships.some(m=>m.tenant_id===tenantId && m.permissions.includes('corporate.finance.invoice.manage')) ?? false;
 
   const refresh = useCallback(async () => {
@@ -59,7 +59,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
     try {
       const result = await createCorporateInvoice(token,form.contract_id,{
         tenant_id:tenantId,invoice_number:form.invoice_number,title:form.title,
-        currency:'IDR',tax_amount:form.tax_amount || '0',due_at:form.due_at || null,
+        currency:'IDR',due_at:form.due_at || null,
         lines:[{service_key:form.service_key,quantity:form.quantity}],
       });
       setNotice('Draft invoice tersimpan di database. Terbitkan setelah detail diverifikasi.');
@@ -104,7 +104,6 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Judul invoice</span><input className={inputClass} value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))}/></label>
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Contract service</span><select className={inputClass} value={form.service_key} onChange={e=>setForm(p=>({...p,service_key:e.target.value}))}><option value="">Pilih service aktif</option>{entitlements.filter(e=>e.contract_id===form.contract_id && e.monthly_fee!==null).map(e=><option key={e.id} value={e.service_key}>{e.service_key} · {formatMoney(e.monthly_fee ?? '0')}</option>)}</select></label>
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Quantity (maks. contracted)</span><input type="number" min="0.0001" step="0.0001" max={entitlements.find(e=>e.contract_id===form.contract_id && e.service_key===form.service_key)?.quantity ?? 1} className={inputClass} value={form.quantity} onChange={e=>setForm(p=>({...p,quantity:e.target.value}))}/></label>
-        <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Pajak (IDR)</span><input type="number" min="0" className={inputClass} value={form.tax_amount} onChange={e=>setForm(p=>({...p,tax_amount:e.target.value}))}/></label>
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Jatuh tempo</span><input type="date" className={inputClass} value={form.due_at} onChange={e=>setForm(p=>({...p,due_at:e.target.value}))}/></label>
       </div>
       <button className={buttonClass+' mt-4'} disabled={saving || !form.contract_id || !form.invoice_number || !form.title || !form.service_key || !form.quantity || Number(form.quantity)<=0} onClick={()=>void createDraft()}>Simpan Draft Invoice</button>
