@@ -54,7 +54,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
   useEffect(()=>{ let alive=true; void (async()=>{ if(alive) await refresh(); })(); return ()=>{alive=false;}; },[refresh]);
 
   const createDraft = async () => {
-    if(!form.contract_id || !form.invoice_number || !form.title || !form.description || !form.unit_amount) return;
+    if(!form.contract_id || !form.invoice_number || !form.title || !form.service_key || !form.quantity) return;
     setSaving(true); setError(''); setNotice('');
     try {
       const result = await createCorporateInvoice(token,form.contract_id,{
@@ -99,7 +99,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
       <h2 className="text-sm font-bold text-[#17324D]">Buat Draft Invoice</h2>
       <p className="mt-1 text-xs text-[#718391]">Nilai subtotal dan total dihitung backend dari quantity × unit amount + pajak. Tidak ada transaksi pembayaran yang dibuat.</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Kontrak</span><select className={inputClass} value={form.contract_id} onChange={e=>setForm(p=>({...p,contract_id:e.target.value}))}><option value="">Pilih kontrak aktif</option>{contracts.filter(c=>['active','approved'].includes(c.status)).map(c=><option key={c.id} value={c.id}>{c.contract_number} — {c.title}</option>)}</select></label>
+        <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Kontrak</span><select className={inputClass} value={form.contract_id} onChange={e=>{const contractId=e.target.value;setForm(p=>({...p,contract_id:contractId,service_key:entitlements.find(item=>item.contract_id===contractId && item.monthly_fee!==null)?.service_key ?? ''}));}}><option value="">Pilih kontrak aktif</option>{contracts.filter(c=>['active','approved'].includes(c.status)).map(c=><option key={c.id} value={c.id}>{c.contract_number} — {c.title}</option>)}</select></label>
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Nomor invoice</span><input className={inputClass} value={form.invoice_number} onChange={e=>setForm(p=>({...p,invoice_number:e.target.value}))}/></label>
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Judul invoice</span><input className={inputClass} value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))}/></label>
         <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Contract service</span><select className={inputClass} value={form.service_key} onChange={e=>setForm(p=>({...p,service_key:e.target.value}))}><option value="">Pilih service aktif</option>{entitlements.filter(e=>e.contract_id===form.contract_id && e.monthly_fee!==null).map(e=><option key={e.id} value={e.service_key}>{e.service_key} · {formatMoney(e.monthly_fee ?? '0')}</option>)}</select></label>
