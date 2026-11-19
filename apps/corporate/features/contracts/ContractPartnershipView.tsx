@@ -8,11 +8,12 @@ import {
   decideContractApproval, getCorporateContract, getCorporateProfile,
   getContractDocumentDownload, getEffectiveContractEntitlements,
   listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
-  requestContractRenewal, submitContractPolicyReview, updateCorporateProfileStatus,
+  requestContractRenewal, listContractVersions, listContractRenewals, decideContractRenewal,
+  submitContractPolicyReview, updateCorporateProfileStatus,
   upsertCorporateProfile, uploadContractDocument,
   changeContractLifecycle,
   type CorporateContract, type CorporateProfile, type ContractDocument,
-  type ContractEntitlement,
+  type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord,
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
@@ -40,6 +41,8 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [selectedId,setSelectedId] = useState('');
   const [detail,setDetail] = useState<CorporateContract | null>(null);
   const [documents,setDocuments] = useState<ContractDocument[]>([]);
+  const [versions,setVersions] = useState<ContractVersionRecord[]>([]);
+  const [renewals,setRenewals] = useState<ContractRenewalRecord[]>([]);
   const [entitlements,setEntitlements] = useState<ContractEntitlement[]>([]);
   const [policies,setPolicies] = useState<Array<Record<string,unknown>>>([]);
   const [loading,setLoading] = useState(false);
@@ -84,11 +87,14 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const loadDetail = useCallback(async (id:string) => {
     if (!id || !token) { setDetail(null); setDocuments([]); return; }
     try {
-      const [d,docs] = await Promise.all([
+      const [d,docs,versionRows,renewalRows] = await Promise.all([
         getCorporateContract(token,tenant.id,id),
         listContractDocuments(token,tenant.id,id),
+        listContractVersions(token,tenant.id,id),
+        listContractRenewals(token,tenant.id,id),
       ]);
       setDetail(d.data); setDocuments(docs.data);
+      setVersions(versionRows.data); setRenewals(renewalRows.data);
     } catch(e) { setError(e instanceof Error ? e.message : 'Gagal memuat detail kontrak.'); }
   },[token,tenant.id]);
 
@@ -213,7 +219,17 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
             {canLifecycle && detail.status==='active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'suspend','Suspension requested from Corporate Portal'),'Kontrak disuspend dan entitlement dihentikan.')}>Suspend</button>}
             {canLifecycle && ['active','suspended','approved'].includes(detail.status) && <button className={secondary} disabled={saving} onClick={()=>{if(window.confirm('Hentikan kontrak ini?')) void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'terminate','Termination requested from Corporate Portal'),'Kontrak dihentikan.')}}>Terminate</button>}
           </div>
-          {canLifecycle && ['active','approved'].includes(detail.status) && <div className="mt-4 grid gap-2 border-t border-[#EAF2F6] pt-4 md:grid-cols-2">
+          {renewals.length > 0 && <div className="mt-4 border-t border-[#EAF2F6] pt-4">
+          <h3 className="text-xs font-bold text-[#17324D]">Renewal History</h3>
+          {renewals.map((renewal) => <div key={renewal.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EAF2F6] py-2">
+            <div><p className="text-xs font-semibold">{renewal.renewal_type} · {renewal.status}</p><p className="text-[11px] text-[#718391]">Requested end {fmt(renewal.requested_end)}</p></div>
+            {canLifecycle && renewal.status === 'requested' && <div className="flex gap-2">
+              <button className={secondary} disabled={saving} onClick={()=>void action(()=>decideContractRenewal(token,tenant.id,renewal.id,'approved','Approved by authorized tenant lifecycle manager'),'Renewal disetujui dan effective date kontrak diperbarui.')}>Approve</button>
+              <button className={secondary} disabled={saving} onClick={()=>void action(()=>decideContractRenewal(token,tenant.id,renewal.id,'rejected','Rejected by authorized tenant lifecycle manager'),'Renewal ditolak.')}>Reject</button>
+            </div>}
+          </div>)}
+        </div>}
+        {canLifecycle && ['active','approved'].includes(detail.status) && <div className="mt-4 grid gap-2 border-t border-[#EAF2F6] pt-4 md:grid-cols-2">
             <label><span className={label}>Tanggal akhir renewal</span><input type="date" className={field} value={renewalEnd} onChange={(e)=>setRenewalEnd(e.target.value)}/></label>
             <button className={secondary+' self-end'} disabled={!renewalEnd || saving} onClick={()=>void action(()=>requestContractRenewal(token,detail.id,{tenant_id:tenant.id,renewal_type:'renewal',requested_end:renewalEnd}),'Renewal request tercatat.')}>Ajukan Renewal</button>
           </div>}
@@ -244,12 +260,13 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
           {canManage && <button className={primary} disabled={saving || !newContract.contract_number || !newContract.title || !newContract.scope_summary || !newContract.service_key || !newContract.service_scope || (newContract.contract_type==='statement_of_work' && !newContract.parent_contract_id)} onClick={()=>void createContract()}>Simpan Draft ke Backend</button>}
         </div>
       </section>
-      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Amendment / Versioning</h2><p className="mt-1 text-xs text-[#718391]">Pilih kontrak aktif di tab Kontrak untuk membuat snapshot perubahan baru.</p>
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Amendment / Versioning</h2><p className="mt-1 text-xs text-[#718391]">Snapshot immutable dan hash konten disimpan untuk setiap versi.</p>
         <label className="mt-3 block"><span className={label}>Ringkasan perubahan</span><input className={field} value={amendment.change_summary} onChange={(e)=>setAmendment(p=>({...p,change_summary:e.target.value}))}/></label>
         <label className="mt-3 block"><span className={label}>Scope versi baru</span><textarea className="min-h-20 w-full rounded-lg border border-[#D8E3E9] p-3 text-sm" value={amendment.scope_summary} onChange={(e)=>setAmendment(p=>({...p,scope_summary:e.target.value}))}/></label>
         <label className="mt-3 block"><span className={label}>Effective from</span><input type="date" className={field} value={amendment.effective_from} onChange={(e)=>setAmendment(p=>({...p,effective_from:e.target.value}))}/></label>
-        {canManage && detail && <button className={primary+' mt-3'} disabled={saving || !amendment.change_summary || !amendment.scope_summary || !amendment.effective_from} onClick={()=>void createAmendment()}>Buat Amendment Version</button>}
-        {detail && <p className="mt-4 text-xs text-[#526675]">Selected {detail.contract_number} · version {detail.current_version}</p>}
+        {canManage && detail && ['active','approved'].includes(detail.status) && <button className={primary+' mt-3'} disabled={saving || !amendment.change_summary || !amendment.scope_summary || !amendment.effective_from} onClick={()=>void createAmendment()}>Buat Amendment Version</button>}
+        {detail && <p className="mt-4 text-xs text-[#526675]">Selected {detail.contract_number} · current v{detail.current_version}</p>}
+        <div className="mt-4 divide-y divide-[#EAF2F6]">{versions.map(v=><div key={v.id} className="py-3"><div className="flex justify-between gap-2"><p className="text-xs font-semibold">Version {v.version_number} · {v.version_status}</p><p className="text-[11px] text-[#718391]">{fmt(v.effective_from)}</p></div><p className="mt-1 text-xs text-[#526675]">{v.change_summary ?? v.scope_summary}</p><p className="mt-1 break-all font-mono text-[10px] text-[#718391]">SHA-256 {v.content_hash}</p></div>)}{!versions.length && <p className="py-3 text-xs text-[#718391]">Riwayat versi belum tersedia.</p>}</div>
       </section>
     </div>}
 
