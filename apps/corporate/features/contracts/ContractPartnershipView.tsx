@@ -15,7 +15,7 @@ import {
   changeContractLifecycle,
   type CorporateContract, type CorporateProfile, type ContractDocument,
   type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord, type PublicCatalogueItem,
-  type ContractApprovalDelegation,
+  type ContractApprovalDelegation, type CorporateProviderProfile,
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
@@ -50,11 +50,14 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [entitlements,setEntitlements] = useState<ContractEntitlement[]>([]);
   const [policies,setPolicies] = useState<Array<Record<string,unknown>>>([]);
   const [catalogue,setCatalogue] = useState<PublicCatalogueItem[]>([]);
+  const [providerProfiles,setProviderProfiles] = useState<CorporateProviderProfile[]>([]);
+  const [providerForm,setProviderForm] = useState({provider_code:'',provider_name:'',provider_type:'isp' as CorporateProviderProfile['provider_type'],registration_number:'',contact_email:'',contact_phone:'',service_regions:''});
+  const [editingProviderId,setEditingProviderId] = useState('');
   const [loading,setLoading] = useState(false);
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
-  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',effective_start:'',effective_end:''});
+  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',provider_profile_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',effective_start:'',effective_end:''});
   const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:''});
   const [policyName,setPolicyName] = useState('');
   const [policyType,setPolicyType] = useState<'master'|'statement_of_work'|'amendment'>('master');
@@ -70,6 +73,8 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const canProfile = can('corporate.profiles.manage');
   const canApprove = can('corporate.contracts.approve');
   const canLifecycle = can('corporate.contracts.lifecycle');
+  const canReadProviders = can('corporate.providers.read');
+  const canManageProviders = can('corporate.providers.manage');
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -97,8 +102,16 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     } catch {
       setCatalogue([]);
     }
+    if (canReadProviders) {
+      try {
+        const providerResult = await listCorporateProviderProfiles(token,tenant.id);
+        setProviderProfiles(providerResult.data);
+      } catch {
+        setProviderProfiles([]);
+      }
+    }
     setLoading(false);
-  },[token,tenant.id]);
+  },[token,tenant.id,canReadProviders]);
 
   const loadDetail = useCallback(async (id:string) => {
     if (!id || !token) { setDetail(null); setDocuments([]); return; }
@@ -144,6 +157,25 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     finally { setSaving(false); }
   };
 
+  const saveProviderProfile = () => action(async () => {
+    const payload = {
+      tenant_id:tenant.id,provider_code:providerForm.provider_code,
+      provider_name:providerForm.provider_name,provider_type:providerForm.provider_type,
+      registration_number:providerForm.registration_number || null,
+      contact_email:providerForm.contact_email || null,
+      contact_phone:providerForm.contact_phone || null,
+      service_regions:providerForm.service_regions.split(',').map(x=>x.trim()).filter(Boolean),
+      service_metadata:{},
+    };
+    if(editingProviderId) {
+      await updateCorporateProviderProfile(token,editingProviderId,payload);
+    } else {
+      await createCorporateProviderProfile(token,payload);
+    }
+    setEditingProviderId('');
+    setProviderForm({provider_code:'',provider_name:'',provider_type:'isp',registration_number:'',contact_email:'',contact_phone:'',service_regions:''});
+  },'Provider profile tersimpan.');
+
   const saveProfile = () => action(() => upsertCorporateProfile(token,{
     tenant_id:tenant.id, organization_id:profileForm.organization_id || null,
     branch_id:profileForm.branch_id || null, legal_name:profileForm.legal_name,
@@ -159,6 +191,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
       tenant_id:tenant.id,organization_id:profile?.organization_id ?? null,
       branch_id:profile?.branch_id ?? null,
       parent_contract_id:newContract.parent_contract_id || null,
+      provider_profile_id:newContract.provider_profile_id || null,
       contract_number:newContract.contract_number,title:newContract.title,
       contract_type:newContract.contract_type,currency:'IDR',
       effective_start:newContract.effective_start || null,effective_end:newContract.effective_end || null,
@@ -251,6 +284,23 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
         {canProfile && profile?.profile_status === 'suspended' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>updateCorporateProfileStatus(token,tenant.id,{status:'active',reason:'Reactivated by tenant administrator'}),'Profile diaktifkan kembali.')}>Reactivate Profile</button>}
         {canProfile && profile && profile.profile_status !== 'archived' && <button className={secondary} disabled={saving} onClick={()=>{if(window.confirm('Arsipkan corporate profile ini?'))void action(()=>updateCorporateProfileStatus(token,tenant.id,{status:'archived',reason:'Archived by tenant administrator'}),'Profile diarsipkan.');}}>Archive Profile</button>}
       </div>
+      {canReadProviders && <div className="mt-6 border-t border-[#EAF2F6] pt-5">
+        <h3 className="text-sm font-bold text-[#17324D]">Provider Profiles</h3>
+        <div className="mt-3 divide-y divide-[#EAF2F6]">{providerProfiles.map(provider=><div key={provider.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div><p className="text-xs font-semibold">{provider.provider_name} · {provider.provider_code}</p><p className="text-[11px] text-[#718391]">{provider.provider_type} · {provider.status} · {provider.contact_email ?? 'No contact email'}</p></div>
+          {canManageProviders && <div className="flex gap-2"><button className={secondary} onClick={()=>{setEditingProviderId(provider.id);setProviderForm({provider_code:provider.provider_code,provider_name:provider.provider_name,provider_type:provider.provider_type,registration_number:provider.registration_number ?? '',contact_email:provider.contact_email ?? '',contact_phone:provider.contact_phone ?? '',service_regions:provider.service_regions.join(', ')});}}>Edit</button>{provider.status==='draft' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>updateCorporateProviderProfileStatus(token,tenant.id,provider.id,'active','Activated by corporate administrator'),'Provider profile diaktifkan.')}>Activate</button>}{provider.status==='active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>updateCorporateProviderProfileStatus(token,tenant.id,provider.id,'suspended','Suspended by corporate administrator'),'Provider profile ditangguhkan.')}>Suspend</button>}</div>}
+        </div>)}{!providerProfiles.length && <p className="py-3 text-xs text-[#718391]">Belum ada provider profile.</p>}</div>
+        {canManageProviders && <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label><span className={label}>Provider code</span><input className={field} value={providerForm.provider_code} onChange={e=>setProviderForm(p=>({...p,provider_code:e.target.value}))}/></label>
+          <label><span className={label}>Provider name</span><input className={field} value={providerForm.provider_name} onChange={e=>setProviderForm(p=>({...p,provider_name:e.target.value}))}/></label>
+          <label><span className={label}>Provider type</span><select className={field} value={providerForm.provider_type} onChange={e=>setProviderForm(p=>({...p,provider_type:e.target.value as CorporateProviderProfile['provider_type']}))}><option value="isp">ISP</option><option value="telecom">Telecom</option><option value="managed_service">Managed Service</option><option value="technology">Technology</option><option value="other">Other</option></select></label>
+          <label><span className={label}>Registration number</span><input className={field} value={providerForm.registration_number} onChange={e=>setProviderForm(p=>({...p,registration_number:e.target.value}))}/></label>
+          <label><span className={label}>Contact email</span><input type="email" className={field} value={providerForm.contact_email} onChange={e=>setProviderForm(p=>({...p,contact_email:e.target.value}))}/></label>
+          <label><span className={label}>Contact phone</span><input className={field} value={providerForm.contact_phone} onChange={e=>setProviderForm(p=>({...p,contact_phone:e.target.value}))}/></label>
+          <label className="md:col-span-2"><span className={label}>Service regions (comma separated)</span><input className={field} value={providerForm.service_regions} onChange={e=>setProviderForm(p=>({...p,service_regions:e.target.value}))}/></label>
+          <button className={primary} disabled={saving || !providerForm.provider_code || !providerForm.provider_name} onClick={()=>void saveProviderProfile()}>{editingProviderId ? 'Update Provider Profile' : 'Create Provider Profile'}</button>
+        </div>}
+      </div>}
     </section>}
 
     {tab === 'contracts' && <div className="grid gap-5 lg:grid-cols-12">
@@ -307,7 +357,8 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     {tab === 'sow' && <div className="grid gap-5 lg:grid-cols-2">
       <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Buat Master Agreement / SOW</h2>
         <div className="mt-3 grid gap-3">
-          <label><span className={label}>Nomor kontrak</span><input className={field} value={newContract.contract_number} onChange={(e)=>setNewContract(p=>({...p,contract_number:e.target.value}))}/></label>
+<label><span className={label}>Provider profile</span><select className={field} value={newContract.provider_profile_id} onChange={e=>setNewContract(p=>({...p,provider_profile_id:e.target.value}))}><option value="">Pilih provider profile</option>{providerProfiles.filter(p=>p.status==='active').map(p=><option key={p.id} value={p.id}>{p.provider_name} · {p.provider_code}</option>)}</select></label>
+                    <label><span className={label}>Nomor kontrak</span><input className={field} value={newContract.contract_number} onChange={(e)=>setNewContract(p=>({...p,contract_number:e.target.value}))}/></label>
           <label><span className={label}>Judul</span><input className={field} value={newContract.title} onChange={(e)=>setNewContract(p=>({...p,title:e.target.value}))}/></label>
           <label><span className={label}>Jenis</span><select className={field} value={newContract.contract_type} onChange={(e)=>setNewContract(p=>({...p,contract_type:e.target.value as 'master'|'statement_of_work'}))}><option value="master">Master Agreement</option><option value="statement_of_work">Statement of Work</option></select></label>
           {newContract.contract_type==='statement_of_work' && <label><span className={label}>Kontrak induk</span><select className={field} value={newContract.parent_contract_id} onChange={(e)=>setNewContract(p=>({...p,parent_contract_id:e.target.value}))}><option value="">Pilih kontrak induk</option>{contracts.filter(c=>['active','approved'].includes(c.status)).map(c=><option key={c.id} value={c.id}>{c.contract_number} — {c.title}</option>)}</select></label>}
