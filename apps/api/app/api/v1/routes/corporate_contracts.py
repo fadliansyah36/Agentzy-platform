@@ -2449,3 +2449,62 @@ async def update_provider_profile_status(
              "metadata": json.dumps({"status": status, "reason": reason})},
         )
     return {"data": {"id": str(provider_id), "status": status}}
+
+
+@router.get("/metrics/contracts")
+async def get_contract_operational_metrics(tenant_id: UUID, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.contracts.read")
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select
+                  count(*) filter (where status='active') as active_contracts,
+                  count(*) filter (where status='draft') as draft_contracts,
+                  count(*) filter (where status='review_pending') as pending_approvals,
+                  count(*) filter (where status='expired') as expired_contracts,
+                  count(*) filter (
+                    where status='active' and effective_end between current_date
+                      and current_date+interval '30 days'
+                  ) as expiring_30_days
+                from public.contracts where tenant_id=:tenant
+            """),
+            {"tenant": tenant_id},
+        )
+        contract_metrics = dict(result.mappings().one())
+        renewals = await connection.execute(
+            text("""
+                select count(*) from public.contract_renewals
+                where tenant_id=:tenant and status in ('requested','review_pending')
+            """),
+            {"tenant": tenant_id},
+        )
+        docs = await connection.execute(
+            text("""
+                select
+                  count(*) filter (where lifecycle_status='quarantined') as quarantined_documents,
+                  count(*) filter (where lifecycle_status='available') as available_documents
+                from public.contract_documents where tenant_id=:tenant
+            """),
+            {"tenant": tenant_id},
+        )
+        invoices = await connection.execute(
+            text("""
+                select count(*) filter (where status in ('issued','partially_paid','overdue')) as outstanding_invoices,
+                       coalesce(sum(total_amount-paid_amount) filter (
+                         where status in ('issued','partially_paid','overdue')
+                       ),0) as outstanding_amount
+                from public.contract_invoices where tenant_id=:tenant
+            """),
+            {"tenant": tenant_id},
+        )
+    return {
+        "data": {
+            **contract_metrics,
+            "pending_renewals": renewals.scalar_one(),
+            **dict(docs.mappings().one()),
+            "outstanding_invoices": invoices.mappings().one()["outstanding_invoices"],
+            "outstanding_amount": str(invoices.mappings().one()["outstanding_amount"]),
+            "as_of": datetime.now(timezone.utc).isoformat(),
+        }
+    }
