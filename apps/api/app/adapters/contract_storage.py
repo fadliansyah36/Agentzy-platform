@@ -48,9 +48,7 @@ async def create_contract_document_signed_url(path: str, expires_in: int = 60) -
         f"{BUCKET}/{quote(path, safe='/')}"
     )
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.post(
-            url, headers=_headers(), json={"expiresIn": expires_in}
-        )
+        response = await client.post(url, headers=_headers(), json={"expiresIn": expires_in})
     if response.status_code not in (200, 201):
         raise RuntimeError("CONTRACT_DOCUMENT_SIGNED_URL_FAILED")
     signed_path = response.json().get("signedURL")

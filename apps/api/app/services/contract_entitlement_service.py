@@ -1,11 +1,11 @@
 """Deterministic contract entitlement resolution and enforcement helpers."""
 
-from datetime import date
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
+
 
 async def resolve_effective_entitlements(
     connection: AsyncConnection, tenant_id: UUID
@@ -41,10 +41,14 @@ async def require_service_entitlement(
     rows = await resolve_effective_entitlements(connection, tenant_id)
     grant = next((item for item in rows if item["service_key"] == service_key), None)
     if grant is None:
-        raise HTTPException(status_code=403, detail="Service is not included in an active contract.")
+        raise HTTPException(
+            status_code=403, detail="Service is not included in an active contract."
+        )
     if workforce_delta > 0 and grant["human_workforce_limit"] is not None:
         if workforce_delta > grant["human_workforce_limit"]:
-            raise HTTPException(status_code=409, detail="Human workforce entitlement limit exceeded.")
+            raise HTTPException(
+                status_code=409, detail="Human workforce entitlement limit exceeded."
+            )
     if ai_worker_delta > 0 and grant["ai_worker_limit"] is not None:
         if ai_worker_delta > grant["ai_worker_limit"]:
             raise HTTPException(status_code=409, detail="AI worker entitlement limit exceeded.")
