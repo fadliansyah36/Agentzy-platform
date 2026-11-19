@@ -147,16 +147,19 @@ async def create_contract(
         )
         existing = replay.mappings().first()
         if existing:
+            if existing["idempotency_fingerprint"] != fingerprint:
+                raise HTTPException(status_code=409, detail="Idempotency-Key sudah digunakan untuk payload berbeda.")
             return {"data": {"id": str(existing["id"]), "status": existing["status"],
                              "version": existing["current_version"], "replayed": True}}
         contract_result = await connection.execute(
             text("""
                 insert into public.contracts(
                   tenant_id,contract_number,title,contract_type,status,currency,
-                  effective_start,effective_end,renewal_at,idempotency_key,created_by,updated_by
+                  effective_start,effective_end,renewal_at,idempotency_key,
+                  idempotency_fingerprint,created_by,updated_by
                 ) values(
                   :tenant_id,:number,:title,:type,'draft',:currency,
-                  :start,:end,:renewal,:key,:actor,:actor
+                  :start,:end,:renewal,:key,:fingerprint,:actor,:actor
                 ) returning id
             """),
             {
@@ -169,6 +172,7 @@ async def create_contract(
                 "end": payload.effective_end,
                 "renewal": payload.renewal_at,
                 "key": idempotency_key,
+                "fingerprint": fingerprint,
                 "actor": actor,
             },
         )
