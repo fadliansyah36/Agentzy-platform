@@ -5,6 +5,7 @@ import { FileText, RefreshCw } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
   createCorporateAmendment, createCorporateContract, createContractApprovalPolicy,
+  createContractApprovalDelegation, listContractApprovalDelegations, revokeContractApprovalDelegation,
   decideContractApproval, getCorporateContract, getCorporateProfile,
   getContractDocumentDownload, getEffectiveContractEntitlements,
   listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
@@ -14,6 +15,7 @@ import {
   changeContractLifecycle,
   type CorporateContract, type CorporateProfile, type ContractDocument,
   type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord,
+  type ContractApprovalDelegation,
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
@@ -43,6 +45,8 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [documents,setDocuments] = useState<ContractDocument[]>([]);
   const [versions,setVersions] = useState<ContractVersionRecord[]>([]);
   const [renewals,setRenewals] = useState<ContractRenewalRecord[]>([]);
+  const [delegations,setDelegations] = useState<ContractApprovalDelegation[]>([]);
+  const [delegationForm,setDelegationForm] = useState({delegatee_user_id:'',starts_at:'',ends_at:'',reason:''});
   const [entitlements,setEntitlements] = useState<ContractEntitlement[]>([]);
   const [policies,setPolicies] = useState<Array<Record<string,unknown>>>([]);
   const [loading,setLoading] = useState(false);
@@ -99,6 +103,12 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   },[token,tenant.id]);
 
   useEffect(() => {
+    if (!token || !canApprove) return;
+    void listContractApprovalDelegations(token,tenant.id)
+      .then((result) => setDelegations(result.data))
+      .catch(() => setDelegations([]));
+  },[token,tenant.id,canApprove]);
+  useEffect(() => {
     const task = Promise.resolve().then(() => refresh());
     return () => { void task; };
   },[refresh]);
@@ -148,6 +158,12 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     tenant_id:tenant.id,policy_name:policyName,contract_type:'master',currency:'IDR',
     min_amount:'0',steps:[{required_permission_key:'corporate.contracts.approve',minimum_approvals:1}],
   }), 'Approval policy tersimpan.');
+
+  const createDelegation = () => action(() => createContractApprovalDelegation(token,{
+    tenant_id:tenant.id,delegatee_user_id:delegationForm.delegatee_user_id,
+    starts_at:new Date(delegationForm.starts_at).toISOString(),
+    ends_at:new Date(delegationForm.ends_at).toISOString(),reason:delegationForm.reason,
+  }), 'Delegasi approval tersimpan.');
 
   const createAmendment = () => {
     if(!detail) return;
@@ -280,6 +296,16 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
         {policies.map(p=><div key={String(p.id)} className="mt-3 rounded-lg bg-[#F5F8FA] p-3"><p className="text-sm font-semibold">{String(p.policy_name)}</p><p className="text-xs text-[#718391]">{String(p.contract_type)} · {Array.isArray(p.steps)?p.steps.length:0} step(s)</p></div>)}
         {!policies.length && <p className="mt-3 text-xs text-[#718391]">Belum ada policy.</p>}
         {canManage && <div className="mt-4 border-t border-[#EAF2F6] pt-4"><label><span className={label}>Nama policy</span><input className={field} value={policyName} onChange={e=>setPolicyName(e.target.value)}/></label><p className="mt-2 text-[11px] text-[#718391]">Default policy menggunakan permission corporate.contracts.approve; approver dipilih dari membership aktif yang memenuhi permission.</p><button className={primary+' mt-3'} disabled={saving || !policyName} onClick={()=>void createPolicy()}>Simpan Policy</button></div>}
+      </section>
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-2"><h2 className="text-sm font-bold text-[#17324D]">Approval Delegation</h2>
+        {canApprove && <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <label><span className={label}>Delegatee user UUID</span><input className={field} value={delegationForm.delegatee_user_id} onChange={e=>setDelegationForm(p=>({...p,delegatee_user_id:e.target.value}))}/></label>
+          <label><span className={label}>Mulai</span><input type="datetime-local" className={field} value={delegationForm.starts_at} onChange={e=>setDelegationForm(p=>({...p,starts_at:e.target.value}))}/></label>
+          <label><span className={label}>Berakhir</span><input type="datetime-local" className={field} value={delegationForm.ends_at} onChange={e=>setDelegationForm(p=>({...p,ends_at:e.target.value}))}/></label>
+          <label><span className={label}>Alasan</span><input className={field} value={delegationForm.reason} onChange={e=>setDelegationForm(p=>({...p,reason:e.target.value}))}/></label>
+          <button className={primary} disabled={saving || !delegationForm.delegatee_user_id || !delegationForm.starts_at || !delegationForm.ends_at || !delegationForm.reason} onClick={()=>void createDelegation()}>Buat Delegasi</button>
+        </div>}
+        <div className="mt-4 divide-y divide-[#EAF2F6]">{delegations.map(d=><div key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><div><p className="text-xs font-semibold">{d.delegator_user_id} → {d.delegatee_user_id} · {d.status}</p><p className="text-[11px] text-[#718391]">{fmt(d.starts_at)} — {fmt(d.ends_at)} · {d.reason}</p></div>{d.status==='active' && d.delegator_user_id===auth.session?.user?.id && <button className={secondary} disabled={saving} onClick={()=>void action(()=>revokeContractApprovalDelegation(token,tenant.id,d.id),'Delegasi dicabut.')}>Revoke</button>}</div>)}{!delegations.length && <p className="py-3 text-xs text-[#718391]">Tidak ada delegasi approval aktif atau historis.</p>}</div>
       </section>
       <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Approval History</h2>
         {(detail?.approvals ?? []).map((a,i)=><div key={String(a.id ?? i)} className="border-b border-[#EAF2F6] py-3"><p className="text-xs font-semibold">Step {String(a.approval_step)} · {String(a.status)}</p><p className="text-[11px] text-[#718391]">Approver {String(a.approver_user_id)}</p>
