@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Building2, CheckCircle2, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { Building2, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import type {
   AgentzyBranch,
   AgentzyDepartment,
