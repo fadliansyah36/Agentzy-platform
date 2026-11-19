@@ -126,7 +126,7 @@ export interface OrgUnitRecord {
   id: string;
   tenantId: string;
   name: string;
-  unitType: 'Cabang / Regional' | 'Departemen';
+  unitType: 'Unit Organisasi' | 'Cabang / Regional' | 'Departemen';
   parentName: string | null;
   headName: string | null;
   memberCount: number | null;
@@ -134,6 +134,7 @@ export interface OrgUnitRecord {
   code?: string;
   organizationId?: string;
   organizationUnitId?: string | null;
+  parentUnitId?: string | null;
   branchId?: string | null;
   departmentId?: string | null;
   parentDepartmentId?: string | null;
