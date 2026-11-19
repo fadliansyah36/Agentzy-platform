@@ -1184,6 +1184,35 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
 
 
+  const restoreOrgUnit = useCallback(
+    async (id: string) => {
+      const accessToken = auth.session?.access_token;
+      const target = orgUnits.find((item) => item.id === id);
+      if (!accessToken || auth.aal !== 'aal2' || !target) {
+        showToast('Session AAL2 atau data struktur yang valid tidak tersedia.');
+        return;
+      }
+      try {
+        if (target.unitType === 'Unit Organisasi') {
+          await restoreOrganizationUnit(accessToken, target.tenantId, target.id);
+        } else if (target.unitType === 'Cabang / Regional') {
+          await restoreBranch(accessToken, target.tenantId, target.id);
+        } else {
+          await restoreDepartment(accessToken, target.tenantId, target.id);
+        }
+        const refreshed = await loadAdminTenantHierarchy(accessToken, target.tenantId);
+        setOrgUnits((previous) => [
+          ...previous.filter((item) => item.tenantId !== target.tenantId),
+          ...refreshed,
+        ]);
+        showToast('Struktur dipulihkan melalui FastAPI.');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Struktur tidak dapat dipulihkan.');
+      }
+    },
+    [auth.session?.access_token, auth.aal, orgUnits, showToast],
+  );
+
   const upsertPlatformUser = useCallback(
     async (payload: Omit<PlatformUserRecord, 'id' | 'lastLogin'> & { id?: string }) => {
       const accessToken = auth.session?.access_token;
