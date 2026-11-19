@@ -406,14 +406,20 @@ async def list_organization_units(
     request: Request,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = None,
+    include_archived: bool = Query(default=False),
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ) -> PageResponse:
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
+    if include_archived:
+        await _authorize(
+            session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
+        )
     params = {
         "tenant_id": tenant_id,
+        "include_archived": include_archived,
         "organization_id": context.organization_id if context else None,
         "organization_unit_id": context.organization_unit_id if context else None,
         "branch_id": context.branch_id if context else None,
@@ -428,7 +434,7 @@ async def list_organization_units(
         select id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status,
                created_at,updated_at
         from public.organization_units
-        where tenant_id=:tenant_id and status='active'
+        where tenant_id=:tenant_id and (:include_archived or status='active')
           and (:organization_id is null or organization_id=:organization_id)
           and (:organization_unit_id is null or id=:organization_unit_id)
           and (:branch_id is null or id in (
@@ -547,14 +553,20 @@ async def list_branches(
     request: Request,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = None,
+    include_archived: bool = Query(default=False),
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ) -> PageResponse:
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
+    if include_archived:
+        await _authorize(
+            session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
+        )
     params = {
         "tenant_id": tenant_id,
+        "include_archived": include_archived,
         "organization_id": context.organization_id if context else None,
         "organization_unit_id": context.organization_unit_id if context else None,
         "branch_id": context.branch_id if context else None,
@@ -568,7 +580,7 @@ async def list_branches(
     query = text(f"""
         select id,tenant_id,organization_id,organization_unit_id,name,code,status,
                created_at,updated_at
-        from public.branches where tenant_id=:tenant_id and status='active'
+        from public.branches where tenant_id=:tenant_id and (:include_archived or status='active')
           and (:organization_id is null or organization_id=:organization_id)
           and (:organization_unit_id is null or organization_unit_id=:organization_unit_id)
           and (:branch_id is null or id=:branch_id)
@@ -682,14 +694,20 @@ async def list_departments(
     request: Request,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = None,
+    include_archived: bool = Query(default=False),
     claims: dict = claims_dependency,
     session: AsyncSession = session_dependency,
 ) -> PageResponse:
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.read", "platform.tenants.read"
     )
+    if include_archived:
+        await _authorize(
+            session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
+        )
     params = {
         "tenant_id": tenant_id,
+        "include_archived": include_archived,
         "organization_id": context.organization_id if context else None,
         "branch_id": context.branch_id if context else None,
         "department_id": context.department_id if context else None,
@@ -703,7 +721,7 @@ async def list_departments(
     query = text(f"""
         select id,tenant_id,organization_id,branch_id,parent_department_id,name,code,status,
                created_at,updated_at
-        from public.departments where tenant_id=:tenant_id and status='active'
+        from public.departments where tenant_id=:tenant_id and (:include_archived or status='active')
           and (:organization_id is null or organization_id=:organization_id)
           and (:branch_id is null or branch_id=:branch_id)
           and (:department_id is null or id=:department_id)
