@@ -391,7 +391,8 @@ async def get_contract(contract_id: UUID, tenant_id: UUID, claims: dict = claims
             raise HTTPException(status_code=404, detail="Kontrak tidak ditemukan.")
         services = await connection.execute(
             text("""
-                select service_key,service_scope,quantity,monthly_fee,currency,sla,entitlement
+                select service_key,service_scope,quantity,monthly_fee,currency,sla,kpi,entitlement,
+                       human_workforce_limit,ai_worker_limit,ai_credits_limit
                 from public.contract_services
                 where contract_id=:id and contract_version_id=:version_id order by id
             """),
