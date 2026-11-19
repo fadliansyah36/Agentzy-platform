@@ -3,11 +3,11 @@ import hashlib
 import hmac
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -178,10 +178,11 @@ async def public_catalogue():
             from public.public_faq_entries
             where is_published=true order by sort_order,faq_key
         """))
+    service_rows = [dict(row) for row in services.mappings().all()]
     return {
         "data": {
-            "human_workforce": [dict(row) for row in services.mappings().all() if row["audience"] == "human"],
-            "ai_workforce": [dict(row) for row in services.mappings().all() if row["audience"] == "ai"],
+            "human_workforce": [row for row in service_rows if row["audience"] == "human"],
+            "ai_workforce": [row for row in service_rows if row["audience"] == "ai"],
             "faqs": [dict(row) for row in faqs.mappings().all()],
         },
         "meta": {"source": "agentzy_database", "updated_at": datetime.now(UTC).isoformat()},
@@ -364,8 +365,8 @@ async def create_partnership_application(
 async def upload_partnership_attachment(
     application_id: UUID,
     request: Request,
-    file: UploadFile = File(...),
     upload_token: str | None = Header(default=None, alias="X-Application-Upload-Token"),
+    filename: str | None = Header(default=None, alias="X-File-Name"),
 ):
     await _rate_limit(request, action="partnership-attachment", limit=20)
     if not upload_token:
@@ -382,12 +383,13 @@ async def upload_partnership_attachment(
         if not app_result.first():
             raise HTTPException(status_code=404, detail="Pengajuan atau akses upload tidak tersedia.")
 
-    filename = (file.filename or "").strip()
-    extension = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    safe_filename = (filename or "").strip()
+    extension = "." + safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     allowed = ALLOWED_UPLOADS.get(extension)
-    if not allowed or file.content_type != allowed[0]:
+    if not allowed or content_type != allowed[0]:
         raise HTTPException(status_code=415, detail="Format lampiran tidak didukung. Gunakan PDF, JPG, atau PNG.")
-    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    content = await request.body()
     if not content or len(content) > MAX_UPLOAD_BYTES or not content.startswith(allowed[1]):
         raise HTTPException(status_code=413 if len(content) > MAX_UPLOAD_BYTES else 400, detail="File tidak valid atau melebihi 10 MB.")
     if not settings.supabase_service_role_key:
@@ -419,7 +421,7 @@ async def upload_partnership_attachment(
                     "id": attachment_id,
                     "application_id": application_id,
                     "path": object_path,
-                    "filename": filename[:255],
+                    "filename": safe_filename[:255],
                     "content_type": allowed[0],
                     "size": len(content),
                     "sha256": hashlib.sha256(content).hexdigest(),
@@ -439,7 +441,6 @@ async def upload_partnership_attachment(
         },
         "meta": _request_context(request),
     }
-
 
 async def _authorize_partnership(
     request: Request,
