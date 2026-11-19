@@ -8,6 +8,7 @@ const VALID_SECTIONS: AdminSectionId[] = [
   'overview',
   'tenants',
   'onboarding',
+  'partnerships',
   'master-data',
   'subscriptions',
   'organization',
