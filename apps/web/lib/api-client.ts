@@ -211,6 +211,7 @@ export const uploadPublicPartnershipAttachment = (
   applicationId: string,
   uploadToken: string,
   file: File,
+  idempotencyKey: string,
 ) => publicApiRequest<{ data: { id: string; scan_status: string; download_available: boolean } }>(
   `/public/partnership-applications/${encodeURIComponent(applicationId)}/attachments`,
   {
@@ -219,6 +220,7 @@ export const uploadPublicPartnershipAttachment = (
       "X-Application-Upload-Token": uploadToken,
       "X-File-Name": encodeURIComponent(file.name),
       "Content-Type": file.type,
+      "Idempotency-Key": idempotencyKey,
     },
     body: file,
   },
