@@ -1013,11 +1013,24 @@ async def list_role_templates(
         tenant_ids = [row["tenant_id"] for row in memberships.mappings().all()]
         tenant_reader = False
         for tenant_id in tenant_ids:
-            if await _has_tenant_permission(
-                session, user_id, tenant_id, ("corporate.organization.read",)
-            ):
+            try:
+                await authorize_action(
+                    session,
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    permission_key="corporate.organization.read",
+                    platform_permission="",
+                    aal=None,
+                    resource_type="corporate.role_catalogue",
+                    action="read",
+                    resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+                    request_id=_request_id(request),
+                )
                 tenant_reader = True
                 break
+            except HTTPException as exc:
+                if exc.status_code != 403:
+                    raise
         if not tenant_reader:
             raise HTTPException(status_code=403, detail="Missing role catalogue read permission.")
     role_filter = "" if is_platform_reader else "and r.key not like 'platform_%'"
