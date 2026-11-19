@@ -76,7 +76,7 @@ async def reserve_idempotency(
 
     existing_result = await connection.execute(
         text("""
-            select id,request_fingerprint,status,response_status,response_body,expires_at
+            select id,request_fingerprint,status,response_status,response_body,expires_at,updated_at
             from public.idempotency_records
             where actor_user_id=:actor
               and tenant_id is not distinct from :tenant_id
@@ -119,7 +119,10 @@ async def reserve_idempotency(
             replay_status=existing["response_status"],
             replay_body=existing["response_body"] or {},
         )
-    if existing["status"] == "failed":
+    if existing["status"] == "failed" or (
+        existing["status"] == "processing"
+        and existing["updated_at"] <= now - timedelta(minutes=10)
+    ):
         await connection.execute(
             text("""
                 update public.idempotency_records
