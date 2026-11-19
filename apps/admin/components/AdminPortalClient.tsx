@@ -175,6 +175,7 @@ export function AdminPortalClient({
               portal.setModal({ type: 'org-unit-crud', unit })
             }
             onDeleteOrgUnit={portal.deleteOrgUnit}
+            onRestoreOrgUnit={portal.restoreOrgUnit}
             onOpenUserModal={(user) => portal.setModal({ type: 'user-crud', user })}
             onDeleteUser={portal.deletePlatformUser}
             onBack={backToOverview}
