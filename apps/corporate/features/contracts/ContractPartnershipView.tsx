@@ -233,6 +233,8 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
       <div className="mt-4 flex flex-wrap items-center gap-3"><span className="text-xs text-[#718391]">Status: {profile?.profile_status ?? 'Belum dibuat'}</span>
         {canProfile && <button className={primary} disabled={saving || !profileForm.legal_name} onClick={()=>void saveProfile()}>Simpan Profile</button>}
         {canProfile && profile?.profile_status === 'active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>updateCorporateProfileStatus(token,tenant.id,{status:'suspended',reason:'Suspended by tenant administrator'}),'Profile ditangguhkan.')}>Suspend Profile</button>}
+        {canProfile && profile?.profile_status === 'suspended' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>updateCorporateProfileStatus(token,tenant.id,{status:'active',reason:'Reactivated by tenant administrator'}),'Profile diaktifkan kembali.')}>Reactivate Profile</button>}
+        {canProfile && profile && profile.profile_status !== 'archived' && <button className={secondary} disabled={saving} onClick={()=>{if(window.confirm('Arsipkan corporate profile ini?'))void action(()=>updateCorporateProfileStatus(token,tenant.id,{status:'archived',reason:'Archived by tenant administrator'}),'Profile diarsipkan.');}}>Archive Profile</button>}
       </div>
     </section>}
 
