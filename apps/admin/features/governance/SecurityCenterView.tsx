@@ -17,11 +17,13 @@ import type {
   BreakGlassRequestRecord,
   FeatureFlagRecord,
 } from '../../lib/admin-types';
-import type { AgentzySecurityAlert } from '@/apps/web/lib/api-client';
+import type { AgentzyAuthSession, AgentzySecurityAlert } from '@/apps/web/lib/api-client';
 
 export function SecurityCenterView({
   mfaEnforced,
   activeSessionsCount,
+  mySessions,
+  onRevokeSession,
   ipAllowlistEnabled,
   sessionTtlMinutes,
   breakGlassRequests,
@@ -37,6 +39,8 @@ export function SecurityCenterView({
 }: {
   mfaEnforced: boolean | null;
   activeSessionsCount: number | null;
+  mySessions: AgentzyAuthSession[];
+  onRevokeSession: (sessionId: string) => Promise<void>;
   ipAllowlistEnabled: boolean | null;
   sessionTtlMinutes: number | null;
   breakGlassRequests: BreakGlassRequestRecord[];
@@ -141,6 +145,53 @@ export function SecurityCenterView({
             Semua aksi diaudit
           </p>
         </div>
+      </div>
+
+      <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EAF2F6] pb-3">
+          <div>
+            <h2 className="text-sm font-bold text-[#17324D]">Sesi Autentikasi Anda</h2>
+            <p className="text-xs text-[#526675]">
+              Daftar sesi milik akun yang sedang masuk. Pencabutan dicatat dan langsung berlaku pada pemeriksaan token backend.
+            </p>
+          </div>
+          <span className="font-mono-tabular text-xs font-bold text-[#17324D]">{activeSessionsCount ?? '—'} aktif</span>
+        </div>
+        {mySessions.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-[#B8C9D3] p-4 text-xs text-[#718391]">
+            Tidak ada sesi Auth yang tersedia untuk akun ini.
+          </p>
+        ) : mySessions.map((session) => (
+          <div key={session.id} className="flex flex-col gap-3 rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-[#17324D]">
+                  {session.user_agent ?? 'Perangkat tidak teridentifikasi'}
+                </span>
+                {session.is_current && <AdminStatusText tone="success" label="Sesi saat ini" />}
+                <AdminStatusText
+                  tone={session.is_revoked ? 'danger' : 'success'}
+                  label={session.is_revoked ? 'Dicabut' : 'Aktif'}
+                />
+              </div>
+              <p className="font-mono-tabular break-all text-[10px] text-[#718391]">
+                ID {session.id} · AAL {session.aal ?? '—'} · Dibuat {session.created_at ?? '—'}
+              </p>
+              <p className="font-mono-tabular text-[10px] text-[#718391]">
+                Refresh terakhir {session.refreshed_at ?? '—'} · Berlaku hingga {session.not_after ?? '—'}
+              </p>
+            </div>
+            {!session.is_revoked && (
+              <button
+                type="button"
+                onClick={() => void onRevokeSession(session.id)}
+                className="h-8 shrink-0 rounded-lg border border-[#B23A48]/40 bg-white px-3 text-xs font-semibold text-[#B23A48] hover:bg-[#B23A48]/5"
+              >
+                {session.is_current ? 'Cabut & keluar' : 'Cabut sesi'}
+              </button>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Security alert feed — source is the durable FastAPI/Supabase event feed. */}
