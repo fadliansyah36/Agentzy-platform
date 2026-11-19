@@ -48,6 +48,10 @@ class Settings(BaseSettings):
         return self
 
     @property
+    def turnstile_required(self) -> bool:
+        return self.app_env.lower() in {"production", "prod"}
+
+    @property
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host and self.smtp_from)
 
