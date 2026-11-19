@@ -52,6 +52,8 @@ Five additive migrations were committed and applied to Agentzy-db:
 | 20261119082716 | `phase_02_partnership_authorization_policies` |
 | 20261119083254 | `phase_02_submission_fingerprint` |
 | 20261119084924 | `phase_02_upload_capability_expiry_and_scanner_queue` |
+| 20261119091102 | `phase_02_attachment_upload_idempotency` |
+| 20261119091305 | `phase_02_attachment_scan_retry_budget` |
 
 New tables:
 - `public_catalogue_items`
@@ -85,6 +87,7 @@ The Supabase Security Advisor reports INFO notices for server-only RLS-enabled t
 - `GET /api/v1/partnership/prospects/{prospect_id}/activities`
 - `GET /api/v1/partnership/prospects/{prospect_id}/attachments`
 - `POST /api/v1/partnership/attachments/{attachment_id}/download` (AAL2; clean-scan only; 60-second signed URL)
+- `POST /api/v1/partnership/attachments/{attachment_id}/retry-scan` (AAL2 + manage permission; dead-letter recovery)
 
 All business writes are performed by FastAPI. The frontend uses typed API-client methods and does not write directly to Supabase.
 
@@ -123,3 +126,13 @@ Phase 03 — Corporate & Contract Management is the next roadmap phase, but it m
 - `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`, Turnstile and SMTP settings are documented in `apps/api/.env.example`; the public Turnstile site key is documented in root `.env.example`.
 - The implementation code head is `5f7f59208545badc99f454d2885de093284ff2ab`. GitHub Actions minimum engineering run [44492471392](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44492471392) completed **SUCCESS**: frontend frozen install, ESLint, TypeScript; Python compile, Ruff, focused authorization checks, FastAPI import/OpenAPI generation; and migration source consistency.
 - Phase 02 remains **PARTIAL** until SMTP delivery, Turnstile, ClamAV, deployed API/CORS/frontend binding and real AAL2 CRM identity can be verified in their target runtime.
+## 8. Backend-first continuation — 2026-11-19
+
+- Production public application submission now fails closed with HTTP 503 if Turnstile is not configured; non-production can still use the existing rate-limit and honeypot path. Turnstile provider/network failures return a controlled 503 rather than silently bypassing bot verification.
+- Attachment quota enforcement is serialized per application with a transaction-scoped advisory lock and application row lock across Storage upload + metadata insert. This prevents concurrent uploads from exceeding the five-file cap; Storage objects are removed if the database insert fails.
+- Attachment upload now requires an `Idempotency-Key`, stores a canonical request fingerprint, and replays the existing attachment for the same application/key/file. Reusing the key for different file content returns 409.
+- Scanner attempts are counted and bounded to eight retries with exponential backoff. Unavailable scans enter `dead_letter` without releasing the file; a new AAL2 + `platform.partnership.manage` recovery endpoint and CRM retry control requeue dead-letter items with an audit event.
+- CRM assignment now creates a second outbox event for the assigned platform user when an Auth email is present. The applicant still receives the existing status notification.
+- New applied migrations: `20261119091102_phase_02_attachment_upload_idempotency` and `20261119091305_phase_02_attachment_scan_retry_budget`.
+- New APIs include `POST /api/v1/partnership/attachments/{attachment_id}/retry-scan`; attachment list includes scanner state and attempt count.
+- Current code head before documentation updates: `766538b7d68512a8cd4dd70b3ef817081a3e9c15`. Engineering checks are pending for this combined continuation.
