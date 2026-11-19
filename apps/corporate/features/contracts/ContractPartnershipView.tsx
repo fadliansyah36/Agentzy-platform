@@ -192,9 +192,14 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     return action(() => createCorporateAmendment(token,detail.id,{
       tenant_id:tenant.id,change_summary:amendment.change_summary,
       scope_summary:amendment.scope_summary,effective_from:amendment.effective_from,
-      services:(detail.services ?? []).map((s) => ({
-        service_key:s.service_key,service_scope:s.service_scope,quantity:s.quantity,
-        monthly_fee:s.monthly_fee,sla:s.sla ?? {},kpi:s.kpi ?? {},entitlement:s.entitlement ?? {},
+      services:(detail.services ?? []).map((s,index) => ({
+        service_key:s.service_key,
+        service_scope:index===0 && amendment.service_scope ? amendment.service_scope : s.service_scope,
+        quantity:s.quantity,
+        monthly_fee:index===0 && amendment.monthly_fee ? amendment.monthly_fee : s.monthly_fee,
+        sla:s.sla ?? {},kpi:s.kpi ?? {},entitlement:s.entitlement ?? {},
+        human_workforce_limit:index===0 && amendment.human_limit ? Number(amendment.human_limit) : s.human_workforce_limit,
+        ai_worker_limit:index===0 && amendment.ai_limit ? Number(amendment.ai_limit) : s.ai_worker_limit,
       })),
     }), 'Amendment version baru tersimpan sebagai draft.');
   };
