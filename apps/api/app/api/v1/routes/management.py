@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, fail_idempotency, reserve_idempotency
+from app.adapters.supabase_auth_admin import invite_user as invite_supabase_auth_user
 from app.core.pagination import (
     PageMeta,
     PageResponse,
@@ -655,12 +656,6 @@ async def invite_tenant_member(
             )
 
     invitation_status = "identity_exists" if existing_user_id else "sent"
-    invite_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/invite"
-    headers = {
-        "apikey": service_key,
-        "Authorization": f"Bearer {service_key}",
-        "Content-Type": "application/json",
-    }
     if role_key.startswith("ai_") or role_key == "corporate_ai_manager":
         redirect_surface = "ai-workforce"
     elif role_key in (
@@ -679,17 +674,12 @@ async def invite_tenant_member(
     invited_user_id = existing_user_id
     if invited_user_id is None:
         try:
-            async with httpx.AsyncClient(timeout=25) as client:
-                response = await client.post(
-                    invite_url,
-                    params={"redirect_to": redirect_to},
-                    headers=headers,
-                    json={
-                        "email": payload.email.strip().lower(),
-                        "data": {"full_name": payload.full_name.strip()},
-                    },
-                )
-            if response.status_code >= 400:
+            invite_result = await invite_supabase_auth_user(
+                payload.email.strip().lower(),
+                payload.full_name.strip(),
+                redirect_to,
+            )
+            if invite_result.status_code >= 400 or invite_result.user_id is None:
                 # The Auth provider may have created the user while the response was lost.
                 # Reconcile against the authoritative Auth table before failing the command.
                 existing_identity = await session.execute(
@@ -708,14 +698,14 @@ async def invite_tenant_member(
                     )
                 invitation_status = "identity_exists"
             else:
-                invited_user_id = UUID(response.json()["id"])
+                invited_user_id = invite_result.user_id
         except HTTPException:
             async with engine.begin() as connection:
                 await fail_idempotency(
                     connection, record_id=reservation.record_id, error_code="AUTH_INVITE_REJECTED"
                 )
             raise
-        except (httpx.HTTPError, KeyError, ValueError) as exc:
+        except (httpx.HTTPError, RuntimeError) as exc:
             # A retry can reconcile a user created by Auth even if the HTTP response was lost.
             async with engine.begin() as connection:
                 await fail_idempotency(
