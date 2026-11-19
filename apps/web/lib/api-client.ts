@@ -1094,3 +1094,37 @@ export const getEffectiveContractEntitlements = (accessToken: string, tenantId: 
     `/corporate/entitlements/effective?tenant_id=${encodeURIComponent(tenantId)}`,
     { method: 'GET', accessToken },
   );
+
+
+export type CorporateAIWorker = {
+  id: string; contract_id: string; service_key: string; worker_code: string;
+  display_name: string; model_provider: string; model_key: string;
+  capabilities: string[]; status: 'draft' | 'active' | 'suspended' | 'retired';
+  created_at: string; updated_at: string;
+};
+export const listCorporateAIWorkers = (accessToken: string, tenantId: string) =>
+  apiRequest<{ data: CorporateAIWorker[] }>(
+    `/corporate/ai-workers?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const createCorporateAIWorker = (
+  accessToken: string, payload: {
+    tenant_id: string; contract_id: string; service_key: string;
+    worker_code: string; display_name: string; model_provider: string; model_key: string;
+    capabilities?: string[]; runtime_config?: Record<string, unknown>;
+  },
+) => apiRequest<{ data: { id: string; status: string; worker_code: string } }>(
+  '/corporate/ai-workers',
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
+export const activateCorporateAIWorker = (accessToken: string, tenantId: string, workerId: string) =>
+  apiRequest<{ data: { id: string; status: string } }>(
+    `/corporate/ai-workers/${encodeURIComponent(workerId)}/activate?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
+  );
+export const suspendCorporateAIWorker = (accessToken: string, tenantId: string, workerId: string) =>
+  apiRequest<{ data: { id: string; status: string } }>(
+    `/corporate/ai-workers/${encodeURIComponent(workerId)}/suspend?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
+  );
