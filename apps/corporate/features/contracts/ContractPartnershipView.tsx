@@ -57,6 +57,10 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',effective_start:'',effective_end:''});
   const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:''});
   const [policyName,setPolicyName] = useState('');
+  const [policyType,setPolicyType] = useState<'master'|'statement_of_work'|'amendment'>('master');
+  const [policySteps,setPolicySteps] = useState(1);
+  const [minimumApprovals,setMinimumApprovals] = useState(1);
+  const [approvalRole,setApprovalRole] = useState('');
   const [renewalEnd,setRenewalEnd] = useState('');
   const [documentType,setDocumentType] = useState<'master_agreement'|'statement_of_work'|'sla'|'amendment'|'supporting'>('master_agreement');
 
@@ -169,8 +173,11 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   }, 'Draft kontrak dibuat.');
 
   const createPolicy = () => action(() => createContractApprovalPolicy(token,{
-    tenant_id:tenant.id,policy_name:policyName,contract_type:'master',currency:'IDR',
-    min_amount:'0',steps:[{required_permission_key:'corporate.contracts.approve',minimum_approvals:1}],
+    tenant_id:tenant.id,policy_name:policyName,contract_type:policyType,currency:'IDR',
+    min_amount:'0',steps:Array.from({length:policySteps},()=>({
+      required_permission_key:'corporate.contracts.approve',
+      required_role_key:approvalRole || null,minimum_approvals:minimumApprovals,
+    })),
   }), 'Approval policy tersimpan.');
 
   const createDelegation = () => action(() => createContractApprovalDelegation(token,{
@@ -309,7 +316,17 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
       <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Approval Policy</h2>
         {policies.map(p=><div key={String(p.id)} className="mt-3 rounded-lg bg-[#F5F8FA] p-3"><p className="text-sm font-semibold">{String(p.policy_name)}</p><p className="text-xs text-[#718391]">{String(p.contract_type)} · {Array.isArray(p.steps)?p.steps.length:0} step(s)</p></div>)}
         {!policies.length && <p className="mt-3 text-xs text-[#718391]">Belum ada policy.</p>}
-        {canManage && <div className="mt-4 border-t border-[#EAF2F6] pt-4"><label><span className={label}>Nama policy</span><input className={field} value={policyName} onChange={e=>setPolicyName(e.target.value)}/></label><p className="mt-2 text-[11px] text-[#718391]">Default policy menggunakan permission corporate.contracts.approve; approver dipilih dari membership aktif yang memenuhi permission.</p><button className={primary+' mt-3'} disabled={saving || !policyName} onClick={()=>void createPolicy()}>Simpan Policy</button></div>}
+        {canManage && <div className="mt-4 border-t border-[#EAF2F6] pt-4">
+          <label><span className={label}>Nama policy</span><input className={field} value={policyName} onChange={e=>setPolicyName(e.target.value)}/></label>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <label><span className={label}>Jenis kontrak</span><select className={field} value={policyType} onChange={e=>setPolicyType(e.target.value as typeof policyType)}><option value="master">Master</option><option value="statement_of_work">SOW</option><option value="amendment">Amendment</option></select></label>
+            <label><span className={label}>Tahapan approval</span><input type="number" min="1" max="8" className={field} value={policySteps} onChange={e=>setPolicySteps(Math.max(1,Math.min(8,Number(e.target.value)||1)))}/></label>
+            <label><span className={label}>Minimum approver / tahap</span><input type="number" min="1" max="5" className={field} value={minimumApprovals} onChange={e=>setMinimumApprovals(Math.max(1,Math.min(5,Number(e.target.value)||1)))}/></label>
+          </div>
+          <label className="mt-3 block"><span className={label}>Role approver (opsional)</span><select className={field} value={approvalRole} onChange={e=>setApprovalRole(e.target.value)}><option value="">Semua role dengan permission approve</option><option value="corporate_finance_manager">Finance Manager</option><option value="corporate_owner">Corporate Owner</option><option value="corporate_admin">Corporate Admin</option></select></label>
+          <p className="mt-2 text-[11px] text-[#718391]">Approval step dijalankan berurutan; setiap tahap memerlukan jumlah persetujuan sesuai konfigurasi.</p>
+          <button className={primary+' mt-3'} disabled={saving || !policyName} onClick={()=>void createPolicy()}>Simpan Policy</button>
+        </div>}
       </section>
       <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-2"><h2 className="text-sm font-bold text-[#17324D]">Approval Delegation</h2>
         {canApprove && <div className="mt-3 grid gap-3 md:grid-cols-4">
