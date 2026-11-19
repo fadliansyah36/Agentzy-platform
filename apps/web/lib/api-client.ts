@@ -947,7 +947,8 @@ export const createCorporateContract = (
   accessToken: string,
   payload: {
     tenant_id: string; organization_id?: string | null; branch_id?: string | null;
-    parent_contract_id?: string | null; contract_number: string; title: string;
+    parent_contract_id?: string | null; provider_profile_id?: string | null;
+    contract_number: string; title: string;
     contract_type: 'master' | 'statement_of_work' | 'amendment'; currency: string;
     effective_start?: string | null; effective_end?: string | null; renewal_at?: string | null;
     scope_summary: string; terms?: string | null;
