@@ -1029,3 +1029,26 @@ Applied Phase 03 migrations:
 Phase 03 remains IN PROGRESS. Remaining work includes contract draft editing/version amendment, corporate profile CRUD, approval policy configuration, contract document/private Storage lifecycle, renewal/expiry/suspension/termination, invoice/payment references, Corporate Portal wiring, full cursor pagination and expanded deterministic domain checks. No fake contract records were seeded.
 
 Latest recorded repository head at this update: `81a9b065aef319bfb0c675b3de5f159537005130`.
+
+
+## 12. Phase 02 implementation completion and Phase 03 execution start — 2026-11-19
+
+Phase 02 code and migration scope is implemented. Task registry entries AGZ-P02-FE-001 through AGZ-P02-DOC-001 are DONE — implementation complete. Provider credentials and deployment activation are explicitly deferred and are not blockers.
+
+Phase 02 implementation evidence:
+- Public landing, catalogue, FAQ and application use the existing UI and FastAPI public API; no demo fallback was added.
+- Consent, application idempotency/fingerprint, anti-abuse, private attachment quarantine, scan lifecycle, CRM prospect creation, lead inbox, qualification transitions, audit and notification outbox are implemented.
+- SMTP templates/dispatcher, ClamAV worker, Turnstile fail-closed adapter, Google OAuth adapter, PKCE consent callback, encrypted token persistence, refresh/revoke and audit lifecycle are in source.
+- Applied Phase 02 migration ledger: 20261119082627, 20261119082643, 20261119082716, 20261119083254, 20261119084924, 20261119091102, 20261119091305, 20261119152347.
+- OAuth state/connection tables are live with RLS enabled. No client-side business write grants or fabricated records were added.
+
+Deployment configuration pending (not code blockers): SMTP credentials, Turnstile keys, ClamAV host + server-side Storage key, Google OAuth client credentials/redirect URI, OAuth encryption key, deployed FastAPI URL/CORS and actual provider activation.
+
+Phase-level DoD: implementation scope complete; the new `.github/workflows/agentzy-minimum-engineering.yml` is committed to execute frontend lint/type-check, Python compile/import, Ruff, focused API tests, OpenAPI assertions and migration source consistency. A passing run result is not yet exposed by the connector, so do not claim the engineering-check criterion has passed until that evidence is available. This is not a credentials blocker.
+
+Phase 03 is IN PROGRESS:
+- Applied migrations 20261119152730 and 20261119152821 create corporate profile, contract, version, service, approval and event tables with RLS and no client grants.
+- FastAPI contract create/list/detail, submit-review, approval decision and activation endpoints are registered.
+- Task IDs AGZ-P03-BE-001, DB-001, API-001, PERM-001 and DOC-001 are IN PROGRESS. Frontend wiring, remaining lifecycle, documents, renewals and finance integration remain open.
+
+Latest code/workflow commit at this checkpoint: `81a9b065aef319bfb0c675b3de5f159537005130`.
