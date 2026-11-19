@@ -1,186 +1,93 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { CheckCircle2, FileCheck2 } from 'lucide-react';
-import {
-  CorporatePageHeader,
-  CorporateSegmentedTabs,
-} from '../../components/data-display/CorporateDataDisplay';
-import { formatIDR } from '../../lib/corporate-data';
-import type {
-  CorporateInvoice,
-  CorporatePaymentRecord,
-} from '../../lib/corporate-types';
+import React, { useCallback, useEffect, useState } from 'react';
+import { RefreshCw, ShieldCheck } from 'lucide-react';
+import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
+import { createPaymentReference, listCorporateInvoices, listPaymentReferences, type ContractInvoice, type ContractPaymentReference } from '@/apps/web/lib/api-client';
+import { CorporatePageHeader } from '../../components/data-display/CorporateDataDisplay';
 
-export function PaymentReconciliationView({
-  invoices,
-  payments,
-  onOpenReconcileModal,
-  onBack,
-}: {
-  invoices: CorporateInvoice[];
-  payments: CorporatePaymentRecord[];
-  onOpenReconcileModal: (invoiceId?: string) => void;
-  onBack: () => void;
-}) {
-  const [tab, setTab] = useState<'pembayaran' | 'rekonsiliasi'>('pembayaran');
+const field='h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
+const button='inline-flex h-10 items-center rounded-[9px] bg-[#17324D] px-4 text-xs font-semibold text-white disabled:opacity-50';
+const secondary='inline-flex h-9 items-center rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-xs font-semibold text-[#17324D]';
+const money=(value:string)=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(value));
 
-  const summary = useMemo(() => {
-    const totalBilled = invoices.reduce((acc, i) => acc + i.amount, 0);
-    const totalPaid = payments
-      .filter((payment) => payment.reconciliationStatus === 'Terekonsiliasi')
-      .reduce((acc, payment) => acc + payment.amount, 0);
-    const outstanding = Math.max(0, totalBilled - totalPaid);
-    return { totalBilled, totalPaid, outstanding };
-  }, [invoices, payments]);
+export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onBack:()=>void}) {
+  const auth=useAgentzyAuth();
+  const token=auth.session?.access_token ?? '';
+  const [invoices,setInvoices]=useState<ContractInvoice[]>([]);
+  const [references,setReferences]=useState<Array<ContractPaymentReference & {invoice_number:string}>>([]);
+  const [selectedInvoice,setSelectedInvoice]=useState('');
+  const [method,setMethod]=useState('Bank Transfer');
+  const [amount,setAmount]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState('');
+  const [notice,setNotice]=useState('');
+  const canManage=auth.identity?.memberships.some(m=>m.tenant_id===tenantId && m.permissions.includes('corporate.finance.invoice.manage')) ?? false;
 
-  const unpaidInvoices = invoices.filter((i) => i.status !== 'Lunas');
+  const refresh=useCallback(async()=>{
+    if(!token || !tenantId) return;
+    setLoading(true);setError('');
+    try {
+      const invoiceResult=await listCorporateInvoices(token,tenantId);
+      setInvoices(invoiceResult.data);
+      const pages=await Promise.all(invoiceResult.data.map(invoice=>listPaymentReferences(token,tenantId,invoice.id)));
+      const mapped=pages.flatMap((page,index)=>page.data.map(reference=>({...reference,invoice_number:invoiceResult.data[index].invoice_number})));
+      setReferences(mapped);
+      setSelectedInvoice(current=>current || invoiceResult.data.find(i=>['issued','partially_paid','overdue'].includes(i.status))?.id || '');
+    } catch(e) {setError(e instanceof Error?e.message:'Gagal memuat payment references.');}
+    finally {setLoading(false);}
+  },[token,tenantId]);
 
-  return (
-    <div className="space-y-5">
-      <CorporatePageHeader
-        title="Payment & Rekonsiliasi"
-        subtitle="Ringkasan invoice, referensi pembayaran, dan status verifikasi rekonsiliasi"
-        onBack={onBack}
-        actions={
-          unpaidInvoices.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => onOpenReconcileModal(unpaidInvoices[0].id)}
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#0284C7] px-4 text-xs font-semibold text-white hover:bg-[#0369A1] whitespace-nowrap"
-            >
-              <FileCheck2 className="h-4 w-4" />
-              <span>Konfirmasi Pembayaran</span>
-            </button>
-          ) : undefined
-        }
-      />
+  useEffect(()=>{let alive=true;void(async()=>{if(alive)await refresh();})();return()=>{alive=false;};},[refresh]);
 
-      <CorporateSegmentedTabs
-        tabs={[
-          { id: 'pembayaran', label: 'Pembayaran' },
-          { id: 'rekonsiliasi', label: 'Rekonsiliasi' },
-        ]}
-        activeTab={tab}
-        onChange={setTab}
-      />
+  const selected=invoices.find(i=>i.id===selectedInvoice) ?? null;
+  const reconciled=references.filter(r=>r.status==='reconciled').reduce((sum,r)=>sum+Number(r.amount),0);
+  const pending=references.filter(r=>['reference_created','submitted'].includes(r.status)).reduce((sum,r)=>sum+Number(r.amount),0);
 
-      {tab === 'pembayaran' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-          {/* Ringkasan Pembayaran (Matches Screen 14) */}
-          <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-5">
-            <h2 className="text-base font-bold text-[#17324D]">
-              Ringkasan Pembayaran
-            </h2>
-            <div className="mt-4 divide-y divide-[#EAF2F6] text-sm">
-              <div className="flex items-center justify-between py-3">
-                <span className="text-[#526675]">Total Tagihan</span>
-                <span className="font-mono-tabular font-bold text-[#17324D]">
-                  {formatIDR(summary.totalBilled)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-3">
-                <span className="text-[#526675]">Total Terekonsiliasi</span>
-                <span className="font-mono-tabular font-bold text-[#247A55]">
-                  {formatIDR(summary.totalPaid)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-3">
-                <span className="text-[#526675]">Sisa Tagihan</span>
-                <span
-                  className={`font-mono-tabular font-bold ${
-                    summary.outstanding > 0 ? 'text-[#A96816]' : 'text-[#247A55]'
-                  }`}
-                >
-                  {formatIDR(summary.outstanding)}
-                </span>
-              </div>
-            </div>
-          </div>
+  const createReference=async()=>{
+    if(!selected || !amount || Number(amount)<=0) return;
+    setSaving(true);setError('');setNotice('');
+    try {
+      const referenceNumber='AGZ-REQ-'+crypto.randomUUID();
+      await createPaymentReference(token,selected.id,{
+        tenant_id:tenantId,reference_number:referenceNumber,payment_method:method,amount,
+      });
+      setNotice('Payment reference berhasil dibuat. Ini bukan bukti pembayaran dan invoice tidak ditandai lunas.');
+      await refresh();
+    } catch(e) {setError(e instanceof Error?e.message:'Gagal membuat payment reference.');}
+    finally {setSaving(false);}
+  };
 
-          {/* Riwayat Pembayaran */}
-          <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-7">
-            <h2 className="text-base font-bold text-[#17324D]">
-              Referensi Pembayaran
-            </h2>
-            <div className="mt-4 divide-y divide-[#EAF2F6]">
-              {payments.map((pay) => (
-                <div
-                  key={pay.id}
-                  className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#247A55]" />
-                    <div>
-                      <p className="text-sm font-bold text-[#17324D]">
-                        {pay.paidAt}
-                      </p>
-                      <p className="text-xs text-[#526675]">
-                        Referensi {pay.invoiceId} · {pay.method}
-                      </p>
-                      <p className="font-mono-tabular text-[11px] text-[#718391]">
-                        Ref: {pay.referenceNo}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="font-mono-tabular text-sm font-bold text-[#17324D]">
-                    {formatIDR(pay.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'rekonsiliasi' && (
-        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
-          <h2 className="text-base font-bold text-[#17324D]">
-            Matriks Rekonsiliasi Ledger &amp; Bank Settlement
-          </h2>
-          <p className="mt-0.5 text-xs text-[#526675]">
-            Setiap pembayaran dicocokkan dengan nomor referensi Virtual Account / RTGS dan faktur Agentzy
-          </p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-[#D8E3E9] text-xs font-semibold text-[#526675]">
-                  <th className="py-3 pr-4">ID Pembayaran &amp; Faktur</th>
-                  <th className="py-3 px-4">Metode &amp; Referensi</th>
-                  <th className="py-3 px-4 text-right">Nominal</th>
-                  <th className="py-3 pl-4 text-right">Status Rekon</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EAF2F6]">
-                {payments.map((pay) => (
-                  <tr key={pay.id}>
-                    <td className="py-3.5 pr-4">
-                      <p className="font-mono-tabular text-xs font-bold text-[#0284C7]">
-                        {pay.id}
-                      </p>
-                      <p className="text-xs font-semibold text-[#17324D]">
-                        {pay.invoiceId} · {pay.paidAt}
-                      </p>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs text-[#526675]">
-                      <p>{pay.method}</p>
-                      <p className="font-mono-tabular text-[#718391]">
-                        {pay.referenceNo}
-                      </p>
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono-tabular font-bold text-[#17324D]">
-                      {formatIDR(pay.amount)}
-                    </td>
-                    <td className="py-3.5 pl-4 text-right text-xs font-bold text-[#247A55]">
-                      {pay.reconciliationStatus}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+  return <div className="space-y-5">
+    <CorporatePageHeader title="Payment References" subtitle="Pencatatan referensi, bukti eksternal dan rekonsiliasi pembayaran" onBack={onBack}
+      actions={<button className={secondary} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
+    {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+    {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
+    <div className="grid gap-3 md:grid-cols-3">
+      <div className="rounded-xl border border-[#D8E3E9] bg-white p-4"><p className="text-xs text-[#718391]">Total terekonsiliasi</p><p className="mt-2 text-lg font-bold text-[#17324D]">{money(String(reconciled))}</p></div>
+      <div className="rounded-xl border border-[#D8E3E9] bg-white p-4"><p className="text-xs text-[#718391]">Referensi menunggu</p><p className="mt-2 text-lg font-bold text-[#A96816]">{money(String(pending))}</p></div>
+      <div className="rounded-xl border border-[#D8E3E9] bg-white p-4"><p className="text-xs text-[#718391]">Jumlah referensi</p><p className="mt-2 text-lg font-bold text-[#17324D]">{references.length}</p></div>
     </div>
-  );
+    {canManage && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
+      <h2 className="text-sm font-bold text-[#17324D]">Buat Referensi Pembayaran</h2>
+      <p className="mt-1 text-xs text-[#718391]">Membuat reference record saja. Status paid hanya boleh berubah setelah bukti settlement diverifikasi oleh proses finance yang berwenang.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Invoice</span><select className={field} value={selectedInvoice} onChange={e=>{setSelectedInvoice(e.target.value);const item=invoices.find(i=>i.id===e.target.value);setAmount(item?.total_amount ?? '');}}><option value="">Pilih invoice terbit</option>{invoices.filter(i=>['issued','partially_paid','overdue'].includes(i.status)).map(i=><option key={i.id} value={i.id}>{i.invoice_number} · {i.title}</option>)}</select></label>
+        <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Metode</span><select className={field} value={method} onChange={e=>setMethod(e.target.value)}><option>Bank Transfer</option><option>Virtual Account</option><option>Manual Transfer</option><option>Other</option></select></label>
+        <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Nominal referensi (IDR)</span><input type="number" min="1" className={field} value={amount} onChange={e=>setAmount(e.target.value)}/></label>
+      </div>
+      <button className={button+' mt-4'} disabled={saving || !selected || !amount} onClick={()=>void createReference()}>Simpan Payment Reference</button>
+    </section>}
+    <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
+      <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#0284C7]"/><h2 className="text-sm font-bold text-[#17324D]">Reference & Reconciliation Ledger</h2></div>
+      <div className="mt-3 divide-y divide-[#EAF2F6]">
+        {references.map(reference=><div key={reference.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div><p className="text-xs font-semibold text-[#17324D]">{reference.reference_number} · {reference.invoice_number}</p><p className="mt-1 text-[11px] text-[#718391]">{reference.payment_method} · {reference.created_at}</p><p className="mt-1 text-[11px] text-[#718391]">External ref: {reference.external_reference ?? 'Belum ada'}</p></div>
+          <div className="text-right"><p className="text-sm font-bold text-[#17324D]">{money(reference.amount)}</p><p className="mt-1 text-[11px] font-semibold text-[#A96816]">{reference.status}</p></div>
+        </div>)}
+        {!references.length && <p className="py-5 text-xs text-[#718391]">Belum ada payment reference.</p>}
+      </div>
+    </section>
+  </div>;
 }
