@@ -598,15 +598,19 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     }
     try {
       const result = await revokeMySession(accessToken, sessionId);
+      if (result.current_session_revoked) {
+        setMySessions((previous) => previous.map((session) => (
+          session.id === sessionId ? { ...session, is_revoked: true } : session
+        )));
+        setActiveSessionsCount((previous) => previous === null ? null : Math.max(0, previous - 1));
+        showToast('Sesi saat ini dicabut. Anda akan keluar dari portal.');
+        await auth.signOut();
+        return;
+      }
       const refreshed = await listMySessions(accessToken);
       setMySessions(refreshed.data);
       setActiveSessionsCount(refreshed.meta.active_count);
-      showToast(
-        result.current_session_revoked
-          ? 'Sesi saat ini dicabut. Anda akan keluar dari portal.'
-          : 'Sesi berhasil dicabut.',
-      );
-      if (result.current_session_revoked) await auth.signOut();
+      showToast('Sesi berhasil dicabut.');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Sesi tidak dapat dicabut.');
     }
