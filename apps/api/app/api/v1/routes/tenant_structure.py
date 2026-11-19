@@ -13,9 +13,11 @@ from app.core.pagination import PageMeta, PageResponse, decode_time_id_cursor, e
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
+from app.services.tenant_structure_service import ensure_tenant_owner_retained
 from app.services.tenant_structure_service import (
-    ensure_tenant_owner_retained,
     set_organization_unit_status as set_organization_unit_status_service,
+)
+from app.services.tenant_structure_service import (
     update_organization_unit as update_organization_unit_service,
 )
 
