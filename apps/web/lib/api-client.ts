@@ -77,6 +77,29 @@ export async function publicApiRequest<T>(path: string, options: RequestInit = {
   return (await response.json()) as T;
 }
 
+
+export type PublicCatalogueItem = {
+  audience: "human" | "ai";
+  service_key: string;
+  name: string;
+  summary: string;
+  scope: string;
+  output: string;
+  boundary: string;
+  governance: string;
+  sort_order: number;
+};
+export type PublicCatalogueResponse = {
+  data: {
+    human_workforce: PublicCatalogueItem[];
+    ai_workforce: PublicCatalogueItem[];
+    faqs: Array<{ faq_key: string; question: string; answer: string; sort_order: number }>;
+  };
+  meta: { source: string; updated_at: string };
+};
+export const getPublicCatalogue = () =>
+  publicApiRequest<PublicCatalogueResponse>("/public/catalogue", { method: "GET" });
+
 export type PublicPartnershipApplicationInput = {
   company_name: string;
   company_type: string;
