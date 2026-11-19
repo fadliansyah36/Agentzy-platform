@@ -16,6 +16,7 @@ import {
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
+import { AIWorkerEntitlementPanel } from './AIWorkerEntitlementPanel';
 
 type Tab = 'profile' | 'contracts' | 'sow' | 'sla' | 'approvals' | 'documents' | 'entitlements';
 const field = 'h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
@@ -277,6 +278,9 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
       {!documents.length && <p className="mt-4 text-xs text-[#718391]">Belum ada dokumen.</p>}
     </section>}
 
-    {tab === 'entitlements' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Effective Entitlements</h2><p className="mt-1 text-xs text-[#718391]">Hanya grant dari kontrak aktif dan tanggal efektif yang berlaku.</p><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-[#D8E3E9] text-[#718391]"><th className="py-3">Service</th><th>Human</th><th>AI Worker</th><th>AI Credits</th><th>Periode</th></tr></thead><tbody>{entitlements.map(e=><tr key={e.id} className="border-b border-[#EAF2F6]"><td className="py-3 font-semibold">{e.service_key}</td><td>{e.human_workforce_limit ?? 'Unlimited'}</td><td>{e.ai_worker_limit ?? 'Unlimited'}</td><td>{e.ai_credits_limit ?? 'Unlimited'}</td><td>{fmt(e.effective_start)} — {fmt(e.effective_end)}</td></tr>)}</tbody></table></div>{!entitlements.length && <p className="mt-4 text-xs text-[#718391]">Belum ada entitlement aktif.</p>}</section>}
+    {tab === 'entitlements' && <div className="space-y-5">
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Effective Entitlements</h2><p className="mt-1 text-xs text-[#718391]">Hanya grant dari kontrak aktif dan tanggal efektif yang berlaku.</p><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-[#D8E3E9] text-[#718391]"><th className="py-3">Service</th><th>Human</th><th>AI Worker</th><th>AI Credits</th><th>Periode</th></tr></thead><tbody>{entitlements.map(e=><tr key={e.id} className="border-b border-[#EAF2F6]"><td className="py-3 font-semibold">{e.service_key}</td><td>{e.human_workforce_limit ?? 'Unlimited'}</td><td>{e.ai_worker_limit ?? 'Unlimited'}</td><td>{e.ai_credits_limit ?? 'Unlimited'}</td><td>{fmt(e.effective_start)} — {fmt(e.effective_end)}</td></tr>)}</tbody></table></div>{!entitlements.length && <p className="mt-4 text-xs text-[#718391]">Belum ada entitlement aktif.</p>}</section>
+      <AIWorkerEntitlementPanel tenantId={tenant.id} entitlements={entitlements}/>
+    </div>}
   </div>;
 }
