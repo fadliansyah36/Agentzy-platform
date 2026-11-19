@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -39,3 +41,32 @@ class OrganizationRead(BaseModel):
     slug: str
     organization_type: str
     status: str
+
+
+class AuthSessionRead(BaseModel):
+    id: UUID
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    refreshed_at: datetime | None = None
+    not_after: datetime | None = None
+    aal: str | None = None
+    user_agent: str | None = None
+    is_current: bool
+    is_revoked: bool
+    revoked_at: datetime | None = None
+
+
+class AuthSessionPageMeta(BaseModel):
+    current_session_id: UUID
+    active_count: int = Field(ge=0)
+
+
+class AuthSessionPage(BaseModel):
+    data: list[AuthSessionRead]
+    meta: AuthSessionPageMeta
+
+
+class AuthSessionRevocationRead(BaseModel):
+    status: Literal["revoked"]
+    session_id: UUID
+    current_session_revoked: bool
