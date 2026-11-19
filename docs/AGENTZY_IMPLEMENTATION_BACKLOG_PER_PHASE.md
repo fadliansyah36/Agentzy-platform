@@ -929,3 +929,10 @@ This section supersedes earlier statements that Phase 02 must not start from the
 - Final Phase 01/02 implementation code commit: `772ee91e8401dacfb8bf5255fc79e70033dbadd3`.
 - GitHub Actions run [44491764537](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44491764537) completed **SUCCESS** on that code commit: frontend frozen install, ESLint, TypeScript, Python compile, Ruff, deterministic authorization checks, FastAPI import/OpenAPI generation, and migration source consistency.
 - The final report-only commit follows the passing code commit; no runtime configuration, hosted Auth settings, or real Auth identities were changed by documentation updates.
+### Additional Phase 01/02 continuation — 2026-11-19
+
+- Phase 01: added global ABAC evaluation for platform permission registry, platform role catalogue and platform tenant directory reads. Commit `990d40d5b428c13792b0c7c4e7e730e88eb3967c`; engineering run [44492293451](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44492293451) SUCCESS.
+- Phase 02: scanner retry metadata is now written atomically to prevent another worker claiming a deferred row between retry-state updates. Commit `5f7f59208545badc99f454d2885de093284ff2ab`.
+- Final combined engineering run [44492471392](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44492471392) SUCCESS on code head `5f7f59208545badc99f454d2885de093284ff2ab`.
+- All five Phase 02 migration source filenames now exactly match the applied Supabase migration ledger versions; migration SQL content was preserved and no applied migration was modified.
+- Phase 00 and Phase 09 paths remain unchanged in the repository compare. Phase 01 and Phase 02 remain PARTIAL for the external and evidence gaps listed above.
