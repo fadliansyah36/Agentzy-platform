@@ -1958,3 +1958,141 @@ async def list_approval_delegations(tenant_id: UUID, claims: dict = claims_depen
         "created_at": row["created_at"].isoformat(),
         "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
     } for row in result.mappings().all()]}
+
+
+class PaymentVerificationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: UUID
+    decision: str = Field(pattern="^(approved|rejected)$")
+    evidence_reference: str = Field(min_length=4, max_length=240)
+    reason: str = Field(min_length=5, max_length=2000)
+
+
+@router.post("/payment-references/{reference_id}/verify")
+async def verify_payment_reference(
+    reference_id: UUID,
+    payload: PaymentVerificationInput,
+    request: Request,
+    claims: dict = claims_dependency,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    actor = UUID(claims["sub"])
+    if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
+    await require_tenant_permission(
+        actor, payload.tenant_id, "corporate.finance.invoice.manage"
+    )
+    fingerprint = hashlib.sha256(
+        f"{payload.decision}:{payload.evidence_reference}:{payload.reason}".encode()
+    ).hexdigest()
+    async with engine.begin() as connection:
+        replay_result = await connection.execute(
+            text("""
+                select id,status,verification_fingerprint
+                from public.contract_payment_references
+                where tenant_id=:tenant and verification_idempotency_key=:key
+            """),
+            {"tenant": payload.tenant_id, "key": idempotency_key},
+        )
+        replay = replay_result.mappings().first()
+        if replay:
+            if replay["verification_fingerprint"] != fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Idempotency-Key dipakai untuk verifikasi berbeda.",
+                )
+            return {
+                "data": {
+                    "id": str(replay["id"]),
+                    "status": replay["status"],
+                    "payment_confirmed": replay["status"] == "reconciled",
+                    "replayed": True,
+                }
+            }
+        reference_result = await connection.execute(
+            text("""
+                select id,invoice_id,amount,status
+                from public.contract_payment_references
+                where id=:id and tenant_id=:tenant for update
+            """),
+            {"id": reference_id, "tenant": payload.tenant_id},
+        )
+        reference = reference_result.mappings().first()
+        if not reference or reference["status"] != "submitted":
+            raise HTTPException(
+                status_code=409,
+                detail="Hanya payment reference submitted yang dapat diverifikasi.",
+            )
+        next_status = "reconciled" if payload.decision == "approved" else "rejected"
+        await connection.execute(
+            text("""
+                update public.contract_payment_references
+                set status=:status,external_reference=:evidence,
+                    verified_by=:actor,verified_at=now(),
+                    reconciled_at=case when :status='reconciled' then now() else null end,
+                    verification_idempotency_key=:key,verification_fingerprint=:fingerprint
+                where id=:id and tenant_id=:tenant
+            """),
+            {
+                "status": next_status, "evidence": payload.evidence_reference,
+                "actor": actor, "key": idempotency_key, "fingerprint": fingerprint,
+                "id": reference_id, "tenant": payload.tenant_id,
+            },
+        )
+        if next_status == "reconciled":
+            total = await connection.execute(
+                text("""
+                    select total_amount from public.contract_invoices
+                    where id=:invoice and tenant_id=:tenant for update
+                """),
+                {"invoice": reference["invoice_id"], "tenant": payload.tenant_id},
+            )
+            invoice_total = total.scalar_one()
+            reconciled = await connection.execute(
+                text("""
+                    select coalesce(sum(amount),0)
+                    from public.contract_payment_references
+                    where invoice_id=:invoice and tenant_id=:tenant
+                      and status='reconciled'
+                """),
+                {"invoice": reference["invoice_id"], "tenant": payload.tenant_id},
+            )
+            invoice_status = (
+                "paid" if reconciled.scalar_one() >= invoice_total else "partially_paid"
+            )
+            await connection.execute(
+                text("""
+                    update public.contract_invoices set status=:status,updated_at=now()
+                    where id=:invoice and tenant_id=:tenant
+                      and status in ('issued','partially_paid','overdue')
+                """),
+                {
+                    "status": invoice_status, "invoice": reference["invoice_id"],
+                    "tenant": payload.tenant_id,
+                },
+            )
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(:tenant,:actor,'contract.payment_reference.verified',
+                  'contract_payment_reference',:id,:request_id,cast(:metadata as jsonb))
+            """),
+            {
+                "tenant": payload.tenant_id, "actor": actor, "id": str(reference_id),
+                "request_id": _request_id(request),
+                "metadata": json.dumps({
+                    "decision": payload.decision, "reason": payload.reason,
+                    "evidence_reference": payload.evidence_reference,
+                    "invoice_id": str(reference["invoice_id"]),
+                    "amount": str(reference["amount"]),
+                }),
+            },
+        )
+    return {
+        "data": {
+            "id": str(reference_id),
+            "status": next_status,
+            "payment_confirmed": next_status == "reconciled",
+        }
+    }
