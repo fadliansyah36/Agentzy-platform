@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.services.identity_session_service import list_sessions_for_user, revoke_session_for_user
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 from app.schemas.identity import IdentityRead, MembershipRead
@@ -291,42 +292,7 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
 async def list_my_sessions(claims: dict = claims_dependency):
     user_id = UUID(claims["sub"])
     current_session_id = UUID(claims["session_id"])
-    async with engine.connect() as connection:
-        result = await connection.execute(
-            text("""
-                select s.id,s.created_at,s.updated_at,s.refreshed_at,s.not_after,s.aal,
-                       left(regexp_replace(coalesce(s.user_agent,''),'[[:cntrl:]]','','g'),180)
-                         as user_agent,
-                       r.revoked_at
-                from auth.sessions s
-                left join public.revoked_sessions r on r.session_id=s.id
-                where s.user_id=:user_id
-                  and (s.not_after is null or s.not_after > now())
-                order by s.updated_at desc nulls last,s.created_at desc
-            """),
-            {"user_id": user_id},
-        )
-    rows = []
-    for row in result.mappings().all():
-        rows.append({
-            "id": str(row["id"]),
-            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-            "refreshed_at": row["refreshed_at"].isoformat() if row["refreshed_at"] else None,
-            "not_after": row["not_after"].isoformat() if row["not_after"] else None,
-            "aal": str(row["aal"]) if row["aal"] else None,
-            "user_agent": row["user_agent"] or None,
-            "is_current": row["id"] == current_session_id,
-            "is_revoked": row["revoked_at"] is not None,
-            "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
-        })
-    return {
-        "data": rows,
-        "meta": {
-            "current_session_id": str(current_session_id),
-            "active_count": sum(1 for row in rows if not row["is_revoked"]),
-        },
-    }
+    return await list_sessions_for_user(user_id, current_session_id)
 
 
 @router.post(
@@ -340,77 +306,11 @@ async def revoke_my_session(
     claims: dict = claims_dependency,
 ):
     user_id = UUID(claims["sub"])
-    async with engine.begin() as connection:
-        target = await connection.execute(
-            text("""
-                select id,not_after from auth.sessions
-                where id=:session_id and user_id=:user_id
-                for update
-            """),
-            {"session_id": target_session_id, "user_id": user_id},
-        )
-        session_row = target.mappings().first()
-        if session_row is None:
-            raise HTTPException(status_code=404, detail="Sesi tidak ditemukan.")
-        reservation = await reserve_idempotency(
-            connection,
-            actor_user_id=user_id,
-            tenant_id=None,
-            command_key=f"auth.session.revoke:{target_session_id}",
-            idempotency_key=request.headers.get("idempotency-key"),
-            payload={"session_id": str(target_session_id)},
-        )
-        if reservation.replay:
-            return JSONResponse(
-                status_code=reservation.replay_status or 202,
-                content=reservation.replay_body or {},
-            )
-        await connection.execute(
-            text("""
-                insert into public.revoked_sessions(
-                  session_id,user_id,revoked_at,expires_at,reason,request_id
-                ) values(
-                  :session_id,:user_id,now(),
-                  coalesce(:not_after,now()+interval '24 hours'),
-                  'user_requested_session_revocation',:request_id
-                )
-                on conflict(session_id) do update
-                  set revoked_at=excluded.revoked_at,
-                      expires_at=excluded.expires_at,
-                      reason=excluded.reason,
-                      request_id=excluded.request_id
-            """),
-            {
-                "session_id": target_session_id,
-                "user_id": user_id,
-                "not_after": session_row["not_after"],
-                "request_id": _request_id(request),
-            },
-        )
-        await connection.execute(
-            text("""
-                insert into public.audit_logs(
-                  actor_user_id,action,resource_type,resource_id,request_id,metadata
-                ) values(
-                  :actor,'auth.session.revoked','auth_session',:session_id,:request_id,
-                  jsonb_build_object('scope','single_session')
-                )
-            """),
-            {
-                "actor": user_id,
-                "session_id": str(target_session_id),
-                "request_id": _request_id(request),
-            },
-        )
-        response_body = {
-            "status": "revoked",
-            "session_id": str(target_session_id),
-            "current_session_revoked": target_session_id == UUID(claims["session_id"]),
-        }
-        await complete_idempotency(
-            connection,
-            record_id=reservation.record_id,
-            response_status=202,
-            response_body=response_body,
-        )
-    return response_body
+    current_session_id = UUID(claims["session_id"])
+    return await revoke_session_for_user(
+        user_id=user_id,
+        current_session_id=current_session_id,
+        target_session_id=target_session_id,
+        request_id=_request_id(request),
+        idempotency_key=request.headers.get("idempotency-key"),
+    )
