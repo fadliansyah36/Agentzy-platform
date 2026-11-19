@@ -936,3 +936,20 @@ This section supersedes earlier statements that Phase 02 must not start from the
 - Final combined engineering run [44492471392](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44492471392) SUCCESS on code head `5f7f59208545badc99f454d2885de093284ff2ab`.
 - All five Phase 02 migration source filenames now exactly match the applied Supabase migration ledger versions; migration SQL content was preserved and no applied migration was modified.
 - Phase 00 and Phase 09 paths remain unchanged in the repository compare. Phase 01 and Phase 02 remain PARTIAL for the external and evidence gaps listed above.
+### Backend-first implementation continuation — 2026-11-19
+
+**Phase 01 — membership command reliability**
+- Moved idempotency reservation after authorization, hierarchy, role and existing-membership validation in `invite_tenant_member`.
+- Added shared `fail_idempotency` support. Auth invite errors release the command to a retryable failed state; a retry reconciles an Auth user created before a lost provider response. Existing Auth identities are reused rather than duplicated.
+- Membership invitation audit JSON metadata now uses recursive redaction for email. No fake Auth identities were created.
+- Code head before docs: `766538b7d68512a8cd4dd70b3ef817081a3e9c15`.
+
+**Phase 02 — attachment and notification backend**
+- Production Turnstile verification fails closed when the server secret is missing or the verification provider is unavailable.
+- Attachment upload count is serialized per application through transaction advisory lock + application row lock; Storage/metadata failure compensates by deleting the uploaded object.
+- Attachment uploads require idempotency key + canonical file fingerprint. Same-key/same-file replay returns the existing attachment; payload mismatch returns 409.
+- ClamAV scan retries are bounded at eight with exponential backoff and a dead-letter state. An AAL2/ABAC-authorized manual retry endpoint is wired into the CRM Lead Inbox.
+- Assignment creates a durable notification outbox event for the assigned platform user when the user has an Auth email.
+- New live-applied migrations: `20261119091102` upload idempotency; `20261119091305` scan retry budget.
+- Phase 01 and Phase 02 remain PARTIAL until remaining core authorization/portal and external runtime dependencies are closed. Hosted Supabase Auth configuration is explicitly deferred by the current user instruction, not a reason to stop backend development.
+- Phase 00 and Phase 09 remain untouched; Phase 03 is not started.
