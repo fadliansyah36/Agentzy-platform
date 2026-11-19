@@ -44,22 +44,22 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | `AGZ-P00-PERM-001` | 00 — Product Governance & Repo Baseline | Permission | Inventory Auth/RLS/grants and create gap matrix; no speculative policy edits. | IN PROGRESS |
 | `AGZ-P00-INT-001` | 00 — Product Governance & Repo Baseline | Integration | Map portal → domain service → database and external provider dependencies. | IN PROGRESS |
 | `AGZ-P00-DOC-001` | 00 — Product Governance & Repo Baseline | Documentation | Prepare ADR index, AGENTS, backlog tracker and evidence template. | COMPLETE — ADR register and baseline evidence committed; Phase 00 itself remains open |
-| `AGZ-P01-FE-001` | 01 — Platform Core, Identity & Tenant | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | IN PROGRESS |
-| `AGZ-P01-BE-001` | 01 — Platform Core, Identity & Tenant | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | IN PROGRESS |
-| `AGZ-P01-DB-001` | 01 — Platform Core, Identity & Tenant | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | IN PROGRESS |
-| `AGZ-P01-API-001` | 01 — Platform Core, Identity & Tenant | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | IN PROGRESS |
-| `AGZ-P01-PERM-001` | 01 — Platform Core, Identity & Tenant | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | IN PROGRESS |
-| `AGZ-P01-INT-001` | 01 — Platform Core, Identity & Tenant | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | IN PROGRESS |
-| `AGZ-P01-OBS-001` | 01 — Platform Core, Identity & Tenant | Observability | Structured logs, metrics, traces, audit events and operational alerts. | IN PROGRESS |
-| `AGZ-P01-DOC-001` | 01 — Platform Core, Identity & Tenant | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | IN PROGRESS |
-| `AGZ-P02-FE-001` | 02 — Public Landing & Partnership Acquisition | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
-| `AGZ-P02-BE-001` | 02 — Public Landing & Partnership Acquisition | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
-| `AGZ-P02-DB-001` | 02 — Public Landing & Partnership Acquisition | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
-| `AGZ-P02-API-001` | 02 — Public Landing & Partnership Acquisition | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | BLOCKED / NOT STARTED |
-| `AGZ-P02-PERM-001` | 02 — Public Landing & Partnership Acquisition | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | BLOCKED / NOT STARTED |
-| `AGZ-P02-INT-001` | 02 — Public Landing & Partnership Acquisition | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | BLOCKED / NOT STARTED |
-| `AGZ-P02-OBS-001` | 02 — Public Landing & Partnership Acquisition | Observability | Structured logs, metrics, traces, audit events and operational alerts. | BLOCKED / NOT STARTED |
-| `AGZ-P02-DOC-001` | 02 — Public Landing & Partnership Acquisition | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | BLOCKED / NOT STARTED |
+| `AGZ-P01-FE-001` | 01 — Platform Core, Identity & Tenant | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | DONE |
+| `AGZ-P01-BE-001` | 01 — Platform Core, Identity & Tenant | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | DONE |
+| `AGZ-P01-DB-001` | 01 — Platform Core, Identity & Tenant | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE |
+| `AGZ-P01-API-001` | 01 — Platform Core, Identity & Tenant | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE |
+| `AGZ-P01-PERM-001` | 01 — Platform Core, Identity & Tenant | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE |
+| `AGZ-P01-INT-001` | 01 — Platform Core, Identity & Tenant | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE |
+| `AGZ-P01-OBS-001` | 01 — Platform Core, Identity & Tenant | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE |
+| `AGZ-P01-DOC-001` | 01 — Platform Core, Identity & Tenant | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE |
+| `AGZ-P02-FE-001` | 02 — Public Landing & Partnership Acquisition | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | DONE |
+| `AGZ-P02-BE-001` | 02 — Public Landing & Partnership Acquisition | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | DONE |
+| `AGZ-P02-DB-001` | 02 — Public Landing & Partnership Acquisition | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE |
+| `AGZ-P02-API-001` | 02 — Public Landing & Partnership Acquisition | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE |
+| `AGZ-P02-PERM-001` | 02 — Public Landing & Partnership Acquisition | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE |
+| `AGZ-P02-INT-001` | 02 — Public Landing & Partnership Acquisition | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | IN PROGRESS |
+| `AGZ-P02-OBS-001` | 02 — Public Landing & Partnership Acquisition | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE |
+| `AGZ-P02-DOC-001` | 02 — Public Landing & Partnership Acquisition | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE |
 | `AGZ-P03-FE-001` | 03 — Corporate & Contract Management | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P03-BE-001` | 03 — Corporate & Contract Management | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
 | `AGZ-P03-DB-001` | 03 — Corporate & Contract Management | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
@@ -962,3 +962,34 @@ This section supersedes earlier statements that Phase 02 must not start from the
 - Final code head `899a981026fa04331e7dbc0e39d921d945774e70` passed engineering run [44495060635](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44495060635) SUCCESS.
 - Hosted Supabase Auth provider/redirect/SMTP/MFA/session/webhook settings remain intentionally deferred under the current user instruction; do not count them as backend implementation work. Real Auth identities are still unavailable, so identity-runtime evidence remains deferred.
 - Phase 01 and Phase 02 remain PARTIAL; Phase 03 NOT STARTED. Phase 00 and Phase 09 source paths remain unchanged.
+
+## 11. Execution closure update — 2026-11-19
+
+This section supersedes the earlier Phase 01 PARTIAL checkpoint and the initial Phase 02 BLOCKED / NOT STARTED task labels above.
+
+### Phase 01 — DONE (implementation scope)
+
+All Phase 01 task registry entries `AGZ-P01-FE-001` through `AGZ-P01-DOC-001` are DONE. The final implementation report is `docs/phase-01/PHASE_01_FINAL_IMPLEMENTATION_STATUS_2026-11-19.md`.
+
+Evidence:
+- Phase 01 migration ledger versions: 20261117175948, 20261117181011, 20261117182410, 20261118062335, 20261118062647, 20261118065058, 20261118124217, 20261118125909, 20261118174350, 20261119130807.
+- Live public schema: 28/28 tables have RLS; 12 public RLS policies; zero anon/authenticated business write grants.
+- Shared identity/session, tenant hierarchy, membership lifecycle, RBAC/ABAC, nested authorization, audit, security alerts, break-glass and provider-event correlation are implemented.
+- Super Admin, Corporate/ISP, Human Workforce and AI Workforce consume the shared FastAPI identity/tenant authority.
+- Versioned success envelope and backwards-compatible shared API client unwrapping committed through `8517c67b4ac5287731218a15c4e6bf35cd91a4ae`.
+- Minimum engineering workflow 44552173433 SUCCESS on that commit.
+
+Hosted Supabase Auth provider, redirect, SMTP, MFA, hosted session and webhook configuration remain explicitly deferred by instruction. No real Auth users existed in the recorded baseline; no real-user runtime acceptance is claimed. This does not reopen Phase 01 source implementation.
+
+### Phase 02 — PARTIAL (source implemented; runtime integration dependencies open)
+
+Task registry updated to reflect implementation: frontend, backend, migration, API, permission, observability and documentation tasks are DONE; `AGZ-P02-INT-001` remains IN PROGRESS pending external service configuration and runtime evidence.
+
+Evidence:
+- Seven Phase 02 migration versions are applied remotely: 20261119082627, 20261119082643, 20261119082716, 20261119083254, 20261119084924, 20261119091102, 20261119091305.
+- Public catalogue, FAQ, application, consent, CRM prospect/activity, attachment, rate-limit and notification-outbox services/endpoints are implemented.
+- Private `partnership-quarantine` bucket exists; attachments require scan status `clean` before signed download.
+- Notification outbox/SMTP worker, ClamAV scanner and Turnstile fail-closed production verification are implemented in source but workers/providers are not configured or verified in the deployed runtime.
+- See `docs/phase-02/PHASE_02_EXECUTION_CONTINUATION_2026-11-19.md` for the exact external dependencies and consequences.
+
+**Phase 02 must remain PARTIAL** until Turnstile, ClamAV/Storage credentials, SMTP delivery, API deployment/CORS binding and authenticated CRM operator runtime are configured and evidenced. Do not start Phase 03 before Phase 02 becomes DONE.
