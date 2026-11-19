@@ -2007,6 +2007,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
 
   return {
     isAuthenticated,
+    accessToken: auth.session?.access_token ?? null,
     authLoading: auth.loading,
     authError: auth.error,
     adminRole,
