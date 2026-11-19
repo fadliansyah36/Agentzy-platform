@@ -121,14 +121,18 @@ export const uploadPublicPartnershipAttachment = (
   applicationId: string,
   uploadToken: string,
   file: File,
-) => {
-  const body = new FormData();
-  body.set("file", file);
-  return publicApiRequest<{ data: { id: string; scan_status: string; download_available: boolean } }>(
-    `/public/partnership-applications/${encodeURIComponent(applicationId)}/attachments`,
-    { method: "POST", headers: { "X-Application-Upload-Token": uploadToken }, body },
-  );
-};
+) => publicApiRequest<{ data: { id: string; scan_status: string; download_available: boolean } }>(
+  `/public/partnership-applications/${encodeURIComponent(applicationId)}/attachments`,
+  {
+    method: "POST",
+    headers: {
+      "X-Application-Upload-Token": uploadToken,
+      "X-File-Name": encodeURIComponent(file.name),
+      "Content-Type": file.type,
+    },
+    body: file,
+  },
+);
 
 export type AgentzyMembership = { id: string; tenant_id: string; tenant_name: string;
   organization_id: string | null; organization_unit_id: string | null;
