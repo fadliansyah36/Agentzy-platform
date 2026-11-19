@@ -12,8 +12,8 @@ from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.pagination import PageMeta, PageResponse, decode_time_id_cursor, encode_time_id_cursor
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
-from app.db.session import engine
-from app.services.contract_entitlement_service import assert_membership_entitlement_capacity, user_session
+from app.db.session import engine, user_session
+from app.services.contract_entitlement_service import assert_membership_entitlement_capacity
 from app.services.tenant_structure_service import ensure_tenant_owner_retained
 from app.services.tenant_structure_service import (
     set_organization_unit_status as set_organization_unit_status_service,
