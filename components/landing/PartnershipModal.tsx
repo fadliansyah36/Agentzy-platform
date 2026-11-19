@@ -1,9 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, CheckCircle2, Building2, Video } from 'lucide-react';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { ApiError, createPublicPartnershipApplication, uploadPublicPartnershipAttachment } from '@/apps/web/lib/api-client';
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement, options: {
+        sitekey: string;
+        callback: (token: string) => void;
+        'expired-callback'?: () => void;
+        'error-callback'?: () => void;
+      }) => string;
+      remove: (widgetId: string) => void;
+    };
+  }
+}
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
 interface PartnershipModalProps {
   isOpen: boolean;
@@ -49,7 +65,9 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   ]);
   const [products, setProducts] = useState<string[]>(['Internet Fiber (FTTH)', 'Wireless (FWA)']);
   const [needsSummary, setNeedsSummary] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [communicationConsent, setCommunicationConsent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
