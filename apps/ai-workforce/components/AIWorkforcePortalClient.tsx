@@ -306,6 +306,18 @@ export function AIWorkforcePortalClient({
             onToggleOfflinePwa={portal.setOfflinePwaMode}
             onNavigate={portal.navigateTo}
             onNotify={portal.showToast}
+            canManageAccess={portal.canManageMemberships}
+            accessMemberships={portal.accessManagementMemberships}
+            accessRoles={portal.accessManagementRoles}
+            accessLoading={portal.accessManagementLoading}
+            accessError={portal.accessManagementError}
+            workforceTenantContext={portal.workforceTenantContext}
+            onInviteMember={portal.handleInviteTenantMember}
+            onReplaceMembershipRole={portal.handleReplaceMembershipRole}
+            onActivateMembership={portal.handleActivateTenantMembership}
+            onSuspendMembership={portal.handleSuspendTenantMembership}
+            onRevokeMembership={portal.handleRevokeTenantMembership}
+            onReassignMembership={portal.handleReassignTenantMembership}
           />
         )}
       </AIWorkforceAppShell>
