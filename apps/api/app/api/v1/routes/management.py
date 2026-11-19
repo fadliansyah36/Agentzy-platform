@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_action, authorize_object, authorize_platform_action
 from app.core.config import get_settings
-from app.core.idempotency import complete_idempotency, reserve_idempotency
+from app.core.idempotency import complete_idempotency, fail_idempotency, reserve_idempotency
 from app.core.pagination import (
     PageMeta,
     PageResponse,
@@ -565,21 +565,6 @@ async def invite_tenant_member(
             branch_id=branch_id,
             department_id=department_id,
         )
-    async with engine.begin() as connection:
-        reservation = await reserve_idempotency(
-            connection,
-            actor_user_id=user_id,
-            tenant_id=tenant_id,
-            command_key=f"membership.invite:{tenant_id}",
-            idempotency_key=request.headers.get("idempotency-key"),
-            payload=payload.model_dump(mode="json"),
-        )
-        if reservation.replay:
-            return JSONResponse(
-                status_code=reservation.replay_status or 201,
-                content=reservation.replay_body or {},
-            )
-
     role_key = payload.role_key.strip().lower()
     if role_key in (
         "corporate_owner",
@@ -644,6 +629,32 @@ async def invite_tenant_member(
     service_key = settings.supabase_service_role_key
     if not service_key:
         raise HTTPException(status_code=503, detail="Supabase Auth invitation belum dikonfigurasi.")
+
+    async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection,
+            actor_user_id=user_id,
+            tenant_id=tenant_id,
+            command_key=f"membership.invite:{tenant_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return JSONResponse(
+                status_code=reservation.replay_status or 201,
+                content=reservation.replay_body or {},
+            )
+
+    existing_identity = await session.execute(
+        text("""
+            select id from auth.users
+            where lower(email)=:email and deleted_at is null
+            order by created_at limit 1
+        """),
+        {"email": payload.email.strip().lower()},
+    )
+    existing_user_id = existing_identity.scalar_one_or_none()
+    invitation_status = "identity_exists" if existing_user_id else "sent"
     invite_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/invite"
     headers = {
         "apikey": service_key,
@@ -665,131 +676,162 @@ async def invite_tenant_member(
     else:
         redirect_surface = "corporate"
     redirect_to = f"{settings.app_base_url.rstrip('/')}/{redirect_surface}"
+    invited_user_id = existing_user_id
+    if invited_user_id is None:
+        try:
+            async with httpx.AsyncClient(timeout=25) as client:
+                response = await client.post(
+                    invite_url,
+                    params={"redirect_to": redirect_to},
+                    headers=headers,
+                    json={
+                        "email": payload.email.strip().lower(),
+                        "data": {"full_name": payload.full_name.strip()},
+                    },
+                )
+            if response.status_code >= 400:
+                # The Auth provider may have created the user while the response was lost.
+                # Reconcile against the authoritative Auth table before failing the command.
+                existing_identity = await session.execute(
+                    text("""
+                        select id from auth.users
+                        where lower(email)=:email and deleted_at is null
+                        order by created_at limit 1
+                    """),
+                    {"email": payload.email.strip().lower()},
+                )
+                invited_user_id = existing_identity.scalar_one_or_none()
+                if invited_user_id is None:
+                    raise HTTPException(
+                        status_code=502,
+                        detail="Supabase Auth tidak dapat menyelesaikan undangan.",
+                    )
+                invitation_status = "identity_exists"
+            else:
+                invited_user_id = UUID(response.json()["id"])
+        except HTTPException:
+            async with engine.begin() as connection:
+                await fail_idempotency(
+                    connection, record_id=reservation.record_id, error_code="AUTH_INVITE_REJECTED"
+                )
+            raise
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            # A retry can reconcile a user created by Auth even if the HTTP response was lost.
+            async with engine.begin() as connection:
+                await fail_idempotency(
+                    connection, record_id=reservation.record_id, error_code="AUTH_INVITE_UNAVAILABLE"
+                )
+            raise HTTPException(
+                status_code=502, detail="Gagal mengirim undangan melalui Supabase Auth."
+            ) from exc
+
+
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
-            response = await client.post(
-                invite_url,
-                params={"redirect_to": redirect_to},
-                headers=headers,
-                json={
-                    "email": payload.email.strip().lower(),
-                    "data": {"full_name": payload.full_name.strip()},
+        async with engine.begin() as connection:
+            membership_result = await connection.execute(
+                text("""
+                insert into public.memberships(
+                    tenant_id,user_id,status,invited_by,invitation_expires_at,
+                    organization_id,organization_unit_id,branch_id,department_id
+                )
+                values(
+                    :tenant_id,:user_id,'invited',:actor,now()+interval '7 days',
+                    :organization_id,:organization_unit_id,:branch_id,:department_id
+                )
+                on conflict(tenant_id,user_id) do update set
+                    status='invited',invited_by=excluded.invited_by,
+                    invitation_expires_at=excluded.invitation_expires_at,
+                    organization_id=excluded.organization_id,
+                    organization_unit_id=excluded.organization_unit_id,
+                    branch_id=excluded.branch_id,department_id=excluded.department_id,
+                    accepted_at=null,joined_at=null,ended_at=null,updated_at=now()
+                where public.memberships.status in ('invited','revoked')
+                returning id,tenant_id,user_id,status,created_at
+            """),
+                {
+                    "tenant_id": tenant_id,
+                    "user_id": invited_user_id,
+                    "actor": user_id,
+                    "organization_id": payload.organization_id,
+                    "organization_unit_id": organization_unit_id,
+                    "branch_id": branch_id,
+                    "department_id": department_id,
                 },
             )
-        if response.status_code >= 400:
-            detail = (
-                response.json().get("msg")
-                or response.json().get("message")
-                or "Supabase Auth menolak undangan."
+            membership_row = membership_result.mappings().first()
+            if membership_row is None:
+                raise HTTPException(
+                    status_code=409, detail="Membership existing tidak dapat diundang ulang."
+                )
+            membership = dict(membership_row)
+            scope_type = (
+                "department"
+                if department_id
+                else "branch"
+                if branch_id
+                else "organization_unit"
+                if organization_unit_id
+                else "organization"
+                if payload.organization_id
+                else "tenant"
             )
-            raise HTTPException(status_code=400, detail=detail)
-        invited_user_id = UUID(response.json()["id"])
-    except HTTPException:
-        raise
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        raise HTTPException(
-            status_code=502, detail="Gagal mengirim undangan melalui Supabase Auth."
-        ) from exc
-
-    async with engine.begin() as connection:
-        membership_result = await connection.execute(
-            text("""
-            insert into public.memberships(
-                tenant_id,user_id,status,invited_by,invitation_expires_at,
-                organization_id,organization_unit_id,branch_id,department_id
+            scope_id = department_id or branch_id or organization_unit_id or payload.organization_id
+            await connection.execute(
+                text("""
+                insert into public.membership_roles(
+                    membership_id,role_id,assigned_by,scope_type,scope_id,valid_from
+                )
+                values(:membership_id,:role_id,:actor,:scope_type,:scope_id,now())
+                on conflict(membership_id,role_id) do update set
+                    assigned_by=excluded.assigned_by,scope_type=excluded.scope_type,
+                    scope_id=excluded.scope_id,valid_from=excluded.valid_from,
+                    valid_until=null,assigned_at=now()
+            """),
+                {
+                    "membership_id": membership["id"],
+                    "role_id": role_id,
+                    "actor": user_id,
+                    "scope_type": scope_type,
+                    "scope_id": scope_id,
+                },
             )
-            values(
-                :tenant_id,:user_id,'invited',:actor,now()+interval '7 days',
-                :organization_id,:organization_unit_id,:branch_id,:department_id
+            await connection.execute(
+                text("""
+                insert into public.audit_logs(
+                    tenant_id, actor_user_id, action, resource_type,
+                    resource_id, request_id, ip_address, metadata
+                )
+                values(:tenant_id,:actor,'membership.invited','membership',:resource_id,:request_id,:ip,
+                       jsonb_build_object('email',:email,'role_key',:role_key))
+            """),
+                {
+                    "tenant_id": tenant_id,
+                    "actor": user_id,
+                    "resource_id": str(membership["id"]),
+                    "request_id": _request_id(request),
+                    "ip": request.client.host if request.client else None,
+                    "email": payload.email.strip().lower(),
+                    "role_key": role_key,
+                },
             )
-            on conflict(tenant_id,user_id) do update set
-                status='invited',invited_by=excluded.invited_by,
-                invitation_expires_at=excluded.invitation_expires_at,
-                organization_id=excluded.organization_id,
-                organization_unit_id=excluded.organization_unit_id,
-                branch_id=excluded.branch_id,department_id=excluded.department_id,
-                accepted_at=null,joined_at=null,ended_at=null,updated_at=now()
-            where public.memberships.status in ('invited','revoked')
-            returning id,tenant_id,user_id,status,created_at
-        """),
-            {
-                "tenant_id": tenant_id,
-                "user_id": invited_user_id,
-                "actor": user_id,
-                "organization_id": payload.organization_id,
-                "organization_unit_id": organization_unit_id,
-                "branch_id": branch_id,
-                "department_id": department_id,
-            },
-        )
-        membership_row = membership_result.mappings().first()
-        if membership_row is None:
-            raise HTTPException(
-                status_code=409, detail="Membership existing tidak dapat diundang ulang."
-            )
-        membership = dict(membership_row)
-        scope_type = (
-            "department"
-            if department_id
-            else "branch"
-            if branch_id
-            else "organization_unit"
-            if organization_unit_id
-            else "organization"
-            if payload.organization_id
-            else "tenant"
-        )
-        scope_id = department_id or branch_id or organization_unit_id or payload.organization_id
-        await connection.execute(
-            text("""
-            insert into public.membership_roles(
-                membership_id,role_id,assigned_by,scope_type,scope_id,valid_from
-            )
-            values(:membership_id,:role_id,:actor,:scope_type,:scope_id,now())
-            on conflict(membership_id,role_id) do update set
-                assigned_by=excluded.assigned_by,scope_type=excluded.scope_type,
-                scope_id=excluded.scope_id,valid_from=excluded.valid_from,
-                valid_until=null,assigned_at=now()
-        """),
-            {
-                "membership_id": membership["id"],
-                "role_id": role_id,
-                "actor": user_id,
-                "scope_type": scope_type,
-                "scope_id": scope_id,
-            },
-        )
-        await connection.execute(
-            text("""
-            insert into public.audit_logs(
-                tenant_id, actor_user_id, action, resource_type,
-                resource_id, request_id, ip_address, metadata
-            )
-            values(:tenant_id,:actor,'membership.invited','membership',:resource_id,:request_id,:ip,
-                   jsonb_build_object('email',:email,'role_key',:role_key))
-        """),
-            {
-                "tenant_id": tenant_id,
-                "actor": user_id,
-                "resource_id": str(membership["id"]),
-                "request_id": _request_id(request),
-                "ip": request.client.host if request.client else None,
+            response_body = {
+                **membership,
                 "email": payload.email.strip().lower(),
                 "role_key": role_key,
-            },
-        )
-        response_body = {
-            **membership,
-            "email": payload.email.strip().lower(),
-            "role_key": role_key,
-            "invitation_status": "sent",
-        }
-        await complete_idempotency(
-            connection,
-            record_id=reservation.record_id,
-            response_status=201,
-            response_body=response_body,
-        )
+                "invitation_status": invitation_status,
+            }
+            await complete_idempotency(
+                connection,
+                record_id=reservation.record_id,
+                response_status=201,
+                response_body=response_body,
+            )
+    except Exception:
+        async with engine.begin() as connection:
+            await fail_idempotency(
+                connection, record_id=reservation.record_id, error_code="MEMBERSHIP_COMMIT_FAILED"
+            )
+        raise
     return response_body
 
 
