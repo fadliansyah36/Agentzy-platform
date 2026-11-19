@@ -62,6 +62,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [minimumApprovals,setMinimumApprovals] = useState(1);
   const [approvalRole,setApprovalRole] = useState('');
   const [renewalEnd,setRenewalEnd] = useState('');
+  const [signatureForm,setSignatureForm] = useState({provider:'manual',signature_reference:'',reason:''});
   const [documentType,setDocumentType] = useState<'master_agreement'|'statement_of_work'|'sla'|'amendment'|'supporting'>('master_agreement');
 
   const can = (permission:string) => auth.identity?.memberships.some((m) => m.tenant_id === tenant.id && m.permissions.includes(permission)) ?? false;
@@ -198,6 +199,15 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     }), 'Amendment version baru tersimpan sebagai draft.');
   };
 
+  const updateSignature = (status:'pending'|'signed'|'rejected'|'cancelled'|'expired') => {
+    if(!detail)return;
+    return action(()=>updateContractSignatureStatus(token,tenant.id,detail.id,{
+      status,provider:signatureForm.provider,
+      signature_reference:signatureForm.signature_reference || undefined,
+      reason:signatureForm.reason || undefined,
+    }),'Signature status kontrak diperbarui dan diaudit.');
+  };
+
   const uploadDoc = (file?:File) => {
     if(!file || !detail) return;
     return action(() => uploadContractDocument(token,tenant.id,detail.id,file,documentType,detail.version_id), 'Dokumen berhasil diunggah ke private storage.');
@@ -251,6 +261,19 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
           <p className="text-xs font-semibold text-[#0284C7]">{detail.contract_number}</p><h2 className="mt-1 text-lg font-bold text-[#17324D]">{detail.title}</h2>
           <p className="mt-1 text-xs text-[#718391]">{statusName[detail.status] ?? detail.status} · v{detail.current_version} · {fmt(detail.effective_start)} — {fmt(detail.effective_end)}</p>
           <div className="mt-4 rounded-lg bg-[#F5F8FA] p-4"><p className="text-xs font-semibold text-[#526675]">Scope</p><p className="mt-1 whitespace-pre-wrap text-sm text-[#17324D]">{detail.scope_summary ?? 'Scope belum tersedia.'}</p></div>
+          <div className="mt-4 rounded-lg border border-[#D8E3E9] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold text-[#17324D]">Signature status</p><span className="text-xs font-semibold text-[#526675]">{detail.signature_status ?? 'not_started'}</span></div>
+            {canManage && detail.signature_status !== 'signed' && <div className="mt-3 grid gap-2 md:grid-cols-3">
+              <label><span className={label}>Provider</span><input className={field} value={signatureForm.provider} onChange={e=>setSignatureForm(p=>({...p,provider:e.target.value}))}/></label>
+              <label><span className={label}>External signature reference</span><input className={field} value={signatureForm.signature_reference} onChange={e=>setSignatureForm(p=>({...p,signature_reference:e.target.value}))}/></label>
+              <label><span className={label}>Reason (jika ditolak/dibatalkan)</span><input className={field} value={signatureForm.reason} onChange={e=>setSignatureForm(p=>({...p,reason:e.target.value}))}/></label>
+              <div className="flex flex-wrap gap-2 md:col-span-3">
+                {detail.signature_status !== 'pending' && <button className={secondary} disabled={saving} onClick={()=>void updateSignature('pending')}>Request Signature</button>}
+                {detail.signature_status === 'pending' && <button className={secondary} disabled={saving || !signatureForm.signature_reference} onClick={()=>void updateSignature('signed')}>Mark Signed with Reference</button>}
+                {detail.signature_status === 'pending' && <button className={secondary} disabled={saving || !signatureForm.reason} onClick={()=>void updateSignature('rejected')}>Reject Signature</button>}
+              </div>
+            </div>}
+          </div>
           <h3 className="mt-4 text-xs font-bold text-[#17324D]">Service & Entitlement</h3>
           {(detail.services ?? []).map((s)=><div key={s.service_key} className="border-b border-[#EAF2F6] py-3"><p className="text-sm font-semibold text-[#17324D]">{s.service_key}</p><p className="text-xs text-[#526675]">{s.service_scope}</p><p className="mt-1 text-[11px] text-[#718391]">Fee {s.monthly_fee ?? '—'} · qty {s.quantity}</p></div>)}
           <div className="mt-4 flex flex-wrap gap-2">
