@@ -243,6 +243,29 @@ export type AgentzyTenant = { id: string; name: string; slug: string; status: st
 
 export const getMyIdentity = (accessToken: string) =>
   apiRequest<AgentzyIdentity>("/me", { method: "GET", accessToken });
+
+export type AgentzyAuthSession = {
+  id: string;
+  created_at: string | null;
+  updated_at: string | null;
+  refreshed_at: string | null;
+  not_after: string | null;
+  aal: string | null;
+  user_agent: string | null;
+  is_current: boolean;
+  is_revoked: boolean;
+  revoked_at: string | null;
+};
+export const listMySessions = (accessToken: string) =>
+  apiRequest<{ data: AgentzyAuthSession[]; meta: { current_session_id: string; active_count: number } }>(
+    "/me/sessions",
+    { method: "GET", accessToken },
+  );
+export const revokeMySession = (accessToken: string, sessionId: string) =>
+  apiRequest<{ status: string; session_id: string; current_session_revoked: boolean }>(
+    `/me/sessions/${encodeURIComponent(sessionId)}/revoke`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
 export const getMyTenants = (accessToken: string) =>
   fetchAllAgentzyPages<AgentzyTenant>(accessToken, "/tenants");
 
