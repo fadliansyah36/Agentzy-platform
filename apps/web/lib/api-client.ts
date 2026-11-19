@@ -1199,3 +1199,14 @@ export const archiveContractDocument = (accessToken: string, tenantId: string, d
     `/corporate/documents/${encodeURIComponent(documentId)}/archive?tenant_id=${encodeURIComponent(tenantId)}`,
     { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
   );
+
+export const verifyPaymentReference = (
+  accessToken: string, referenceId: string, payload: {
+    tenant_id: string; decision: 'approved' | 'rejected';
+    evidence_reference: string; reason: string;
+  },
+) => apiRequest<{ data: { id: string; status: string; payment_confirmed: boolean } }>(
+  `/corporate/payment-references/${encodeURIComponent(referenceId)}/verify`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify(payload) },
+);
