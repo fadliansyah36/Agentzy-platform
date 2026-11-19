@@ -1454,8 +1454,9 @@ async def activate_membership(
                 select r.key
                 from public.membership_roles mr
                 join public.roles r on r.id=mr.role_id
-                where mr.membership_id=:membership_id and mr.scope_type='tenant'
-                  and mr.valid_from<=now() and (mr.valid_until is null or mr.valid_until>now())
+                where mr.membership_id=:membership_id
+                  and (mr.valid_from is null or mr.valid_from<=now())
+                  and (mr.valid_until is null or mr.valid_until>now())
             """),
             {"membership_id": membership_id},
         )
