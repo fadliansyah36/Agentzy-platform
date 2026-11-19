@@ -64,8 +64,8 @@ async def _claim_batch(limit: int = 10) -> list[dict]:
                   and coalesce((scan_result->>'retry_after')::timestamptz,
                                '-infinity'::timestamptz) <= now()
                 order by uploaded_at
-                for update skip locked
                 limit :limit
+                for update skip locked
             """),
             {"limit": limit},
         )
