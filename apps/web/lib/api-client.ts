@@ -78,6 +78,50 @@ export async function publicApiRequest<T>(path: string, options: RequestInit = {
 }
 
 
+
+export type PartnershipProspect = {
+  id: string;
+  application_id: string;
+  reference_code: string;
+  company_name: string;
+  company_type: string;
+  contact_name: string;
+  business_email: string;
+  business_phone: string;
+  status: string;
+  assigned_to: string | null;
+  assigned_at: string | null;
+  last_activity_at: string;
+  created_at: string;
+  human_needs: string[];
+  ai_needs: string[];
+  provider_products: string[];
+  operating_locations: string | null;
+  estimated_workforce: number | null;
+};
+export type PartnershipProspectPage = {
+  data: PartnershipProspect[];
+  meta: { has_more: boolean; next_cursor: string | null; request_id?: string | null };
+};
+export const listPartnershipProspects = (accessToken: string, status?: string) => {
+  const query = new URLSearchParams({ limit: "50" });
+  if (status) query.set("status", status);
+  return apiRequest<PartnershipProspectPage>(`/partnership/prospects?${query.toString()}`, { method: "GET", accessToken });
+};
+export const updatePartnershipProspect = (
+  accessToken: string,
+  prospectId: string,
+  payload: { status?: string; assigned_to?: string | null; note?: string },
+) => apiRequest<{ data: { id: string; reference_code: string; status: string; assigned_to: string | null } }>(
+  `/partnership/prospects/${encodeURIComponent(prospectId)}`,
+  { method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
+);
+export const listPartnershipProspectActivities = (accessToken: string, prospectId: string) =>
+  apiRequest<{ data: Array<{ id: string; activity_type: string; from_status: string | null; to_status: string | null; note: string | null; created_at: string }> }>(
+    `/partnership/prospects/${encodeURIComponent(prospectId)}/activities`,
+    { method: "GET", accessToken },
+  );
+
 export type PublicCatalogueItem = {
   audience: "human" | "ai";
   service_key: string;
