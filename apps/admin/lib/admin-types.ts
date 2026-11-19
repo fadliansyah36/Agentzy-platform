@@ -85,7 +85,7 @@ export interface MasterServiceItem {
   industryCode: string;
   scope: string;
   slaStandard: string;
-  status: 'Aktif' | 'Nonaktif';
+  status: 'Aktif' | 'Nonaktif' | 'Diarsipkan';
 }
 
 export interface MasterProductItem {
