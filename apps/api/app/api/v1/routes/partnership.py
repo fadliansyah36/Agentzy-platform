@@ -446,14 +446,19 @@ async def upload_partnership_attachment(
     async with engine.connect() as connection:
         app_result = await connection.execute(
             text("""
-                select upload_token_hash,upload_token_expires_at from public.public_partnership_applications
+                select upload_token_hash,upload_token_expires_at
+                from public.public_partnership_applications
                 where id=:id and status not in ('closed','disqualified')
             """),
             {"id": application_id},
         )
         stored_application = app_result.mappings().first()
-        stored_token_hash = stored_application["upload_token_hash"] if stored_application else None
-        token_expires_at = stored_application["upload_token_expires_at"] if stored_application else None
+        stored_token_hash = (
+            stored_application["upload_token_hash"] if stored_application else None
+        )
+        token_expires_at = (
+            stored_application["upload_token_expires_at"] if stored_application else None
+        )
         if (
             not stored_token_hash
             or not token_expires_at
