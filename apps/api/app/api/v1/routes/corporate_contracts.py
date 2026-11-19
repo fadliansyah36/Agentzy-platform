@@ -158,10 +158,8 @@ class LifecycleReason(BaseModel):
 
 class InvoiceLineInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    contract_service_id: UUID | None = None
-    description: str = Field(min_length=2, max_length=500)
+    contract_service_id: UUID
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=4)
-    unit_amount: Decimal = Field(ge=0, max_digits=18, decimal_places=2)
 
 
 class InvoiceInput(BaseModel):
@@ -1496,9 +1494,6 @@ async def create_contract_invoice(
     if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
         raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
     await require_tenant_permission(actor, payload.tenant_id, "corporate.finance.invoice.manage")
-    subtotal = sum((line.quantity * line.unit_amount for line in payload.lines), Decimal("0.00"))
-    subtotal = subtotal.quantize(Decimal("0.01"))
-    total = (subtotal + payload.tax_amount).quantize(Decimal("0.01"))
     fingerprint = hashlib.sha256(
         json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
     ).hexdigest()
@@ -1515,14 +1510,81 @@ async def create_contract_invoice(
         if replay:
             if replay["idempotency_fingerprint"] != fingerprint:
                 raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk invoice berbeda.")
-            return {"data": {"id": str(replay["id"]), "status": replay["status"],
-                             "total_amount": str(replay["total_amount"]), "replayed": True}}
-        contract = await connection.execute(
-            text("select status from public.contracts where id=:id and tenant_id=:tenant"),
+            return {
+                "data": {
+                    "id": str(replay["id"]),
+                    "status": replay["status"],
+                    "total_amount": str(replay["total_amount"]),
+                    "replayed": True,
+                }
+            }
+        contract_result = await connection.execute(
+            text("""
+                select status,currency from public.contracts
+                where id=:id and tenant_id=:tenant for update
+            """),
             {"id": contract_id, "tenant": payload.tenant_id},
         )
-        if contract.scalar_one_or_none() not in ("active", "approved"):
-            raise HTTPException(status_code=409, detail="Invoice hanya dapat dibuat untuk kontrak approved/active.")
+        contract = contract_result.mappings().first()
+        if not contract or contract["status"] != "active":
+            raise HTTPException(
+                status_code=409,
+                detail="Invoice hanya dapat dibuat untuk kontrak aktif.",
+            )
+        if payload.currency.upper() != contract["currency"]:
+            raise HTTPException(
+                status_code=422,
+                detail="Currency invoice harus sama dengan currency kontrak.",
+            )
+        resolved_lines = []
+        subtotal = Decimal("0.00")
+        for line in payload.lines:
+            service_result = await connection.execute(
+                text("""
+                    select cs.id,cs.service_key,cs.service_scope,cs.quantity,cs.monthly_fee
+                    from public.contract_services cs
+                    join public.contract_entitlement_grants g
+                      on g.contract_version_id=cs.contract_version_id
+                     and g.service_key=cs.service_key and g.status='active'
+                    where cs.id=:service and cs.tenant_id=:tenant
+                      and cs.contract_id=:contract
+                      and (g.effective_start is null or g.effective_start<=current_date)
+                      and (g.effective_end is null or g.effective_end>=current_date)
+                """),
+                {
+                    "service": line.contract_service_id,
+                    "tenant": payload.tenant_id,
+                    "contract": contract_id,
+                },
+            )
+            service = service_result.mappings().first()
+            if not service:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invoice line harus berasal dari service scope kontrak aktif.",
+                )
+            if service["monthly_fee"] is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Service {service['service_key']} belum memiliki monthly fee pada kontrak.",
+                )
+            if line.quantity > service["quantity"]:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Quantity invoice melebihi contracted quantity untuk {service['service_key']}.",
+                )
+            unit_amount = service["monthly_fee"]
+            line_amount = (line.quantity * unit_amount).quantize(Decimal("0.01"))
+            subtotal += line_amount
+            resolved_lines.append({
+                "contract_service_id": service["id"],
+                "description": f"{service['service_key']} — {service['service_scope']}",
+                "quantity": line.quantity,
+                "unit_amount": unit_amount,
+                "line_amount": line_amount,
+            })
+        subtotal = subtotal.quantize(Decimal("0.01"))
+        total = (subtotal + payload.tax_amount).quantize(Decimal("0.01"))
         invoice = await connection.execute(
             text("""
                 insert into public.contract_invoices(
@@ -1534,26 +1596,22 @@ async def create_contract_invoice(
                 ) returning id,status,total_amount
             """),
             {
-                "tenant": payload.tenant_id, "contract": contract_id,
-                "number": payload.invoice_number, "title": payload.title,
-                "currency": payload.currency.upper(), "subtotal": subtotal,
-                "tax": payload.tax_amount, "total": total, "due": payload.due_at,
-                "key": idempotency_key, "fingerprint": fingerprint, "actor": actor,
+                "tenant": payload.tenant_id,
+                "contract": contract_id,
+                "number": payload.invoice_number,
+                "title": payload.title,
+                "currency": contract["currency"],
+                "subtotal": subtotal,
+                "tax": payload.tax_amount,
+                "total": total,
+                "due": payload.due_at,
+                "key": idempotency_key,
+                "fingerprint": fingerprint,
+                "actor": actor,
             },
         )
         invoice_row = invoice.mappings().one()
-        for line in payload.lines:
-            if line.contract_service_id:
-                valid = await connection.execute(
-                    text("""
-                        select exists(select 1 from public.contract_services
-                          where id=:id and tenant_id=:tenant and contract_id=:contract)
-                    """),
-                    {"id": line.contract_service_id, "tenant": payload.tenant_id, "contract": contract_id},
-                )
-                if not valid.scalar_one():
-                    raise HTTPException(status_code=422, detail="Service invoice bukan milik kontrak ini.")
-            line_amount = (line.quantity * line.unit_amount).quantize(Decimal("0.01"))
+        for line in resolved_lines:
             await connection.execute(
                 text("""
                     insert into public.contract_invoice_lines(
@@ -1561,18 +1619,37 @@ async def create_contract_invoice(
                     ) values(:tenant,:invoice,:service,:description,:quantity,:unit,:amount)
                 """),
                 {
-                    "tenant": payload.tenant_id, "invoice": invoice_row["id"],
-                    "service": line.contract_service_id, "description": line.description,
-                    "quantity": line.quantity, "unit": line.unit_amount, "amount": line_amount,
+                    "tenant": payload.tenant_id,
+                    "invoice": invoice_row["id"],
+                    "service": line["contract_service_id"],
+                    "description": line["description"],
+                    "quantity": line["quantity"],
+                    "unit": line["unit_amount"],
+                    "amount": line["line_amount"],
                 },
             )
         await audit_contract_event(
-            connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
-            event_type="contract.invoice.created", request_id=_request_id(request),
-            metadata={"invoice_id": str(invoice_row["id"]), "total": str(total), "fingerprint": fingerprint},
+            connection,
+            tenant_id=payload.tenant_id,
+            actor=actor,
+            contract_id=contract_id,
+            event_type="contract.invoice.created",
+            request_id=_request_id(request),
+            metadata={
+                "invoice_id": str(invoice_row["id"]),
+                "total": str(total),
+                "fingerprint": fingerprint,
+                "line_count": len(resolved_lines),
+            },
             idempotency_key=idempotency_key,
         )
-    return {"data": {"id": str(invoice_row["id"]), "status": invoice_row["status"], "total_amount": str(total)}}
+    return {
+        "data": {
+            "id": str(invoice_row["id"]),
+            "status": invoice_row["status"],
+            "total_amount": str(total),
+        }
+    }
 
 
 @router.post("/invoices/{invoice_id}/issue")
