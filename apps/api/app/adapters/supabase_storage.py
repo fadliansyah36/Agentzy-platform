@@ -14,10 +14,7 @@ async def download_quarantined_object(object_path: str) -> bytes:
     if not settings.supabase_service_role_key:
         raise RuntimeError("SUPABASE_STORAGE_CREDENTIALS_NOT_CONFIGURED")
     encoded_path = quote(object_path, safe="/")
-    url = (
-        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
-        f"{BUCKET}/{encoded_path}"
-    )
+    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{BUCKET}/{encoded_path}"
     headers = {
         "Authorization": f"Bearer {settings.supabase_service_role_key}",
         "apikey": settings.supabase_service_role_key,
@@ -43,10 +40,7 @@ def _storage_headers(content_type: str | None = None) -> dict[str, str]:
 
 def _object_url(object_path: str) -> str:
     encoded_path = quote(object_path, safe="/")
-    return (
-        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
-        f"{BUCKET}/{encoded_path}"
-    )
+    return f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{BUCKET}/{encoded_path}"
 
 
 async def upload_quarantined_object(object_path: str, content: bytes, content_type: str) -> None:

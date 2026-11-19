@@ -19,18 +19,20 @@ async def list_sessions_for_user(user_id: UUID, current_session_id: UUID) -> dic
     rows = await list_user_session_records(user_id)
     data = []
     for row in rows:
-        data.append({
-            "id": str(row["id"]),
-            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-            "refreshed_at": row["refreshed_at"].isoformat() if row["refreshed_at"] else None,
-            "not_after": row["not_after"].isoformat() if row["not_after"] else None,
-            "aal": str(row["aal"]) if row["aal"] else None,
-            "user_agent": row["user_agent"] or None,
-            "is_current": row["id"] == current_session_id,
-            "is_revoked": row["revoked_at"] is not None,
-            "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
-        })
+        data.append(
+            {
+                "id": str(row["id"]),
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                "refreshed_at": row["refreshed_at"].isoformat() if row["refreshed_at"] else None,
+                "not_after": row["not_after"].isoformat() if row["not_after"] else None,
+                "aal": str(row["aal"]) if row["aal"] else None,
+                "user_agent": row["user_agent"] or None,
+                "is_current": row["id"] == current_session_id,
+                "is_revoked": row["revoked_at"] is not None,
+                "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
+            }
+        )
     return {
         "data": data,
         "meta": {

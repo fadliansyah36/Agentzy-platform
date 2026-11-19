@@ -108,9 +108,7 @@ async def create_attachment_download(
     try:
         signed_url = await create_quarantined_signed_url(str(row["object_path"]), 60)
     except (httpx.HTTPError, RuntimeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=502, detail="Signed download tidak dapat dibuat."
-        ) from exc
+        raise HTTPException(status_code=502, detail="Signed download tidak dapat dibuat.") from exc
     async with engine.begin() as connection:
         await connection.execute(
             text("""

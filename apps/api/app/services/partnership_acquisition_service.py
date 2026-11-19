@@ -84,20 +84,14 @@ async def submit_partnership_application(
             payload["privacy_consent"],
             payload["communication_consent"],
         )
-        await insert_prospect_submission_activity(
-            connection, prospect_id, reference_code
-        )
-        await enqueue_application_received(
-            connection, application_id, payload, reference_code
-        )
+        await insert_prospect_submission_activity(connection, prospect_id, reference_code)
+        await enqueue_application_received(connection, application_id, payload, reference_code)
         audit_metadata = json.dumps(
             redact_audit_value(
                 {
                     "reference_code": reference_code,
                     "company_type": payload["company_type"],
-                    "email_hash": hashlib.sha256(
-                        payload["business_email"].encode()
-                    ).hexdigest(),
+                    "email_hash": hashlib.sha256(payload["business_email"].encode()).hexdigest(),
                     "correlation_id": request_context["correlation_id"],
                     "trace_id": request_context["trace_id"],
                 }

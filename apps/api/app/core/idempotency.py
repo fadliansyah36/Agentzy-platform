@@ -120,8 +120,7 @@ async def reserve_idempotency(
             replay_body=existing["response_body"] or {},
         )
     if existing["status"] == "failed" or (
-        existing["status"] == "processing"
-        and existing["updated_at"] <= now - timedelta(minutes=10)
+        existing["status"] == "processing" and existing["updated_at"] <= now - timedelta(minutes=10)
     ):
         await connection.execute(
             text("""

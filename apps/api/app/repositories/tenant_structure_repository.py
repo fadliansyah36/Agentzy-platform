@@ -68,9 +68,7 @@ async def organization_unit_parent_would_cycle(
     return bool(result.scalar_one())
 
 
-async def organization_unit_has_dependents(
-    connection: AsyncConnection, tenant_id, unit_id
-) -> bool:
+async def organization_unit_has_dependents(connection: AsyncConnection, tenant_id, unit_id) -> bool:
     result = await connection.execute(
         text("""
             select

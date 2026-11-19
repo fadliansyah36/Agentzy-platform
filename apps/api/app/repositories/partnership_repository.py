@@ -154,9 +154,7 @@ async def insert_prospect_submission_activity(
         """),
         {
             "prospect": prospect_id,
-            "metadata": json.dumps(
-                {"source": "public_landing", "reference_code": reference_code}
-            ),
+            "metadata": json.dumps({"source": "public_landing", "reference_code": reference_code}),
         },
     )
 
