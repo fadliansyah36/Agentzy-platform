@@ -158,7 +158,7 @@ class LifecycleReason(BaseModel):
 
 class InvoiceLineInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    contract_service_id: UUID
+    service_key: str = Field(min_length=2, max_length=100)
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=4)
 
 
@@ -1542,17 +1542,19 @@ async def create_contract_invoice(
             service_result = await connection.execute(
                 text("""
                     select cs.id,cs.service_key,cs.service_scope,cs.quantity,cs.monthly_fee
-                    from public.contract_services cs
-                    join public.contract_entitlement_grants g
-                      on g.contract_version_id=cs.contract_version_id
-                     and g.service_key=cs.service_key and g.status='active'
-                    where cs.id=:service and cs.tenant_id=:tenant
-                      and cs.contract_id=:contract
+                    from public.contract_entitlement_grants g
+                    join public.contract_services cs
+                      on cs.contract_version_id=g.contract_version_id
+                     and cs.contract_id=g.contract_id and cs.service_key=g.service_key
+                    where g.tenant_id=:tenant and g.contract_id=:contract
+                      and g.service_key=:service_key and g.status='active'
+                      and (g.effective_start is null or g.effective_start<=current_date)
+                      and (g.effective_end is null or g.effective_end>=current_date)
                       and (g.effective_start is null or g.effective_start<=current_date)
                       and (g.effective_end is null or g.effective_end>=current_date)
                 """),
                 {
-                    "service": line.contract_service_id,
+                    "service_key": line.service_key,
                     "tenant": payload.tenant_id,
                     "contract": contract_id,
                 },
