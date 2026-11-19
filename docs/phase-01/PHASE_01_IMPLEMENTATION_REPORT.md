@@ -170,3 +170,22 @@ Commits: `a3bff5177c42694bf098f911b302b606017cd715`, `27013c8fa7ad3dbd45b829fc17
 ## Engineering verification — membership lifecycle increment
 
 The corrected implementation code commit `2560e24369da21a755bdf253c537e329f7c2f6a4` passed GitHub Actions minimum engineering workflow [44302719914](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44302719914): frozen frontend dependency install, ESLint, TypeScript, Python compile, Ruff, focused deterministic authorization checks, FastAPI import/OpenAPI generation, and migration source consistency. Earlier failed runs were due to formatting/syntax introduced during the incremental edit and were corrected before this passing commit. The passing run is the evidence for the code commit, not a claim of live integration or hosted Auth acceptance.
+
+
+## Execution continuation — 2026-11-19
+
+**Current disposition: PARTIAL / IN PROGRESS — NOT DONE.**
+
+The latest execution did not fabricate Auth users or activity. The canonical Supabase project remains active, but live Auth evidence currently shows zero `auth.users`, zero `auth.sessions`, and zero MFA factors. The Supabase connector surface can inspect the database/project but does not expose hosted Auth provider, redirect allowlist, SMTP, MFA enforcement or webhook configuration controls. Those settings therefore remain unverified.
+
+Phase 02 was explicitly authorized by the user and has been implemented in parallel at code/schema level. This does not change the Phase 01 Definition of Done: Phase 01 must close independently before Phase 02 can be declared DONE.
+
+The current live schema has 28 public application tables after four Phase 02 migrations. Phase 01's nine historical migrations remain unchanged. All 19 prior tables and all nine new Phase 02 tables have RLS enabled; the new server-only tables have no grants to client roles.
+
+The latest Phase 01 gaps remain:
+- Hosted Auth provider/redirect/SMTP/MFA/session/webhook configuration and real identity lifecycle evidence.
+- Complete resource-aware authorization parity across all management operations and nested repository calls.
+- Complete hierarchy/membership lifecycle parity in all four portals.
+- Final least-privilege and audit export/redaction verification against real identities.
+
+No staging, UAT, security acceptance or production deployment was performed.
