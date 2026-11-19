@@ -467,7 +467,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     void Promise.all(tenants.map(async (tenant) => {
       const [hierarchy, organizations] = await Promise.all([
         loadAdminTenantHierarchy(accessToken, tenant.id, includeArchived),
-        listTenantOrganizations(accessToken, tenant.id).catch(() => []),
+        listTenantOrganizations(accessToken, tenant.id),
       ]);
       return { tenantId: tenant.id, hierarchy, organizations };
     })).then((results) => {
