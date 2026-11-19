@@ -67,6 +67,24 @@ async def exchange_authorization_code(code: str, verifier: str) -> tuple[dict, d
         return tokens, profile_response.json()
 
 
+async def refresh_access_token(refresh_token: str) -> dict:
+    settings = get_settings()
+    if not settings.google_oauth_configured:
+        raise RuntimeError("GOOGLE_OAUTH_NOT_CONFIGURED")
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.post(
+            TOKEN_ENDPOINT,
+            data={
+                "client_id": settings.google_oauth_client_id,
+                "client_secret": settings.google_oauth_client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
+
 async def revoke_token(token: str) -> None:
     async with httpx.AsyncClient(timeout=15) as client:
         response = await client.post(REVOKE_ENDPOINT, params={"token": token})
