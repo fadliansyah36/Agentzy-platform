@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = None
     supabase_service_role_key: str | None = None
     auth_provider_webhook_secret: str | None = None
+    turnstile_secret_key: str | None = None
     platform_bootstrap_token: str | None = None
     app_base_url: str = "http://localhost:3000"
     database_url: str
