@@ -94,10 +94,10 @@ export function InvoiceCenterView({
         {filtered.length === 0 && (
           <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-8 text-center">
             <p className="text-sm font-bold text-[#17324D]">
-              Tidak ada faktur pada filter ini
+              Belum ada faktur pada filter ini
             </p>
             <p className="mt-1 text-xs text-[#526675]">
-              Seluruh tagihan Anda telah terselesaikan.
+              Faktur akan muncul setelah diterbitkan melalui contract finance workflow.
             </p>
           </div>
         )}
