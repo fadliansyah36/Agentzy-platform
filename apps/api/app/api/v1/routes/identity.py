@@ -10,7 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine, user_session
-from app.schemas.identity import IdentityRead, MembershipRead
+from app.schemas.identity import (
+    AuthSessionPage,
+    AuthSessionRevocationRead,
+    IdentityRead,
+    MembershipRead,
+)
 from app.services.identity_session_service import list_sessions_for_user, revoke_session_for_user
 
 router = APIRouter()
@@ -288,7 +293,7 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
     return response_body
 
 
-@router.get("/me/sessions", tags=["Identity"])
+@router.get("/me/sessions", response_model=AuthSessionPage, tags=["Identity"])
 async def list_my_sessions(claims: dict = claims_dependency):
     user_id = UUID(claims["sub"])
     current_session_id = UUID(claims["session_id"])
@@ -298,6 +303,7 @@ async def list_my_sessions(claims: dict = claims_dependency):
 @router.post(
     "/me/sessions/{target_session_id}/revoke",
     status_code=202,
+    response_model=AuthSessionRevocationRead,
     tags=["Identity"],
 )
 async def revoke_my_session(
