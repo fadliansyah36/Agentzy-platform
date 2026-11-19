@@ -35,3 +35,9 @@ New live evidence:
 The Supabase connector does not provide hosted Auth configuration management. Provider enablement, Site URL/redirect allowlists, SMTP, MFA enforcement, session settings and webhook registration cannot be changed or verified through the available actions in this execution. The user-facing API/portal lifecycle must still be exercised with real identities after that configuration is available.
 
 The current source review also does not claim complete cross-portal role/membership lifecycle parity or universal object-level authorization closure.
+
+## Execution priority update — 2026-11-19
+
+- Hosted Supabase Auth provider, redirect allowlist, hosted SMTP, MFA enforcement, session settings and Auth webhook configuration are explicitly deferred by the current execution instruction. They are not blockers to continuing backend Phase 01 implementation; real-user runtime evidence remains unavailable until a real identity is provisioned later.
+- Backend session verification, revoked-session enforcement, identity claims, membership lifecycle, tenant context, RBAC/ABAC, API dependencies and provider event correlation remain in implementation scope and must be closed independently of hosted Auth configuration.
+- The latest membership invitation implementation now reconciles existing Auth identities, uses durable idempotency failure/retry state for the Auth invitation saga and redacts invitee email from audit metadata. It does not create fake identities.
