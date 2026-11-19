@@ -91,12 +91,16 @@ export function PartnershipLeadsView({
 
   const downloadAttachment = async (attachment: PartnershipAttachment) => {
     if (!attachment.download_available) return;
+    const downloadWindow = window.open('about:blank', '_blank');
+    if (downloadWindow) downloadWindow.opener = null;
     setDownloadingAttachment(attachment.id);
     setError(null);
     try {
       const response = await createPartnershipAttachmentDownload(accessToken, attachment.id);
-      window.open(response.data.signed_url, '_blank', 'noopener,noreferrer');
+      if (downloadWindow) downloadWindow.location.replace(response.data.signed_url);
+      else setError('Izinkan pop-up browser untuk mengunduh lampiran yang telah lolos pemindaian.');
     } catch (err) {
+      downloadWindow?.close();
       setError(err instanceof ApiError ? err.message : 'Lampiran tidak dapat diunduh.');
     } finally {
       setDownloadingAttachment(null);
