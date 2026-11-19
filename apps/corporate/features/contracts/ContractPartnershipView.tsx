@@ -16,6 +16,7 @@ import {
   type CorporateContract, type CorporateProfile, type ContractDocument,
   type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord, type PublicCatalogueItem,
   type ContractApprovalDelegation, type CorporateProviderProfile,
+  type AgentzyOrganization, type AgentzyBranch,
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
@@ -33,7 +34,10 @@ const statusName: Record<string,string> = {
   terminated: 'Dihentikan', rejected: 'Ditolak',
 };
 
-export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateTenant; onBack: () => void }) {
+export function ContractPartnershipView({ tenant, onBack, organizations, branches }: {
+  tenant: CorporateTenant; onBack: () => void;
+  organizations: AgentzyOrganization[]; branches: AgentzyBranch[];
+}) {
   const auth = useAgentzyAuth();
   const token = auth.session?.access_token ?? '';
   const [tab,setTab] = useState<Tab>('contracts');
@@ -274,9 +278,11 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     {tab === 'profile' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
       <h2 className="text-sm font-bold text-[#17324D]">Legal & Billing Profile</h2>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {([['legal_name','Nama legal'],['registration_number','Nomor registrasi'],['billing_email','Email billing'],['billing_phone','Telepon billing'],['contact_name','Nama PIC'],['contact_title','Jabatan PIC'],['website','Website'],['country_code','Kode negara'],['organization_id','Organization ID'],['branch_id','Branch ID']] as const).map(([key,name]) =>
+        {([['legal_name','Nama legal'],['registration_number','Nomor registrasi'],['billing_email','Email billing'],['billing_phone','Telepon billing'],['contact_name','Nama PIC'],['contact_title','Jabatan PIC'],['website','Website'],['country_code','Kode negara']] as const).map(([key,name]) =>
           <label key={key}><span className={label}>{name}</span><input className={field} value={profileForm[key]} disabled={!canProfile || saving} onChange={(e)=>setProfileForm((p)=>({...p,[key]:e.target.value}))}/></label>
         )}
+        <label><span className={label}>Organization</span><select className={field} disabled={!canProfile || saving} value={profileForm.organization_id} onChange={e=>setProfileForm(p=>({...p,organization_id:e.target.value,branch_id:''}))}><option value="">Pilih organization</option>{organizations.filter(o=>o.status==='active').map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+        <label><span className={label}>Branch</span><select className={field} disabled={!canProfile || saving || !profileForm.organization_id} value={profileForm.branch_id} onChange={e=>setProfileForm(p=>({...p,branch_id:e.target.value}))}><option value="">Pilih branch</option>{branches.filter(b=>b.organization_id===profileForm.organization_id && b.status==='active').map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3"><span className="text-xs text-[#718391]">Status: {profile?.profile_status ?? 'Belum dibuat'}</span>
         {canProfile && <button className={primary} disabled={saving || !profileForm.legal_name} onClick={()=>void saveProfile()}>Simpan Profile</button>}
