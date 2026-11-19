@@ -38,10 +38,10 @@ This is a source inspection inventory, not a penetration test or proof that ever
 | management | POST `/tenants/{tenant_id}/organizations` | Create organization | Central tenant + ABAC helper; idempotency | COVERED (route-level) |
 | management | POST `/tenants/{tenant_id}/memberships/invite` | Invite member | Central tenant + ABAC helper; invitation ownership/scope; idempotency | COVERED (route-level) |
 | management | GET `/tenants/{tenant_id}/memberships` | Membership directory | Central tenant + ABAC helper | COVERED (route-level) |
-| management | GET `/permissions` | Permission registry | Platform role/permission gate | PARTIAL (admin access is role-gated; not all read context uses ABAC) |
-| management | GET `/roles` | Role catalogue | Platform role/permission gate or tenant scope | PARTIAL |
+| management | GET `/permissions` | Permission registry | AAL2 + platform role/permission gate + global ABAC resource check | COVERED (platform scope) |
+| management | GET `/roles` | Role catalogue | AAL2 + global ABAC for platform readers; tenant permission path for tenant readers | COVERED (route-level) |
 | management | PUT `/roles/{role_id}/permissions` | Replace role permissions | Platform role/permission gate + MFA; idempotency | PARTIAL (object/scope ABAC parity not proven) |
-| management | GET `/tenants/directory` | Platform tenant directory | Platform role/permission gate | PARTIAL |
+| management | GET `/tenants/directory` | Platform tenant directory | AAL2 + platform role/permission gate + global ABAC resource check | COVERED (platform scope) |
 | management | PATCH `/tenants/{tenant_id}` | Tenant update | Platform role/permission gate | PARTIAL (object-level ABAC parity not proven) |
 | management | DELETE `/tenants/{tenant_id}` | Tenant archive | Platform role/permission gate | PARTIAL (object-level ABAC parity not proven) |
 | management | POST/PATCH/DELETE `/roles`, `/roles/{role_id}` | Role lifecycle | Platform role/permission gate | PARTIAL (object/scope ABAC parity not proven) |
@@ -100,3 +100,12 @@ This is a source inspection inventory, not a penetration test or proof that ever
 - Membership MFA state remains “not verified” where the API does not return authoritative MFA state.
 - Admin editing of another user's profile and replacing an existing membership role are not implemented by the current API/portal contract.
 - Engineering verification: [run 44300592550](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44300592550) SUCCESS at `92bc296d`.
+
+## 7. Execution delta — 2026-11-19
+
+- Added central `authorize_platform_action` evaluation to the global permission registry read (`platform.roles.read`), platform role catalogue read (`platform.roles.read`) and platform tenant directory read (`platform.tenants.read`). Platform reads now require both the platform permission and the matching global ABAC policy; platform role catalogue access also retains AAL2.
+- Existing resource-aware ABAC on tenant update/archive and platform role create/update/delete/permission replacement remains in place. Tenant membership and hierarchy operations continue to use the tenant context and nested scope checks documented above.
+- This closes the previously listed platform read-route ABAC gap, but does not close the broader confirmed gap: complete machine-generated inventory of every route plus nested service/repository authorization review and live ABAC decision evidence remain outstanding.
+- Code commit: `990d40d5b428c13792b0c7c4e7e730e88eb3967c`. Minimum engineering workflow for the final combined commit is pending and must be checked before acceptance.
+
+**Disposition remains PARTIAL / IN PROGRESS.**
