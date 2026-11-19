@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -30,12 +30,8 @@ import { AgentzyLogo } from '@/components/brand/AgentzyLogo';
 import { PWAInstallButton } from '@/components/pwa/PWAControls';
 import { PartnershipModal } from './PartnershipModal';
 import { AgentzyEcosystemSections } from './AgentzyEcosystemSections';
-import {
-  HUMAN_WORKFORCE_CATALOGUE,
-  AI_WORKFORCE_CATALOGUE,
-  PARTNERSHIP_STEPS,
-  LANDING_FAQS,
-} from '@/lib/agentzy-data';
+import { PARTNERSHIP_STEPS } from '@/lib/agentzy-data';
+import { getPublicCatalogue, type PublicCatalogueResponse } from '@/apps/web/lib/api-client';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 
 type LegalDocKey = 'privacy' | 'terms' | 'security' | null;
@@ -75,6 +71,24 @@ export function LandingPageClient() {
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
   const [legalModal, setLegalModal] = useState<LegalDocKey>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [publicCatalogue, setPublicCatalogue] = useState<PublicCatalogueResponse['data'] | null>(null);
+  const [catalogueLoading, setCatalogueLoading] = useState(true);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getPublicCatalogue()
+      .then((response) => {
+        if (active) setPublicCatalogue(response.data);
+      })
+      .catch((error: unknown) => {
+        if (active) setCatalogueError(error instanceof Error ? error.message : 'Katalog layanan tidak dapat dimuat.');
+      })
+      .finally(() => {
+        if (active) setCatalogueLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#F5F8FA] text-[#172B3A]">
@@ -732,8 +746,8 @@ export function LandingPageClient() {
                       : 'text-[#526675] hover:text-[#17324D]'
                   }`}
                 >
-                  <span className="sm:hidden">Tenaga Kerja (9)</span>
-                  <span className="hidden sm:inline">Human Workforce (9 Layanan)</span>
+                  <span className="sm:hidden">Tenaga Kerja ({publicCatalogue?.human_workforce.length ?? 0})</span>
+                  <span className="hidden sm:inline">Human Workforce ({publicCatalogue?.human_workforce.length ?? 0} Layanan)</span>
                 </button>
                 <button
                   type="button"
@@ -744,53 +758,49 @@ export function LandingPageClient() {
                       : 'text-[#526675] hover:text-[#17324D]'
                   }`}
                 >
-                  <span className="sm:hidden">Dukungan AI (10)</span>
-                  <span className="hidden sm:inline">AI Workforce (10 Layanan)</span>
+                  <span className="sm:hidden">Dukungan AI ({publicCatalogue?.ai_workforce.length ?? 0})</span>
+                  <span className="hidden sm:inline">AI Workforce ({publicCatalogue?.ai_workforce.length ?? 0} Layanan)</span>
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 md:grid-cols-2 lg:grid-cols-3">
-              {(catalogueTab === 'human'
-                ? HUMAN_WORKFORCE_CATALOGUE
-                : AI_WORKFORCE_CATALOGUE
-              ).map((svc, idx) => (
-                <div
-                  key={svc.title}
-                  className="flex flex-col justify-between rounded-[14px] border border-[#D8E3E9] bg-white p-5 transition hover:border-[#87CEEB]"
-                >
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-[#526675]">
-                      <span className="font-mono-tabular font-semibold text-[#0284C7]">
-                        {String(idx + 1).padStart(2, '0')}
-                      </span>
-                      <span>
-                        {catalogueTab === 'human'
-                          ? 'Tim Profesional'
-                          : 'Dukungan AI'}
-                      </span>
+            {catalogueLoading ? (
+              <div className="mt-6 rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Memuat katalog layanan dari Agentzy API…</div>
+            ) : catalogueError ? (
+              <div role="alert" className="mt-6 rounded-[14px] border border-[#B23A48]/30 bg-white p-6 text-sm text-[#B23A48]">Katalog layanan tidak tersedia: {catalogueError}</div>
+            ) : (
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 md:grid-cols-2 lg:grid-cols-3">
+                {(catalogueTab === 'human'
+                  ? publicCatalogue?.human_workforce ?? []
+                  : publicCatalogue?.ai_workforce ?? []
+                ).map((svc, idx) => (
+                  <div
+                    key={svc.service_key}
+                    className="flex flex-col justify-between rounded-[14px] border border-[#D8E3E9] bg-white p-5 transition hover:border-[#87CEEB]"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between text-xs text-[#526675]">
+                        <span className="font-mono-tabular font-semibold text-[#0284C7]">
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <span>{catalogueTab === 'human' ? 'Tim Profesional' : 'Dukungan AI'}</span>
+                      </div>
+                      <h3 className="mt-2 text-base font-bold text-[#17324D]">{svc.name}</h3>
+                      <p className="mt-1 text-xs text-[#5F879E]">{svc.summary}</p>
+                      <p className="mt-2 text-sm leading-relaxed text-[#526675]">{svc.scope}</p>
+                      <p className="mt-2 text-xs leading-relaxed text-[#526675]"><span className="font-semibold text-[#17324D]">Batas layanan:</span> {svc.boundary}</p>
                     </div>
-                    <h3 className="mt-2 text-base font-bold text-[#17324D]">
-                      {svc.title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-[#526675]">
-                      {svc.scope}
-                    </p>
+                    <div className="mt-4 space-y-1.5 border-t border-[#EAF2F6] pt-3 text-xs">
+                      <p className="text-[#172B3A]"><span className="font-semibold">Hasil Bisnis:</span> {svc.output}</p>
+                      <p className="text-[#526675]"><span className="font-semibold text-[#17324D]">Governance:</span> {svc.governance}</p>
+                    </div>
                   </div>
-                  <div className="mt-4 space-y-1.5 border-t border-[#EAF2F6] pt-3 text-xs">
-                    <p className="text-[#172B3A]">
-                      <span className="font-semibold">Hasil Bisnis:</span> {svc.output}
-                    </p>
-                    <p className="text-[#526675]">
-                      <span className="font-semibold text-[#17324D]">
-                        Jaminan Mutu:
-                      </span>{' '}
-                      {svc.governance}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+                {((catalogueTab === 'human' ? publicCatalogue?.human_workforce : publicCatalogue?.ai_workforce) ?? []).length === 0 && (
+                  <p className="col-span-full rounded-[14px] border border-[#D8E3E9] bg-white p-6 text-sm text-[#526675]">Belum ada layanan yang dipublikasikan.</p>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -995,11 +1005,11 @@ export function LandingPageClient() {
             </div>
 
             <div className="mt-8 divide-y divide-[#D8E3E9] rounded-[14px] border border-[#D8E3E9] bg-white">
-              {LANDING_FAQS.map((faq, idx) => {
+              {(publicCatalogue?.faqs ?? []).map((faq, idx) => {
                 const isOpen = openFaqIdx === idx;
                 return (
                   <div
-                    key={faq.q}
+                    key={faq.faq_key}
                     className="bg-white first:rounded-t-[14px] last:rounded-b-[14px]"
                   >
                     <button
@@ -1008,7 +1018,7 @@ export function LandingPageClient() {
                       className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
                     >
                       <span className="text-sm font-semibold text-[#17324D]">
-                        {faq.q}
+                        {faq.question}
                       </span>
                       <ChevronDown
                         className={`h-4 w-4 shrink-0 text-[#526675] transition-transform ${
@@ -1018,7 +1028,7 @@ export function LandingPageClient() {
                     </button>
                     {isOpen && (
                       <div className="border-t border-[#EAF2F6] px-5 py-4 text-sm leading-relaxed text-[#526675]">
-                        {faq.a}
+                        {faq.answer}
                       </div>
                     )}
                   </div>
