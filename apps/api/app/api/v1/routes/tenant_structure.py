@@ -486,10 +486,6 @@ async def create_organization_unit(
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
     )
-    if context is not None:
-        authorize_object(
-            context, resource_tenant_id=tenant_id, organization_id=payload.organization_id
-        )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
         organization = await connection.execute(
@@ -522,6 +518,13 @@ async def create_organization_unit(
                     status_code=404,
                     detail="Parent organization unit tidak aktif atau berada di luar organisasi.",
                 )
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=payload.organization_id,
+                organization_unit_id=payload.parent_unit_id,
+            )
         reservation = await _reserve_command(
             connection,
             request,
@@ -2076,7 +2079,10 @@ async def update_branch(
                 organization_unit_id=branch["organization_unit_id"],
                 branch_id=branch_id,
             )
-        if "organization_unit_id" in values and values["organization_unit_id"] is not None:
+        target_organization_unit_id = values.get(
+            "organization_unit_id", branch["organization_unit_id"]
+        )
+        if target_organization_unit_id is not None:
             unit = await connection.execute(
                 text("""
                     select 1 from public.organization_units
@@ -2084,7 +2090,7 @@ async def update_branch(
                       and organization_id=:organization_id and status='active'
                 """),
                 {
-                    "unit_id": values["organization_unit_id"],
+                    "unit_id": target_organization_unit_id,
                     "tenant_id": tenant_id,
                     "organization_id": branch["organization_id"],
                 },
@@ -2094,6 +2100,14 @@ async def update_branch(
                     status_code=404,
                     detail="Active organization unit not found in this branch scope.",
                 )
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=branch["organization_id"],
+                organization_unit_id=target_organization_unit_id,
+                branch_id=branch_id,
+            )
         if (
             "organization_unit_id" in values
             and values["organization_unit_id"] != branch["organization_unit_id"]
