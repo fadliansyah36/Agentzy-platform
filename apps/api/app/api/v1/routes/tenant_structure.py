@@ -14,6 +14,7 @@ from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
 from app.services.tenant_structure_service import (
+    ensure_tenant_owner_retained,
     set_organization_unit_status as set_organization_unit_status_service,
 )
 from app.services.tenant_structure_service import (
@@ -1016,6 +1017,9 @@ async def suspend_membership(
         target = target_result.mappings().first()
         if target is None:
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        await ensure_tenant_owner_retained(
+            connection, tenant_id=tenant_id, membership_id=membership_id
+        )
         if context is not None:
             authorize_object(
                 context,
@@ -1805,37 +1809,10 @@ async def replace_membership_role(
                 raise HTTPException(
                     status_code=404, detail="Scope tidak tersedia untuk membership."
                 )
-        current_owner = await connection.execute(
-            text("""
-                select exists(
-                  select 1 from public.membership_roles mr
-                  join public.roles r on r.id=mr.role_id
-                  where mr.membership_id=:membership_id and r.key='corporate_owner'
-                    and (mr.valid_from is null or mr.valid_from<=now())
-                    and (mr.valid_until is null or mr.valid_until>now())
-                )
-            """),
-            {"membership_id": membership_id},
-        )
-        if current_owner.scalar_one() and role_key != "corporate_owner":
-            other_owner = await connection.execute(
-                text("""
-                    select exists(
-                      select 1 from public.memberships m
-                      join public.membership_roles mr on mr.membership_id=m.id
-                      join public.roles r on r.id=mr.role_id
-                      where m.tenant_id=:tenant_id and m.id<>:membership_id
-                        and m.status='active' and r.key='corporate_owner'
-                        and (mr.valid_from is null or mr.valid_from<=now())
-                        and (mr.valid_until is null or mr.valid_until>now())
-                    )
-                """),
-                {"tenant_id": tenant_id, "membership_id": membership_id},
+        if role_key != "corporate_owner":
+            await ensure_tenant_owner_retained(
+                connection, tenant_id=tenant_id, membership_id=membership_id
             )
-            if not other_owner.scalar_one():
-                raise HTTPException(
-                    status_code=409, detail="Tenant harus memiliki minimal satu owner aktif."
-                )
         previous = await connection.execute(
             text("""
                 select coalesce(array_agg(r.key order by r.key), '{}') as role_keys
