@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.db.session import engine
@@ -63,7 +64,7 @@ async def retry_partnership_notification(
             )
         await requeue_notification_record(connection, notification_id)
         await connection.execute(
-            __import__("sqlalchemy").text("""
+            text("""
                 insert into public.audit_logs(
                   actor_user_id,action,resource_type,resource_id,request_id,metadata
                 ) values(
