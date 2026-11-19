@@ -140,7 +140,7 @@ async def create_contract(
     async with engine.begin() as connection:
         replay = await connection.execute(
             text("""
-                select id,status,current_version from public.contracts
+                select id,status,current_version,idempotency_fingerprint from public.contracts
                 where tenant_id=:tenant_id and idempotency_key=:key
             """),
             {"tenant_id": payload.tenant_id, "key": idempotency_key},
