@@ -726,6 +726,7 @@ async def list_departments(
         "tenant_id": tenant_id,
         "include_archived": include_archived,
         "organization_id": context.organization_id if context else None,
+        "organization_unit_id": context.organization_unit_id if context else None,
         "branch_id": context.branch_id if context else None,
         "department_id": context.department_id if context else None,
         "limit": limit + 1,
@@ -741,6 +742,14 @@ async def list_departments(
         from public.departments
         where tenant_id=:tenant_id and (:include_archived or status='active')
           and (:organization_id is null or organization_id=:organization_id)
+          and (
+            :organization_unit_id is null
+            or exists (
+              select 1 from public.branches b
+              where b.id=departments.branch_id and b.tenant_id=:tenant_id
+                and b.organization_unit_id=:organization_unit_id
+            )
+          )
           and (:branch_id is null or branch_id=:branch_id)
           and (:department_id is null or id=:department_id)
           {cursor_clause}
@@ -778,19 +787,13 @@ async def create_department(
     context = await _authorize(
         session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
     )
-    if context is not None:
-        authorize_object(
-            context,
-            resource_tenant_id=tenant_id,
-            organization_id=payload.organization_id,
-            branch_id=payload.branch_id,
-        )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        branch_organization_unit_id = None
         if payload.branch_id is not None:
             branch = await connection.execute(
                 text("""
-                    select 1 from public.branches
+                    select organization_unit_id from public.branches
                     where id=:branch_id and tenant_id=:tenant_id
                       and organization_id=:organization_id and status='active'
                 """),
@@ -800,11 +803,21 @@ async def create_department(
                     "organization_id": payload.organization_id,
                 },
             )
-            if branch.scalar_one_or_none() is None:
+            branch_row = branch.mappings().first()
+            if branch_row is None:
                 raise HTTPException(
                     status_code=404,
                     detail="Active branch not found in this organization.",
                 )
+            branch_organization_unit_id = branch_row["organization_unit_id"]
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=payload.organization_id,
+                organization_unit_id=branch_organization_unit_id,
+                branch_id=payload.branch_id,
+            )
         if payload.parent_department_id is not None:
             parent = await connection.execute(
                 text("""
@@ -2177,10 +2190,13 @@ async def update_department(
             return reservation
         current = await connection.execute(
             text("""
-                select id,tenant_id,organization_id,branch_id,parent_department_id,status
-                from public.departments
-                where id=:id and tenant_id=:tenant_id
-                for update
+                select d.id,d.tenant_id,d.organization_id,d.branch_id,
+                       d.parent_department_id,d.status,b.organization_unit_id
+                from public.departments d
+                left join public.branches b
+                  on b.id=d.branch_id and b.tenant_id=d.tenant_id
+                where d.id=:id and d.tenant_id=:tenant_id
+                for update of d
             """),
             {"id": department_id, "tenant_id": tenant_id},
         )
@@ -2192,14 +2208,16 @@ async def update_department(
                 context,
                 resource_tenant_id=tenant_id,
                 organization_id=department["organization_id"],
+                organization_unit_id=department["organization_unit_id"],
                 branch_id=department["branch_id"],
                 department_id=department_id,
             )
         target_branch = values.get("branch_id", department["branch_id"])
+        target_organization_unit_id = None
         if target_branch is not None:
             branch = await connection.execute(
                 text("""
-                    select 1 from public.branches
+                    select organization_unit_id from public.branches
                     where id=:branch_id and tenant_id=:tenant_id
                       and organization_id=:organization_id and status='active'
                 """),
@@ -2209,11 +2227,22 @@ async def update_department(
                     "organization_id": department["organization_id"],
                 },
             )
-            if branch.scalar_one_or_none() is None:
+            branch_row = branch.mappings().first()
+            if branch_row is None:
                 raise HTTPException(
                     status_code=404,
                     detail="Active branch not found in this organization.",
                 )
+            target_organization_unit_id = branch_row["organization_unit_id"]
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=department["organization_id"],
+                organization_unit_id=target_organization_unit_id,
+                branch_id=target_branch,
+                department_id=department_id,
+            )
         if "parent_department_id" in values and values["parent_department_id"] is not None:
             parent_id = values["parent_department_id"]
             parent = await connection.execute(
