@@ -871,3 +871,56 @@ This section supersedes earlier statements that Phase 02 must not start from the
 - No staging, UAT, load, penetration/security acceptance or production deployment was run.
 
 **Final execution disposition: Phase 01 PARTIAL; Phase 02 PARTIAL. Phase 03 remains NOT STARTED.**
+
+## 24. Phase 01–02 execution continuation — security and integration hardening — 2026-11-19
+
+### Current disposition
+
+| Phase | Status | Reason |
+|---|---|---|
+| Phase 01 — Platform Core, Identity & Tenant | **PARTIAL — NOT DONE** | Code for identity, membership, hierarchy, role lifecycle and tenant context exists across portals, but hosted Auth settings, real-user lifecycle evidence, complete nested/object authorization coverage and real-identity audit/security evidence are not closed. |
+| Phase 02 — Public Landing & Partnership Acquisition | **PARTIAL — NOT DONE** | Core public acquisition and CRM flow is implemented. Scanner, Turnstile and SMTP are now integrated in code, but their deployment configuration and live delivery/scan evidence are not available. |
+| Phase 03 — Corporate & Contract Management | NOT STARTED | Do not begin until Phase 01 and Phase 02 are separately DONE and the user explicitly instructs the next phase. |
+
+### Phase 02 hardening now implemented
+
+- Added ClamAV INSTREAM attachment scanner worker. It retrieves objects from private Supabase Storage, verifies size and SHA-256, and transitions only to `clean`, `infected` or `rejected`. Scanner outage defers work with retry metadata; it never auto-releases files.
+- Added AAL2 and `platform.partnership.read` + ABAC-protected attachment list/download APIs. Signed URLs expire after 60 seconds and are issued only when scan status is `clean`; issuance is written to audit logs.
+- Wired attachment metadata, scan status and download action into Super Admin Partnership Lead Inbox.
+- Added two-hour upload capability expiry. Idempotent replay renews expiry only for the matching canonical request fingerprint.
+- Added migration `20261119084924_phase_02_upload_capability_expiry_and_scanner_queue`; it is applied to live Supabase and the source filename matches the applied migration version.
+- Added the pending-scan partial index to support scanner polling.
+- Added browser CORS allowance for `X-Application-Upload-Token` and `X-File-Name` upload headers.
+- Added Cloudflare Turnstile explicit widget in the public Partnership Modal and server-side token submission. It is enabled only when the frontend site key and API secret are configured.
+- Split privacy consent and communication consent into separate explicit checkboxes; API submission and DB consent records retain separate consent values.
+- Added environment documentation for ClamAV, SMTP, Turnstile secret and public site key.
+
+### Phase 02 live database evidence
+
+- Supabase migration ledger includes all five Phase 02 migrations: `20261119082627`, `20261119082643`, `20261119082716`, `20261119083254`, `20261119084924`.
+- Live SQL confirms `upload_token_expires_at` exists and `idx_partnership_attachments_pending_scan` exists.
+- Live rows remain zero for Auth users, Auth sessions, MFA factors, partnership applications, CRM prospects, attachments and notification outbox. No fake identities, submissions, prospects, attachments or notifications were created.
+- Security Advisor returned 16 INFO findings for server-only RLS tables without client policies and no WARN findings in this check. This is not a clean security acceptance; FORCE RLS remains unenabled.
+
+### Engineering checks
+
+- Code head `1826fe6ca73084daede8b49ea414b0d7dddbfdc2` passed GitHub Actions minimum engineering workflow [44491441360](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44491441360): frozen frontend install, ESLint, TypeScript, Python compile, Ruff, focused authorization tests, FastAPI import/OpenAPI generation and migration source consistency.
+- Earlier failed runs were corrected: Ruff line-length violations and the Turnstile effect state update were fixed before the passing run. Do not use failed earlier run IDs as final evidence.
+- Phase 00 source and configuration were not intentionally changed. Phase 09 files were not changed. No staging, UAT, load, penetration test or production deployment was run.
+
+### Remaining blockers — exact external and internal scope
+
+**Phase 01**
+1. Hosted Supabase Auth provider settings, redirect allowlist, SMTP, MFA enforcement, session policy and Auth webhook settings cannot be managed through the currently available Supabase connector actions; these settings remain unconfigured/unverified.
+2. Live Auth has zero users, sessions and MFA factors. Real identity lifecycle evidence cannot be fabricated; CRM and portal AAL2 runtime actions have not been exercised with a real identity.
+3. Complete object-level and nested-resource authorization coverage across all sensitive management endpoints still requires closure and evidence.
+4. Final audit redaction/export, provider correlation and security observability evidence against real identities remains open.
+
+**Phase 02**
+1. `CLAMAV_HOST` and private network reachability are not configured on the deployed API; the scanner worker is therefore disabled and all attachments remain `pending_scan` until configured and scanned.
+2. `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are not configured in frontend/API deployment; CAPTCHA is not active.
+3. SMTP host, sender, credentials and transport settings are not configured; outbox rows will remain queued until delivery is configured and confirmed.
+4. Deployed FastAPI URL, CORS origins and frontend API environment binding are not verified against a live runtime.
+5. CRM access requires a real AAL2 platform identity and is not demonstrated while Auth has zero users.
+
+**Execution conclusion:** Phase 01 PARTIAL; Phase 02 PARTIAL; Phase 03 NOT STARTED. Continue closing Phase 01 before declaring Phase 02 DONE. No claim of production readiness or phase completion is made.
