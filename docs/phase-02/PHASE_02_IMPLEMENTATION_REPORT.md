@@ -15,7 +15,7 @@
 
 ### Partnership application
 - Added validated `POST /api/v1/public/partnership-applications`.
-- Requires an idempotency key; stores a canonical request fingerprint and deterministic upload capability derived from server-side secret material.
+- Requires an idempotency key; stores a canonical request fingerprint and deterministic upload capability derived from server-side secret material. Capability expiry is persisted and upload authorization expires after two hours; a valid idempotent replay renews the two-hour window.
 - Validates email, consent, company/contact fields, arrays and URL format.
 - Includes honeypot and database-backed IP-hash rate limiting.
 - Creates application, privacy/communication consent records, CRM prospect, initial activity, audit event and notification outbox event in one database transaction.
@@ -25,11 +25,14 @@
 - Created private Storage bucket `partnership-quarantine` with 10 MB object limit and PDF/JPG/PNG MIME allowlist.
 - Added a capability-protected raw upload endpoint. It checks application capability, filename, MIME, magic bytes, size and per-application attachment count.
 - Object names are random and private. Metadata includes SHA-256 and `pending_scan`.
-- No download or public object policy exists. Attachments remain quarantined and unavailable until a scanner/release workflow is configured.
+- Added a ClamAV INSTREAM scanner worker. It retrieves objects from private Storage, verifies size and SHA-256 against metadata, and records `clean`, `infected` or `rejected`; scanner outages defer/retry without releasing files.
+- Added AAL2 + `platform.partnership.read` + global ABAC protected attachment listing and 60-second signed download issuance. Only `clean` objects can receive a signed URL; issuance is audited.
+- CRM Lead Inbox now shows attachment names, scan status and download controls. The scanner worker remains disabled until `CLAMAV_HOST` and server-side Storage credentials are configured.
 
 ### CRM and lead lifecycle
 - Public applications create CRM prospects transactionally.
 - Added platform permissions `platform.partnership.read` and `platform.partnership.manage`, global ABAC policies, and role mapping for `platform_super_admin`.
+- Privacy consent and communication consent are now separate user-visible checkboxes and separate database records. The form supports the Cloudflare Turnstile explicit widget when `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is configured; FastAPI verifies the token when `TURNSTILE_SECRET_KEY` is configured.
 - Added cursor-paginated lead inbox, lifecycle status transitions, self-assignment, notes/activity timeline, audit records and idempotent update commands.
 - Added Super Admin Partnership Lead Inbox UI using existing design tokens and authenticated FastAPI calls.
 
@@ -40,7 +43,7 @@
 
 ## 2. Database changes applied
 
-Four additive migrations were committed and applied to Agentzy-db:
+Five additive migrations were committed and applied to Agentzy-db:
 
 | Version | Migration |
 |---|---|
@@ -48,6 +51,7 @@ Four additive migrations were committed and applied to Agentzy-db:
 | 20261119082643 | `phase_02_public_application_capabilities` |
 | 20261119082716 | `phase_02_partnership_authorization_policies` |
 | 20261119083254 | `phase_02_submission_fingerprint` |
+| 20261119084924 | `phase_02_upload_capability_expiry_and_scanner_queue` |
 
 New tables:
 - `public_catalogue_items`
@@ -79,14 +83,16 @@ The Supabase Security Advisor reports INFO notices for server-only RLS-enabled t
 - `GET /api/v1/partnership/prospects`
 - `PATCH /api/v1/partnership/prospects/{prospect_id}`
 - `GET /api/v1/partnership/prospects/{prospect_id}/activities`
+- `GET /api/v1/partnership/prospects/{prospect_id}/attachments`
+- `POST /api/v1/partnership/attachments/{attachment_id}/download` (AAL2; clean-scan only; 60-second signed URL)
 
 All business writes are performed by FastAPI. The frontend uses typed API-client methods and does not write directly to Supabase.
 
 ## 4. Remaining blockers — why status is PARTIAL
 
 1. SMTP host/sender/credentials have not been supplied or verified in the runtime environment. Outbox worker therefore remains disabled until configuration exists; no real email delivery is claimed.
-2. Cloudflare Turnstile secret/site key is not configured. Current public anti-abuse controls are validation, honeypot and rate limiting; CAPTCHA is not claimed as active.
-3. No malware scanning service is configured. Uploaded objects remain `pending_scan` in private quarantine and are not downloadable; a clean-scan/release workflow remains open.
+2. Cloudflare Turnstile site/secret keys are not configured in the frontend/API runtime. Widget and server verification code are implemented, but CAPTCHA is not claimed active.
+3. ClamAV scanner integration is implemented but `CLAMAV_HOST` is not configured in the API runtime. Uploaded objects remain `pending_scan`; the signed-download API refuses access until a scan returns `clean`.
 4. Production API URL, CORS allowlist and frontend environment binding have not been verified against a deployed FastAPI service. Code is committed; runtime end-to-end completion is not claimed.
 5. Super Admin CRM access requires a real platform membership with AAL2 and the new permissions. The live Auth project currently has zero Auth users, so authenticated CRM runtime access has not been demonstrated.
 
@@ -107,3 +113,13 @@ No staging, UAT, load test, penetration test or production deployment was run.
 ## 6. Next phase
 
 Phase 03 — Corporate & Contract Management is the next roadmap phase, but it must not start until Phase 01 and Phase 02 are independently closed. No Phase 03 implementation is included here.
+
+## 7. Security hardening continuation — 2026-11-19
+
+- Migration `20261119084924_phase_02_upload_capability_expiry_and_scanner_queue` is applied to live Supabase. It adds `upload_token_expires_at` and a partial index for pending scan work.
+- Live verification confirms the expiry column and scanner queue index exist. Live row counts remain zero for applications, CRM prospects, attachments and notification outbox; no production/test records were fabricated.
+- The latest Security Advisor query returned 16 INFO findings (`rls_enabled_no_policy`) for server-only RLS tables with no client grants; no WARN findings were returned. This is not a clean security acceptance.
+- The API CORS allowlist now includes `X-Application-Upload-Token` and `X-File-Name` required by the browser upload path.
+- `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`, Turnstile and SMTP settings are documented in `apps/api/.env.example`; the public Turnstile site key is documented in root `.env.example`.
+- The current implementation code head before report updates is `1826fe6ca73084daede8b49ea414b0d7dddbfdc2`. GitHub Actions minimum engineering run [44491441360](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44491441360) was pending when this report was prepared; do not treat it as passed until completed.
+- Phase 02 remains **PARTIAL** until SMTP delivery, Turnstile, ClamAV, deployed API/CORS/frontend binding and real AAL2 CRM identity can be verified in their target runtime.
