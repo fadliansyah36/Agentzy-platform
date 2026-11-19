@@ -1550,8 +1550,6 @@ async def create_contract_invoice(
                       and g.service_key=:service_key and g.status='active'
                       and (g.effective_start is null or g.effective_start<=current_date)
                       and (g.effective_end is null or g.effective_end>=current_date)
-                      and (g.effective_start is null or g.effective_start<=current_date)
-                      and (g.effective_end is null or g.effective_end>=current_date)
                 """),
                 {
                     "service_key": line.service_key,
