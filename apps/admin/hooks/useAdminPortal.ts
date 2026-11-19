@@ -21,6 +21,7 @@ import {
   activateTenantMembership,
   suspendTenantMembership,
   replaceMembershipRole,
+  reassignMembershipHierarchy,
   listOrganizationUnits,
   listBranches,
   listDepartments,
@@ -630,6 +631,73 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       showToast(error instanceof Error ? error.message : 'Gagal mengganti role membership.');
     }
   }, [auth.session?.access_token, auth.aal, roles, refreshMembershipsForTenant, showToast]);
+
+  const handleReassignMembershipHierarchy = useCallback(async (
+    membershipId: string,
+    tenantId: string,
+    scopeKey: string,
+    currentOrganizationId?: string | null,
+  ) => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || auth.aal !== 'aal2') {
+      showToast('Session AAL2 diperlukan untuk mengubah assignment membership.');
+      return;
+    }
+    const tenantRows = orgUnits.filter((item) => item.tenantId === tenantId);
+    let payload = {
+      organization_id: null as string | null,
+      organization_unit_id: null as string | null,
+      branch_id: null as string | null,
+      department_id: null as string | null,
+    };
+    if (scopeKey.startsWith('organization:')) {
+      payload.organization_id = scopeKey.slice('organization:'.length);
+    } else if (scopeKey.startsWith('branch:')) {
+      const branch = tenantRows.find(
+        (item) => item.unitType === 'Cabang / Regional' && item.id === scopeKey.slice('branch:'.length),
+      );
+      if (!branch?.organizationId) {
+        showToast('Cabang tidak memiliki organisasi induk yang valid.');
+        return;
+      }
+      payload = {
+        organization_id: branch.organizationId,
+        organization_unit_id: branch.organizationUnitId ?? null,
+        branch_id: branch.id,
+        department_id: null,
+      };
+    } else if (scopeKey.startsWith('department:')) {
+      const department = tenantRows.find(
+        (item) => item.unitType === 'Departemen' && item.id === scopeKey.slice('department:'.length),
+      );
+      const branch = department?.branchId
+        ? tenantRows.find((item) => item.unitType === 'Cabang / Regional' && item.id === department.branchId)
+        : undefined;
+      if (!department?.organizationId || !department.branchId || !branch) {
+        showToast('Departemen tidak memiliki cabang dan organisasi induk yang valid.');
+        return;
+      }
+      payload = {
+        organization_id: department.organizationId,
+        organization_unit_id: branch.organizationUnitId ?? null,
+        branch_id: department.branchId,
+        department_id: department.id,
+      };
+    } else if (scopeKey.startsWith('organization:') === false && scopeKey !== 'tenant') {
+      showToast('Scope assignment tidak dikenali.');
+      return;
+    }
+    if (scopeKey === 'tenant' && currentOrganizationId) {
+      payload.organization_id = null;
+    }
+    try {
+      await reassignMembershipHierarchy(accessToken, tenantId, membershipId, payload);
+      await refreshMembershipsForTenant(tenantId);
+      showToast('Assignment hierarchy membership diperbarui melalui FastAPI.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gagal mengubah assignment hierarchy.');
+    }
+  }, [auth.session?.access_token, auth.aal, orgUnits, refreshMembershipsForTenant, showToast]);
 
   const handleActivateMembership = useCallback(async (membershipId: string, tenantId: string) => {
     const accessToken = auth.session?.access_token;
