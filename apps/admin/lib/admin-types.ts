@@ -3,6 +3,7 @@ export type AdminSectionId =
   | 'overview'
   | 'tenants'
   | 'onboarding'
+  | 'partnerships'
   | 'master-data'
   | 'subscriptions'
   | 'organization'
