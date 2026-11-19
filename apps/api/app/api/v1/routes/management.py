@@ -802,7 +802,7 @@ async def invite_tenant_member(
                     resource_id, request_id, ip_address, metadata
                 )
                 values(:tenant_id,:actor,'membership.invited','membership',:resource_id,:request_id,:ip,
-                       jsonb_build_object('email',:email,'role_key',:role_key))
+                       cast(:metadata as jsonb))
             """),
                 {
                     "tenant_id": tenant_id,
@@ -810,8 +810,10 @@ async def invite_tenant_member(
                     "resource_id": str(membership["id"]),
                     "request_id": _request_id(request),
                     "ip": request.client.host if request.client else None,
-                    "email": payload.email.strip().lower(),
-                    "role_key": role_key,
+                    "metadata": _audit_metadata(
+                        request,
+                        {"email": payload.email.strip().lower(), "role_key": role_key},
+                    ),
                 },
             )
             response_body = {
