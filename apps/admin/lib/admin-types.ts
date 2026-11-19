@@ -131,6 +131,12 @@ export interface OrgUnitRecord {
   headName: string | null;
   memberCount: number | null;
   status: 'Aktif' | 'Nonaktif';
+  code?: string;
+  organizationId?: string;
+  organizationUnitId?: string | null;
+  branchId?: string | null;
+  departmentId?: string | null;
+  parentDepartmentId?: string | null;
 }
 
 export interface PlatformUserRecord {
