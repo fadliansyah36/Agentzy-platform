@@ -73,6 +73,7 @@ async def _require_permission(user_id: UUID, tenant_id: UUID, permission: str) -
                   join public.role_permissions rp on rp.role_id=r.id
                   where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active'
                     and rp.permission_key=:permission
+                    and mr.scope_type='tenant' and mr.scope_id is null
                     and (mr.valid_from is null or mr.valid_from<=now())
                     and (mr.valid_until is null or mr.valid_until>now())
                     and (r.tenant_id is null or r.tenant_id=m.tenant_id)
@@ -362,8 +363,20 @@ async def submit_contract_review(
             raise HTTPException(status_code=409, detail="Hanya kontrak draft yang dapat diajukan.")
         approver_result = await connection.execute(
             text("""
-                select user_id from public.memberships
-                where tenant_id=:tenant_id and status='active' and user_id=any(:users)
+                select distinct m.user_id
+                from public.memberships m
+                where m.tenant_id=:tenant_id and m.status='active' and m.user_id=any(:users)
+                  and exists (
+                    select 1
+                    from public.membership_roles mr
+                    join public.roles r on r.id=mr.role_id
+                    join public.role_permissions rp on rp.role_id=r.id
+                    where mr.membership_id=m.id
+                      and rp.permission_key='corporate.contracts.approve'
+                      and mr.scope_type='tenant' and mr.scope_id is null
+                      and (mr.valid_from is null or mr.valid_from<=now())
+                      and (mr.valid_until is null or mr.valid_until>now())
+                  )
             """),
             {"tenant_id": tenant_id, "users": payload.approver_user_ids},
         )
