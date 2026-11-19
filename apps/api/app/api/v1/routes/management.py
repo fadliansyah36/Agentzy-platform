@@ -626,8 +626,17 @@ async def invite_tenant_member(
             )
 
     settings = get_settings()
+    existing_identity = await session.execute(
+        text("""
+            select id from auth.users
+            where lower(email)=:email and deleted_at is null
+            order by created_at limit 1
+        """),
+        {"email": payload.email.strip().lower()},
+    )
+    existing_user_id = existing_identity.scalar_one_or_none()
     service_key = settings.supabase_service_role_key
-    if not service_key:
+    if existing_user_id is None and not service_key:
         raise HTTPException(status_code=503, detail="Supabase Auth invitation belum dikonfigurasi.")
 
     async with engine.begin() as connection:
@@ -645,15 +654,6 @@ async def invite_tenant_member(
                 content=reservation.replay_body or {},
             )
 
-    existing_identity = await session.execute(
-        text("""
-            select id from auth.users
-            where lower(email)=:email and deleted_at is null
-            order by created_at limit 1
-        """),
-        {"email": payload.email.strip().lower()},
-    )
-    existing_user_id = existing_identity.scalar_one_or_none()
     invitation_status = "identity_exists" if existing_user_id else "sent"
     invite_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/invite"
     headers = {
