@@ -78,7 +78,11 @@ async def submit_partnership_application(
             payload=payload,
         )
         await insert_application_consents(
-            connection, application_id, payload["policy_version"]
+            connection,
+            application_id,
+            payload["policy_version"],
+            payload["privacy_consent"],
+            payload["communication_consent"],
         )
         await insert_prospect_submission_activity(
             connection, prospect_id, reference_code
