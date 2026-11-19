@@ -339,7 +339,7 @@ export function OrganizationUsersView({
                   >
                     <option value="tenant">Seluruh Tenant</option>
                     {u.organizationId && <option value={`organization:${u.organizationId}`}>Organisasi saat ini</option>}
-                    {orgUnits.filter((unit) => unit.tenantId === u.tenantId).map((unit) => (
+                    {orgUnits.filter((unit) => unit.tenantId === u.tenantId && unit.status === 'Aktif').map((unit) => (
                       <option
                         key={`${unit.unitType}:${unit.id}`}
                         value={unit.unitType === 'Unit Organisasi' ? `organization_unit:${unit.id}` : unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
@@ -422,7 +422,7 @@ export function OrganizationUsersView({
                           >
                             <option value="tenant">Seluruh Tenant</option>
                             {u.organizationId && <option value={`organization:${u.organizationId}`}>Organisasi saat ini</option>}
-                            {orgUnits.filter((unit) => unit.tenantId === u.tenantId).map((unit) => (
+                            {orgUnits.filter((unit) => unit.tenantId === u.tenantId && unit.status === 'Aktif').map((unit) => (
                               <option
                                 key={`${unit.unitType}:${unit.id}`}
                                 value={unit.unitType === 'Unit Organisasi' ? `organization_unit:${unit.id}` : unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
