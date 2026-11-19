@@ -991,6 +991,26 @@ async def decide_policy_approval(
             """),
             {"status": version_next_status, "version_id": approval["version_id"]},
         )
+        if approval["status"] == "active" and version_next_status == "rejected":
+            parent_result = await connection.execute(
+                text("select parent_version_id from public.contract_versions where id=:id"),
+                {"id": approval["version_id"]},
+            )
+            parent_version_id = parent_result.scalar_one_or_none()
+            if parent_version_id:
+                parent_number = await connection.execute(
+                    text("select version_number from public.contract_versions where id=:id"),
+                    {"id": parent_version_id},
+                )
+                await connection.execute(
+                    text("""
+                        update public.contracts set current_version=:version,
+                          updated_by=:actor,updated_at=now(),row_version=row_version+1
+                        where id=:contract and tenant_id=:tenant
+                    """),
+                    {"version": parent_number.scalar_one(), "actor": actor,
+                     "contract": contract_id, "tenant": payload.tenant_id},
+                )
         if approval["status"] == "active" and version_next_status == "approved":
                 await connection.execute(
                     text("""
