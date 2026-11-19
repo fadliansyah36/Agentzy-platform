@@ -47,6 +47,89 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
   return (await response.json()) as T;
 }
 
+
+export async function publicApiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (!API_BASE_URL) throw new ApiError("API belum dikonfigurasi. Hubungi administrator.", 503, "API_NOT_CONFIGURED");
+  const headers = new Headers(options.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (!headers.has("X-Request-ID")) headers.set("X-Request-ID", createIdempotencyKey());
+  if (!headers.has("X-Correlation-ID")) headers.set("X-Correlation-ID", createIdempotencyKey());
+  if (!headers.has("X-Trace-ID")) headers.set("X-Trace-ID", createIdempotencyKey());
+  const response = await fetch(`${API_BASE_URL}/api/v1${path.startsWith("/") ? path : `/${path}`}`, {
+    ...options,
+    headers,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const error = payload?.error ?? payload;
+    throw new ApiError(
+      error?.message ?? payload?.detail ?? "Permintaan ke Agentzy API gagal.",
+      response.status,
+      error?.code,
+      error?.details ?? payload?.detail,
+      error?.request_id ?? response.headers.get("X-Request-ID"),
+      error?.correlation_id ?? response.headers.get("X-Correlation-ID"),
+      error?.trace_id ?? response.headers.get("X-Trace-ID"),
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+export type PublicPartnershipApplicationInput = {
+  company_name: string;
+  company_type: string;
+  contact_name: string;
+  contact_title?: string;
+  business_email: string;
+  business_phone: string;
+  website?: string;
+  operating_locations?: string;
+  estimated_workforce?: number;
+  human_needs: string[];
+  ai_needs: string[];
+  provider_products: string[];
+  needs_summary?: string;
+  privacy_consent: true;
+  communication_consent: true;
+  policy_version: string;
+  fax_number: string;
+};
+
+export type PublicPartnershipApplicationResult = {
+  data: {
+    id: string;
+    reference_code: string;
+    status: string;
+    upload_token: string;
+    notification_status: "queued";
+  };
+  meta: { request_id?: string | null; correlation_id?: string | null; trace_id?: string | null };
+};
+
+export const createPublicPartnershipApplication = (
+  payload: PublicPartnershipApplicationInput,
+  idempotencyKey: string,
+) => publicApiRequest<PublicPartnershipApplicationResult>("/public/partnership-applications", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+  body: JSON.stringify(payload),
+});
+
+export const uploadPublicPartnershipAttachment = (
+  applicationId: string,
+  uploadToken: string,
+  file: File,
+) => {
+  const body = new FormData();
+  body.set("file", file);
+  return publicApiRequest<{ data: { id: string; scan_status: string; download_available: boolean } }>(
+    `/public/partnership-applications/${encodeURIComponent(applicationId)}/attachments`,
+    { method: "POST", headers: { "X-Application-Upload-Token": uploadToken }, body },
+  );
+};
+
 export type AgentzyMembership = { id: string; tenant_id: string; tenant_name: string;
   organization_id: string | null; organization_unit_id: string | null;
   branch_id: string | null; department_id: string | null;
