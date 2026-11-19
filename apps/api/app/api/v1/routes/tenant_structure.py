@@ -104,6 +104,19 @@ class OrganizationUnitCreate(BaseModel):
     unit_type: str = Field(pattern="^(division|unit|team|cost_center)$")
 
 
+class OrganizationUnitUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=40,
+        pattern="^[A-Z0-9][A-Z0-9_-]*$",
+    )
+    parent_unit_id: UUID | None = None
+    unit_type: str | None = Field(default=None, pattern="^(division|unit|team|cost_center)$")
+    status: str | None = Field(default=None, pattern="^(active|inactive)$")
+
+
 class BranchCreate(BaseModel):
     organization_id: UUID
     organization_unit_id: UUID | None = None
@@ -2323,4 +2336,280 @@ async def restore_department(
 ):
     return await update_department(
         tenant_id, department_id, DepartmentUpdate(status="active"), request, claims, session
+    )
+
+
+@router.patch(
+    "/{tenant_id}/organization-units/{unit_id}",
+    response_model=HierarchyUnitRead,
+    tags=["Organization"],
+)
+async def update_organization_unit(
+    tenant_id: UUID,
+    unit_id: UUID,
+    payload: OrganizationUnitUpdate,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    if not payload.model_fields_set:
+        raise HTTPException(status_code=422, detail="Minimal satu perubahan harus dikirim.")
+    context = await _authorize(
+        session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
+    )
+    actor = UUID(claims["sub"])
+    async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"organization_unit.update:{unit_id}",
+            payload.model_dump(mode="json"),
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
+        result = await connection.execute(
+            text("""
+                select id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status
+                from public.organization_units
+                where id=:id and tenant_id=:tenant_id
+                for update
+            """),
+            {"id": unit_id, "tenant_id": tenant_id},
+        )
+        current = result.mappings().first()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Organization unit tidak ditemukan.")
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=current["organization_id"],
+                organization_unit_id=unit_id,
+            )
+
+        parent_unit_id = (
+            payload.parent_unit_id
+            if "parent_unit_id" in payload.model_fields_set
+            else current["parent_unit_id"]
+        )
+        if parent_unit_id is not None:
+            parent_result = await connection.execute(
+                text("""
+                    select id from public.organization_units
+                    where id=:parent_id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {
+                    "parent_id": parent_unit_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": current["organization_id"],
+                },
+            )
+            if parent_result.scalar_one_or_none() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Parent organization unit tidak aktif atau berada di luar organisasi.",
+                )
+            if parent_unit_id == unit_id:
+                raise HTTPException(status_code=409, detail="Unit tidak dapat menjadi induknya sendiri.")
+            cycle = await connection.execute(
+                text("""
+                    with recursive descendants(id) as (
+                      select id from public.organization_units
+                      where tenant_id=:tenant_id and parent_unit_id=:unit_id
+                      union all
+                      select child.id
+                      from public.organization_units child
+                      join descendants parent on child.parent_unit_id=parent.id
+                      where child.tenant_id=:tenant_id
+                    )
+                    select exists(select 1 from descendants where id=:parent_id)
+                """),
+                {"tenant_id": tenant_id, "unit_id": unit_id, "parent_id": parent_unit_id},
+            )
+            if cycle.scalar_one():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Parent baru berada di bawah unit ini dan akan membentuk siklus.",
+                )
+
+        values = {
+            "name": payload.name.strip() if payload.name is not None else current["name"],
+            "code": payload.code.strip().upper() if payload.code is not None else current["code"],
+            "unit_type": payload.unit_type or current["unit_type"],
+            "status": payload.status or current["status"],
+            "parent_unit_id": parent_unit_id,
+        }
+        updated = await connection.execute(
+            text("""
+                update public.organization_units
+                set name=:name,code=:code,unit_type=:unit_type,status=:status,
+                    parent_unit_id=:parent_unit_id,updated_by=:actor,updated_at=now()
+                where id=:id and tenant_id=:tenant_id
+                returning id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status
+            """),
+            {**values, "actor": actor, "id": unit_id, "tenant_id": tenant_id},
+        )
+        row = dict(updated.mappings().one())
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            "organization_unit.updated",
+            "organization_unit",
+            unit_id,
+            {"fields": sorted(payload.model_fields_set)},
+        )
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=row,
+        )
+    return row
+
+
+async def _set_organization_unit_status(
+    tenant_id: UUID,
+    unit_id: UUID,
+    request: Request,
+    claims: dict,
+    session: AsyncSession,
+    *,
+    status_value: str,
+):
+    context = await _authorize(
+        session, claims, tenant_id, "corporate.organization.manage", "platform.tenants.manage"
+    )
+    actor = UUID(claims["sub"])
+    async with engine.begin() as connection:
+        reservation = await _reserve_command(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"organization_unit.{status_value}:{unit_id}",
+            {"status": status_value},
+        )
+        if isinstance(reservation, JSONResponse):
+            return reservation
+        result = await connection.execute(
+            text("""
+                select id,organization_id,parent_unit_id,status
+                from public.organization_units
+                where id=:id and tenant_id=:tenant_id
+                for update
+            """),
+            {"id": unit_id, "tenant_id": tenant_id},
+        )
+        current = result.mappings().first()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Organization unit tidak ditemukan.")
+        if context is not None:
+            authorize_object(
+                context,
+                resource_tenant_id=tenant_id,
+                organization_id=current["organization_id"],
+                organization_unit_id=unit_id,
+            )
+        if status_value == "archived":
+            dependents = await connection.execute(
+                text("""
+                    select
+                      exists(select 1 from public.organization_units
+                        where tenant_id=:tenant_id and parent_unit_id=:id and status<>'archived')
+                      or exists(select 1 from public.branches
+                        where tenant_id=:tenant_id and organization_unit_id=:id and status<>'archived')
+                      or exists(select 1 from public.memberships
+                        where tenant_id=:tenant_id and organization_unit_id=:id
+                          and status in ('invited','active','suspended'))
+                """),
+                {"tenant_id": tenant_id, "id": unit_id},
+            )
+            if dependents.scalar_one():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Unit masih memiliki child unit, cabang, atau membership yang ditugaskan.",
+                )
+        elif current["parent_unit_id"] is not None:
+            parent = await connection.execute(
+                text("""
+                    select status from public.organization_units
+                    where id=:id and tenant_id=:tenant_id
+                """),
+                {"id": current["parent_unit_id"], "tenant_id": tenant_id},
+            )
+            if parent.scalar_one_or_none() != "active":
+                raise HTTPException(
+                    status_code=409,
+                    detail="Parent unit harus aktif sebelum unit ini dipulihkan.",
+                )
+        updated = await connection.execute(
+            text("""
+                update public.organization_units
+                set status=:status,updated_by=:actor,updated_at=now()
+                where id=:id and tenant_id=:tenant_id
+                returning id,tenant_id,organization_id,parent_unit_id,name,code,unit_type,status
+            """),
+            {
+                "status": status_value,
+                "actor": actor,
+                "id": unit_id,
+                "tenant_id": tenant_id,
+            },
+        )
+        row = dict(updated.mappings().one())
+        await _audit(
+            connection,
+            request,
+            actor,
+            tenant_id,
+            f"organization_unit.{status_value}",
+            "organization_unit",
+            unit_id,
+            {"previous_status": current["status"]},
+        )
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=row,
+        )
+    return row
+
+
+@router.post(
+    "/{tenant_id}/organization-units/{unit_id}/archive",
+    response_model=HierarchyUnitRead,
+    tags=["Organization"],
+)
+async def archive_organization_unit(
+    tenant_id: UUID,
+    unit_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    return await _set_organization_unit_status(
+        tenant_id, unit_id, request, claims, session, status_value="archived"
+    )
+
+
+@router.post(
+    "/{tenant_id}/organization-units/{unit_id}/restore",
+    response_model=HierarchyUnitRead,
+    tags=["Organization"],
+)
+async def restore_organization_unit(
+    tenant_id: UUID,
+    unit_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    return await _set_organization_unit_status(
+        tenant_id, unit_id, request, claims, session, status_value="active"
     )
