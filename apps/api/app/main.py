@@ -1,4 +1,5 @@
 import asyncio
+import json
 from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
+from app.core.envelopes import success_envelope
 from app.core.redaction import redact_audit_value
 from app.db.session import engine
 from app.services.attachment_scanner import run_attachment_scanner_worker
@@ -91,6 +93,29 @@ async def request_context(request: Request, call_next):
     )
     try:
         response = await call_next(request)
+        content_type = response.headers.get("content-type", "")
+        if 200 <= response.status_code < 300 and content_type.startswith("application/json"):
+            body = b"".join([chunk async for chunk in response.body_iterator])
+            payload = json.loads(body)
+            normalized = success_envelope(
+                payload,
+                {
+                    "request_id": request_id,
+                    "correlation_id": correlation_id,
+                    "trace_id": trace_id,
+                },
+            )
+            original_headers = [
+                (key, value)
+                for key, value in response.raw_headers
+                if key.lower() not in {b"content-length", b"content-type"}
+            ]
+            response = JSONResponse(
+                content=normalized,
+                status_code=response.status_code,
+                background=response.background,
+            )
+            response.raw_headers.extend(original_headers)
         logger.info(
             "api_request_completed",
             method=request.method,
