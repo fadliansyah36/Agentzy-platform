@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_platform_action, has_platform_permission
 from app.core.config import get_settings
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
@@ -558,7 +559,18 @@ async def update_partnership_prospect(
         request, claims, session, permission="platform.partnership.manage",
         action="manage", resource={"id": str(prospect_id)},
     )
+    response_body = None
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection,
+            actor_user_id=actor,
+            tenant_id=None,
+            command_key=f"partnership.prospect.update:{prospect_id}",
+            idempotency_key=request.headers.get("idempotency-key"),
+            payload=payload.model_dump(mode="json"),
+        )
+        if reservation.replay:
+            return reservation.replay_body or {}
         result = await connection.execute(
             text("""
                 select p.*,a.reference_code,a.business_email,a.company_name
@@ -666,15 +678,22 @@ async def update_partnership_prospect(
                     }),
                 },
             )
-    return {
-        "data": {
-            "id": str(prospect_id),
-            "reference_code": current["reference_code"],
-            "status": next_status,
-            "assigned_to": str(assigned_to) if assigned_to else None,
-        },
-        "meta": _request_context(request),
-    }
+        response_body = {
+            "data": {
+                "id": str(prospect_id),
+                "reference_code": current["reference_code"],
+                "status": next_status,
+                "assigned_to": str(assigned_to) if assigned_to else None,
+            },
+            "meta": _request_context(request),
+        }
+        await complete_idempotency(
+            connection,
+            record_id=reservation.record_id,
+            response_status=200,
+            response_body=response_body,
+        )
+    return response_body
 
 
 @router.get("/partnership/prospects/{prospect_id}/activities", tags=["Partnership CRM"])
