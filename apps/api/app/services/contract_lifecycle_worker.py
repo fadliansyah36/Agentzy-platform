@@ -66,25 +66,26 @@ async def process_contract_lifecycle_batch() -> dict[str, int]:
                     "effective_end": row["effective_end"].isoformat(), "key": key,
                 },
             )
-            await connection.execute(
-                text("""
-                    insert into public.notification_outbox(
-                      event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
-                    ) values('contract.expired','contract',:contract,:recipient,
-                      cast(:payload as jsonb),'pending',now())
-                """),
-                {
-                    "contract": row["id"],
-                    "recipient": recipient,
-                    "payload": json.dumps({
-                        "tenant_id": str(row["tenant_id"]),
-                        "contract_id": str(row["id"]),
-                        "contract_number": contract_row["contract_number"],
-                        "title": contract_row["title"],
-                        "effective_end": row["effective_end"].isoformat(),
-                    }),
-                },
-            )
+            if recipient:
+                await connection.execute(
+                    text("""
+                        insert into public.notification_outbox(
+                          event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
+                        ) values('contract.expired','contract',:contract,:recipient,
+                          cast(:payload as jsonb),'pending',now())
+                    """),
+                    {
+                        "contract": row["id"],
+                        "recipient": recipient,
+                        "payload": json.dumps({
+                            "tenant_id": str(row["tenant_id"]),
+                            "contract_id": str(row["id"]),
+                            "contract_number": contract_row["contract_number"],
+                            "title": contract_row["title"],
+                            "effective_end": row["effective_end"].isoformat(),
+                        }),
+                    },
+                )
 
         reminders = await connection.execute(
             text("""
@@ -131,22 +132,26 @@ async def process_contract_lifecycle_batch() -> dict[str, int]:
                     "effective_end": row["effective_end"].isoformat(), "key": key,
                 },
             )
-            await connection.execute(
-                text("""
-                    insert into public.notification_outbox(
-                      event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
-                    ) values('contract.renewal_reminder','contract',:contract,:recipient,
-                      cast(:payload as jsonb),'pending',now())
-                """),
-                {
-                    "contract": row["id"],
-                    "payload": json.dumps({
-                        "tenant_id": str(row["tenant_id"]),
-                        "contract_id": str(row["id"]),
-                        "effective_end": row["effective_end"].isoformat(),
-                    }),
-                },
-            )
+            if recipient:
+                await connection.execute(
+                    text("""
+                        insert into public.notification_outbox(
+                          event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
+                        ) values('contract.renewal_reminder','contract',:contract,:recipient,
+                          cast(:payload as jsonb),'pending',now())
+                    """),
+                    {
+                        "contract": row["id"],
+                        "recipient": recipient,
+                        "payload": json.dumps({
+                            "tenant_id": str(row["tenant_id"]),
+                            "contract_id": str(row["id"]),
+                            "contract_number": contract_row["contract_number"],
+                            "title": contract_row["title"],
+                            "effective_end": row["effective_end"].isoformat(),
+                        }),
+                    },
+                )
     return {"expired": expired_count, "renewal_reminders": reminder_count}
 
 
