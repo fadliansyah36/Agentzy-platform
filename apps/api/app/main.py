@@ -16,6 +16,7 @@ from app.core.envelopes import success_envelope
 from app.core.redaction import redact_audit_value
 from app.db.session import engine
 from app.services.attachment_scanner import run_attachment_scanner_worker
+from app.services.contract_lifecycle_worker import run_contract_lifecycle_worker
 from app.services.notification_dispatcher import run_notification_worker
 
 settings = get_settings()
@@ -26,6 +27,7 @@ logger = structlog.get_logger()
 async def lifespan(_: FastAPI):
     notification_task = None
     attachment_scanner_task = None
+    contract_lifecycle_task = None
     if settings.smtp_configured:
         notification_task = asyncio.create_task(run_notification_worker())
     else:
@@ -37,10 +39,14 @@ async def lifespan(_: FastAPI):
             "attachment_scanner_disabled",
             reason="CLAMAV_HOST and server-side Supabase Storage credentials are required",
         )
+    if settings.contract_lifecycle_worker_enabled:
+        contract_lifecycle_task = asyncio.create_task(
+            run_contract_lifecycle_worker(settings.contract_lifecycle_poll_seconds)
+        )
     try:
         yield
     finally:
-        for task in (notification_task, attachment_scanner_task):
+        for task in (notification_task, attachment_scanner_task, contract_lifecycle_task):
             if task:
                 task.cancel()
                 with suppress(asyncio.CancelledError):
