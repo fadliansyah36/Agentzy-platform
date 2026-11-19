@@ -35,7 +35,8 @@ def _send_email(recipient: str, subject: str, body: str) -> None:
     message["To"] = recipient
     message["Subject"] = subject
     message.set_content(body)
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as client:
+    smtp_class = smtplib.SMTP if settings.smtp_starttls else smtplib.SMTP_SSL
+    with smtp_class(settings.smtp_host, settings.smtp_port, timeout=20) as client:
         if settings.smtp_starttls:
             client.starttls()
         if settings.smtp_username:
