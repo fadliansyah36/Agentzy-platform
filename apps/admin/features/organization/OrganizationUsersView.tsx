@@ -139,15 +139,21 @@ export function OrganizationUsersView({
                 <div key={unit.id} className="flex items-center justify-between gap-3 rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] px-3.5 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold text-[#17324D]">{unit.name}</p>
-                    <p className="text-[11px] text-[#526675]">{unit.code ?? '—'} · Induk: {unit.parentName ?? '—'}</p>
+                    <p className="text-[11px] text-[#526675]">{unit.code ?? '—'} · Induk: {unit.parentName ?? '—'} · Status: {unit.status}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button type="button" onClick={() => onOpenOrgUnitModal(unit)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#0284C7]" aria-label={`Edit ${unit.name}`}>
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button type="button" onClick={() => onDeleteOrgUnit(unit.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]" aria-label={`Arsipkan ${unit.name}`}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {unit.status === 'Diarsipkan' ? (
+                      <button type="button" onClick={() => onRestoreOrgUnit(unit.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#247A55]" aria-label={`Pulihkan ${unit.name}`}>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => onDeleteOrgUnit(unit.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]" aria-label={`Arsipkan ${unit.name}`}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
