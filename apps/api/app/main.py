@@ -65,6 +65,8 @@ app.add_middleware(
         "X-Request-ID",
         "X-Correlation-ID",
         "X-Trace-ID",
+        "X-Application-Upload-Token",
+        "X-File-Name",
     ],
 )
 
