@@ -236,7 +236,7 @@ async def create_partnership_application(
     async with engine.begin() as connection:
         existing = await connection.execute(
             text("""
-                select id, reference_code, status, request_fingerprint
+                select id, reference_code, status, request_fingerprint, upload_token_expires_at
                 from public.public_partnership_applications
                 where submission_idempotency_key=:key
             """),
@@ -249,6 +249,14 @@ async def create_partnership_application(
                     status_code=409,
                     detail="Idempotency-Key telah digunakan untuk payload yang berbeda.",
                 )
+            await connection.execute(
+                text("""
+                    update public.public_partnership_applications
+                    set upload_token_expires_at=now() + interval '2 hours'
+                    where id=:id
+                """),
+                {"id": prior["id"]},
+            )
             return {
                 "data": {
                     "id": str(prior["id"]),
@@ -284,13 +292,13 @@ async def create_partnership_application(
                   id,reference_code,company_name,company_type,contact_name,contact_title,
                   business_email,business_phone,website,operating_locations,estimated_workforce,
                   human_needs,ai_needs,provider_products,needs_summary,status,source,
-                  request_id,correlation_id,trace_id,upload_token_hash,
+                  request_id,correlation_id,trace_id,upload_token_hash,upload_token_expires_at,
                   submission_idempotency_key,request_fingerprint
                 ) values (
                   :id,:reference,:company,:company_type,:contact,:title,:email,:phone,
                   :website,:locations,:workforce,:human,:ai,:products,:summary,'submitted',
                   'public_landing',:request_id,:correlation_id,:trace_id,
-                  :upload_hash,:idempotency,:fingerprint
+                  :upload_hash,now() + interval '2 hours',:idempotency,:fingerprint
                 ) returning id,reference_code,status,created_at
             """),
             {
@@ -438,13 +446,20 @@ async def upload_partnership_attachment(
     async with engine.connect() as connection:
         app_result = await connection.execute(
             text("""
-                select upload_token_hash from public.public_partnership_applications
+                select upload_token_hash,upload_token_expires_at from public.public_partnership_applications
                 where id=:id and status not in ('closed','disqualified')
             """),
             {"id": application_id},
         )
-        stored_token_hash = app_result.scalar_one_or_none()
-        if not stored_token_hash or not hmac.compare_digest(stored_token_hash, token_hash):
+        stored_application = app_result.mappings().first()
+        stored_token_hash = stored_application["upload_token_hash"] if stored_application else None
+        token_expires_at = stored_application["upload_token_expires_at"] if stored_application else None
+        if (
+            not stored_token_hash
+            or not token_expires_at
+            or token_expires_at <= datetime.now(UTC)
+            or not hmac.compare_digest(stored_token_hash, token_hash)
+        ):
             raise HTTPException(
                 status_code=404, detail="Pengajuan atau akses upload tidak tersedia."
             )
