@@ -138,11 +138,11 @@ export type AdminModalState =
   | { type: 'incident-crud' }
   | { type: 'vendor-crud'; vendor?: VendorSubprocessorRecord };
 
-async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): Promise<OrgUnitRecord[]> {
+async function loadAdminTenantHierarchy(accessToken: string, tenantId: string, includeArchived = false): Promise<OrgUnitRecord[]> {
   const [unitRows, branchRows, departmentRows] = await Promise.all([
-    listOrganizationUnits(accessToken, tenantId, true),
-    listBranches(accessToken, tenantId, true),
-    listDepartments(accessToken, tenantId, true),
+    listOrganizationUnits(accessToken, tenantId, includeArchived),
+    listBranches(accessToken, tenantId, includeArchived),
+    listDepartments(accessToken, tenantId, includeArchived),
   ]);
   const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
   const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
@@ -457,7 +457,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       tenants.length === 0
     ) return;
     let active = true;
-    void Promise.all(tenants.map((tenant) => loadAdminTenantHierarchy(accessToken, tenant.id)))
+    const includeArchived = platformPermissions.includes('platform.tenants.manage');
+    void Promise.all(tenants.map((tenant) => loadAdminTenantHierarchy(accessToken, tenant.id, includeArchived)))
       .then((rows) => {
       if (active) setOrgUnits(rows.flat());
     }).catch((error) => {
@@ -1155,7 +1156,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
             });
           }
         }
-        const refreshed = await loadAdminTenantHierarchy(accessToken, tenant.id);
+        const refreshed = await loadAdminTenantHierarchy(accessToken, tenant.id, true);
         setOrgUnits((previous) => [
           ...previous.filter((item) => item.tenantId !== tenant.id),
           ...refreshed,
@@ -1185,7 +1186,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
         } else {
           await archiveDepartment(accessToken, target.tenantId, target.id);
         }
-        const refreshed = await loadAdminTenantHierarchy(accessToken, target.tenantId);
+        const refreshed = await loadAdminTenantHierarchy(accessToken, target.tenantId, true);
         setOrgUnits((previous) => [
           ...previous.filter((item) => item.tenantId !== target.tenantId),
           ...refreshed,
