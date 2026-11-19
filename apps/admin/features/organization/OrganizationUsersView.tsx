@@ -74,8 +74,8 @@ export function OrganizationUsersView({
   return (
     <div className="space-y-5">
       <AdminPageHeader
-        title="Organisasi, Cabang, Departemen & Pengguna"
-        subtitle="Kelola struktur hierarki tenant, cabang regional, departemen, dan akun pengguna platform."
+        title="Unit Organisasi, Cabang, Departemen & Pengguna"
+        subtitle="Kelola unit organisasi, cabang, departemen, assignment hierarchy, dan membership tenant melalui FastAPI."
         onBack={onBack}
         actions={
           <button
