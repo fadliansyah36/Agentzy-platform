@@ -1670,6 +1670,7 @@ function OrgUnitCrudModal({
           <label className={labelCls}>Tenant</label>
           <select
             value={tenantId}
+            disabled={Boolean(initial)}
             onChange={(e) => { setTenantId(e.target.value); setOrganizationId(''); }}
             className={inputCls}
           >
