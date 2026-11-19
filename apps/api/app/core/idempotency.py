@@ -155,3 +155,29 @@ async def complete_idempotency(
             "body": json.dumps(response_body, default=str),
         },
     )
+
+async def fail_idempotency(
+    connection: AsyncConnection,
+    *,
+    record_id: UUID,
+    error_code: str,
+) -> None:
+    """Release a committed reservation after an external command fails.
+
+    Only a bounded machine-readable code is persisted; provider response bodies
+    and credentials must never be stored in the idempotency record.
+    """
+    await connection.execute(
+        text("""
+            update public.idempotency_records
+            set status='failed',
+                response_status=null,
+                response_body=cast(:body as jsonb),
+                updated_at=now()
+            where id=:id and status='processing'
+        """),
+        {
+            "id": record_id,
+            "body": json.dumps({"error_code": error_code[:80]}),
+        },
+    )
