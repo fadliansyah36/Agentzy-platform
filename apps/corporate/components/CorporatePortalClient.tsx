@@ -170,21 +170,14 @@ export function CorporatePortalClient({
 
         {portal.activeSection === 'invoices' && (
           <InvoiceCenterView
-            invoices={portal.invoices}
-            onSelectInvoice={(invoiceId) =>
-              portal.setModal({ type: 'invoice-detail', invoiceId })
-            }
+            tenantId={portal.activeTenant.id}
             onBack={backToOverview}
           />
         )}
 
         {portal.activeSection === 'payments' && (
           <PaymentReconciliationView
-            invoices={portal.invoices}
-            payments={portal.payments}
-            onOpenReconcileModal={(invoiceId) =>
-              portal.setModal({ type: 'payment-reconcile', invoiceId })
-            }
+            tenantId={portal.activeTenant.id}
             onBack={backToOverview}
           />
         )}
