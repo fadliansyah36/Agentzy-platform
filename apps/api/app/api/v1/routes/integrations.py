@@ -163,7 +163,9 @@ async def google_oauth_callback(
         )
         oauth_state = result.mappings().first()
     if oauth_state is None:
-        raise HTTPException(status_code=400, detail="OAuth state is invalid, expired or already used.")
+        raise HTTPException(
+            status_code=400, detail="OAuth state is invalid, expired or already used."
+        )
     tenant_id = UUID(str(oauth_state["tenant_id"]))
     user_id = UUID(str(oauth_state["user_id"]))
     try:
@@ -204,7 +206,8 @@ async def google_oauth_callback(
                     "tenant_id": tenant_id,
                     "subject": profile["sub"],
                     "email": profile.get("email"),
-                    "scopes": tokens.get("scope", "").split() or list(oauth_state["requested_scopes"]),
+                    "scopes": tokens.get("scope", "").split()
+                    or list(oauth_state["requested_scopes"]),
                     "access_token": access_cipher,
                     "refresh_token": refresh_cipher,
                     "expires": expires_in,
@@ -281,12 +284,16 @@ async def refresh_provider_connection(
     if row is None:
         raise HTTPException(status_code=404, detail="Provider connection not found.")
     if not row["refresh_token_ciphertext"]:
-        raise HTTPException(status_code=409, detail="Provider did not grant offline refresh consent.")
+        raise HTTPException(
+            status_code=409, detail="Provider did not grant offline refresh consent."
+        )
     cipher = _cipher()
     try:
         refresh_token = cipher.decrypt(row["refresh_token_ciphertext"].encode()).decode()
     except (InvalidToken, ValueError) as exc:
-        raise HTTPException(status_code=500, detail="Stored provider credential cannot be decrypted.") from exc
+        raise HTTPException(
+            status_code=500, detail="Stored provider credential cannot be decrypted."
+        ) from exc
     try:
         tokens = await refresh_access_token(refresh_token)
         access_cipher = cipher.encrypt(tokens["access_token"].encode()).decode()
@@ -356,7 +363,9 @@ async def revoke_provider_connection(
         encrypted = row["refresh_token_ciphertext"] or row["access_token_ciphertext"]
         token = cipher.decrypt(encrypted.encode()).decode()
     except (InvalidToken, ValueError) as exc:
-        raise HTTPException(status_code=500, detail="Stored provider credential cannot be decrypted.") from exc
+        raise HTTPException(
+            status_code=500, detail="Stored provider credential cannot be decrypted."
+        ) from exc
     try:
         await revoke_token(token)
     except Exception as exc:

@@ -25,19 +25,23 @@ def build_authorization_url(state: str, challenge: str, scopes: list[str]) -> st
     settings = get_settings()
     if not settings.google_oauth_configured:
         raise RuntimeError("GOOGLE_OAUTH_NOT_CONFIGURED")
-    return AUTHORIZE_ENDPOINT + "?" + urlencode(
-        {
-            "client_id": settings.google_oauth_client_id,
-            "redirect_uri": settings.google_oauth_redirect_uri,
-            "response_type": "code",
-            "scope": " ".join(scopes),
-            "access_type": "offline",
-            "prompt": "consent",
-            "include_granted_scopes": "true",
-            "state": state,
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-        }
+    return (
+        AUTHORIZE_ENDPOINT
+        + "?"
+        + urlencode(
+            {
+                "client_id": settings.google_oauth_client_id,
+                "redirect_uri": settings.google_oauth_redirect_uri,
+                "response_type": "code",
+                "scope": " ".join(scopes),
+                "access_type": "offline",
+                "prompt": "consent",
+                "include_granted_scopes": "true",
+                "state": state,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            }
+        )
     )
 
 
