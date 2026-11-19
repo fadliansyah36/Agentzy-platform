@@ -5,6 +5,7 @@ import { AIWorkforceAccessView } from './AIWorkforceAccessView';
 import type { AgentzyWorkforceTenantContext, AgentzyTenantMembership, AgentzyRoleTemplate, InviteTenantMemberInput, ReassignMembershipHierarchyInput } from '@/apps/web/lib/api-client';
 import {
   ShieldCheck,
+  Users,
   FileSearch,
   Settings,
   CheckCircle2,
