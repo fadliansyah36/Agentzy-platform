@@ -27,6 +27,22 @@ async def process_contract_lifecycle_batch() -> dict[str, int]:
         expired_rows = expired.mappings().all()
         expired_count = len(expired_rows)
         for row in expired_rows:
+            profile = await connection.execute(
+                text("""
+                    select billing_email from public.corporate_profiles
+                    where tenant_id=:tenant and profile_status='active'
+                """),
+                {"tenant": row["tenant_id"]},
+            )
+            recipient = profile.scalar_one_or_none()
+            contract_info = await connection.execute(
+                text("""
+                    select contract_number,title from public.contracts
+                    where id=:contract and tenant_id=:tenant
+                """),
+                {"contract": row["id"], "tenant": row["tenant_id"]},
+            )
+            contract_row = contract_info.mappings().one()
             await connection.execute(
                 text("""
                     update public.contract_entitlement_grants
@@ -53,15 +69,18 @@ async def process_contract_lifecycle_batch() -> dict[str, int]:
             await connection.execute(
                 text("""
                     insert into public.notification_outbox(
-                      event_type,aggregate_type,aggregate_id,payload,status,available_at
-                    ) values('contract.expired','contract',:contract,
+                      event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
+                    ) values('contract.expired','contract',:contract,:recipient,
                       cast(:payload as jsonb),'pending',now())
                 """),
                 {
                     "contract": row["id"],
+                    "recipient": recipient,
                     "payload": json.dumps({
                         "tenant_id": str(row["tenant_id"]),
                         "contract_id": str(row["id"]),
+                        "contract_number": contract_row["contract_number"],
+                        "title": contract_row["title"],
                         "effective_end": row["effective_end"].isoformat(),
                     }),
                 },
@@ -81,6 +100,22 @@ async def process_contract_lifecycle_batch() -> dict[str, int]:
         reminder_rows = reminders.mappings().all()
         reminder_count = len(reminder_rows)
         for row in reminder_rows:
+            profile = await connection.execute(
+                text("""
+                    select billing_email from public.corporate_profiles
+                    where tenant_id=:tenant and profile_status='active'
+                """),
+                {"tenant": row["tenant_id"]},
+            )
+            recipient = profile.scalar_one_or_none()
+            contract_info = await connection.execute(
+                text("""
+                    select contract_number,title from public.contracts
+                    where id=:contract and tenant_id=:tenant
+                """),
+                {"contract": row["id"], "tenant": row["tenant_id"]},
+            )
+            contract_row = contract_info.mappings().one()
             key = f"contract-renewal-reminder:{row['id']}:{row['effective_end']}"
             await connection.execute(
                 text("""
@@ -99,8 +134,8 @@ async def process_contract_lifecycle_batch() -> dict[str, int]:
             await connection.execute(
                 text("""
                     insert into public.notification_outbox(
-                      event_type,aggregate_type,aggregate_id,payload,status,available_at
-                    ) values('contract.renewal_reminder','contract',:contract,
+                      event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
+                    ) values('contract.renewal_reminder','contract',:contract,:recipient,
                       cast(:payload as jsonb),'pending',now())
                 """),
                 {
