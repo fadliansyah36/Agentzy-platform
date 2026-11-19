@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, RefreshCw, UserCheck, Clock3, Building2, Activity, Download, Paperclip } from 'lucide-react';
+import { ArrowLeft, RefreshCw, UserCheck, Clock3, Building2, Activity, Download, Paperclip, RotateCcw } from 'lucide-react';
 import {
   ApiError,
   listPartnershipProspects,
   listPartnershipProspectActivities,
   listPartnershipProspectAttachments,
   createPartnershipAttachmentDownload,
+  retryPartnershipAttachmentScan,
   updatePartnershipProspect,
   type PartnershipAttachment,
   type PartnershipProspect,
@@ -53,6 +54,7 @@ export function PartnershipLeadsView({
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [attachments, setAttachments] = useState<PartnershipAttachment[]>([]);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
+  const [retryingAttachment, setRetryingAttachment] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -88,6 +90,19 @@ export function PartnershipLeadsView({
       setError(err instanceof ApiError ? err.message : 'Daftar lampiran tidak dapat dimuat.');
     }
   }, [accessToken]);
+
+  const retryAttachmentScan = async (attachment: PartnershipAttachment) => {
+    setRetryingAttachment(attachment.id);
+    setError(null);
+    try {
+      await retryPartnershipAttachmentScan(accessToken, attachment.id);
+      if (selected) await loadAttachments(selected.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Pemindaian ulang tidak dapat dijadwalkan.');
+    } finally {
+      setRetryingAttachment(null);
+    }
+  };
 
   const downloadAttachment = async (attachment: PartnershipAttachment) => {
     if (!attachment.download_available) return;
@@ -226,9 +241,20 @@ export function PartnershipLeadsView({
                       <div className="min-w-0">
                         <p className="truncate text-[11px] font-semibold text-[#17324D]">{attachment.original_filename}</p>
                         <p className="mt-1 text-[10px] text-[#718391]">
-                          {(attachment.file_size / 1024).toFixed(0)} KB · {attachment.scan_status === 'clean' ? 'Lolos pemindaian' : attachment.scan_status === 'pending_scan' ? 'Menunggu pemindaian' : attachment.scan_status === 'infected' ? 'Terdeteksi berbahaya' : 'Ditolak'}
+                          {(attachment.file_size / 1024).toFixed(0)} KB · {attachment.scan_status === 'clean' ? 'Lolos pemindaian' : attachment.scan_status === 'pending_scan' ? (attachment.scan_state === 'dead_letter' ? 'Perlu pemindaian ulang' : 'Menunggu pemindaian') : attachment.scan_status === 'infected' ? 'Terdeteksi berbahaya' : 'Ditolak'} · {attachment.scan_attempts} percobaan
                         </p>
                       </div>
+                      {attachment.scan_state === 'dead_letter' && (
+                        <button
+                          type="button"
+                          onClick={() => void retryAttachmentScan(attachment)}
+                          disabled={retryingAttachment === attachment.id}
+                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-[#D8B58A] bg-white px-2.5 text-[10px] font-semibold text-[#8A4B08] disabled:opacity-40"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          {retryingAttachment === attachment.id ? 'Menjadwalkan…' : 'Retry scan'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => void downloadAttachment(attachment)}
