@@ -166,15 +166,28 @@ def _upload_token_for_key(idempotency_key: str) -> str:
 async def _verify_turnstile(token: str | None, request: Request) -> None:
     secret = settings.turnstile_secret_key
     if not secret:
+        if settings.turnstile_required:
+            raise HTTPException(
+                status_code=503,
+                detail="Verifikasi anti-bot belum dikonfigurasi pada layanan pengajuan publik.",
+            )
         return
     if not token:
         raise HTTPException(status_code=400, detail="Verifikasi anti-bot diperlukan.")
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        response = await client.post(
-            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-            data={"secret": secret, "response": token, "remoteip": _client_ip(request)},
-        )
-    if response.status_code != 200 or not response.json().get("success"):
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data={"secret": secret, "response": token, "remoteip": _client_ip(request)},
+            )
+            response.raise_for_status()
+            verification = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Layanan verifikasi anti-bot sementara tidak tersedia.",
+        ) from exc
+    if not verification.get("success"):
         raise HTTPException(status_code=400, detail="Verifikasi anti-bot gagal.")
 
 
