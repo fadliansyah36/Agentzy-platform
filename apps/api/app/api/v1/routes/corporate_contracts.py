@@ -1898,3 +1898,29 @@ async def get_contract_invoice(invoice_id: UUID, tenant_id: UUID, claims: dict =
         "line_amount": str(line["line_amount"]),
     } for line in lines_result.mappings().all()]
     return {"data": data}
+
+
+@router.get("/approval-delegations")
+async def list_approval_delegations(tenant_id: UUID, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.contracts.approve")
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select id,delegator_user_id,delegatee_user_id,starts_at,ends_at,
+                       reason,status,created_at,revoked_at
+                from public.contract_approval_delegations
+                where tenant_id=:tenant and (delegator_user_id=:actor or delegatee_user_id=:actor)
+                order by created_at desc
+            """),
+            {"tenant": tenant_id, "actor": actor},
+        )
+    return {"data": [{
+        **dict(row), "id": str(row["id"]),
+        "delegator_user_id": str(row["delegator_user_id"]),
+        "delegatee_user_id": str(row["delegatee_user_id"]),
+        "starts_at": row["starts_at"].isoformat(),
+        "ends_at": row["ends_at"].isoformat(),
+        "created_at": row["created_at"].isoformat(),
+        "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
+    } for row in result.mappings().all()]}
