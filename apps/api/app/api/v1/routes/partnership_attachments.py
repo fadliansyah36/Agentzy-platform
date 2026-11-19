@@ -57,7 +57,7 @@ async def list_prospect_attachments(
         result = await connection.execute(
             text("""
                 select a.id,a.original_filename,a.content_type,a.file_size,a.sha256,
-                       a.scan_status,a.uploaded_at,a.scanned_at
+                       a.scan_status,a.scan_attempts,a.scan_result,a.uploaded_at,a.scanned_at
                 from public.public_partnership_attachments a
                 join public.crm_prospects p on p.application_id=a.application_id
                 where p.id=:prospect_id
@@ -68,6 +68,7 @@ async def list_prospect_attachments(
         rows = [dict(row) for row in result.mappings().all()]
     for row in rows:
         row["id"] = str(row["id"])
+        row["scan_state"] = (row.get("scan_result") or {}).get("state", "queued")
         row["uploaded_at"] = row["uploaded_at"].isoformat()
         row["scanned_at"] = row["scanned_at"].isoformat() if row["scanned_at"] else None
         row["download_available"] = row["scan_status"] == "clean"
