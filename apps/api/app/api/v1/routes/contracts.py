@@ -38,6 +38,7 @@ class ContractCreate(BaseModel):
     organization_id: UUID | None = None
     branch_id: UUID | None = None
     parent_contract_id: UUID | None = None
+    provider_profile_id: UUID | None = None
     contract_number: str = Field(min_length=3, max_length=80, pattern=r"^[A-Za-z0-9._/-]+$")
     title: str = Field(min_length=3, max_length=240)
     contract_type: Literal["master", "statement_of_work", "amendment"] = "master"
@@ -174,6 +175,13 @@ async def create_contract(
                 )
                 if not valid.scalar_one():
                     raise HTTPException(status_code=422, detail=f"{table} tidak dimiliki tenant ini.")
+        if payload.provider_profile_id:
+            provider = await validation_connection.execute(
+                text("select exists(select 1 from public.provider_profiles where id=:id and tenant_id=:tenant and status='active')"),
+                {"id": payload.provider_profile_id, "tenant": payload.tenant_id},
+            )
+            if not provider.scalar_one():
+                raise HTTPException(status_code=422, detail="Provider profile tidak aktif atau bukan milik tenant.")
         if payload.parent_contract_id:
             parent = await validation_connection.execute(
                 text("select exists(select 1 from public.contracts where id=:id and tenant_id=:tenant and status in ('approved','active'))"),
@@ -213,11 +221,12 @@ async def create_contract(
                 insert into public.contracts(
                   tenant_id,contract_number,title,contract_type,status,currency,
                   effective_start,effective_end,renewal_at,organization_id,branch_id,
-                  parent_contract_id,idempotency_key,idempotency_fingerprint,created_by,updated_by
+                  parent_contract_id,provider_profile_id,idempotency_key,idempotency_fingerprint,
+                  created_by,updated_by
                 ) values(
                   :tenant_id,:number,:title,:type,'draft',:currency,
                   :start,:end,:renewal,:organization_id,:branch_id,:parent_contract_id,
-                  :key,:fingerprint,:actor,:actor
+                  :provider_profile_id,:key,:fingerprint,:actor,:actor
                 ) returning id
             """),
             {
@@ -232,6 +241,7 @@ async def create_contract(
                 "organization_id": payload.organization_id,
                 "branch_id": payload.branch_id,
                 "parent_contract_id": payload.parent_contract_id,
+                "provider_profile_id": payload.provider_profile_id,
                 "key": idempotency_key,
                 "fingerprint": fingerprint,
                 "actor": actor,
