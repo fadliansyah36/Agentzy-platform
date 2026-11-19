@@ -5,6 +5,7 @@ import { RefreshCw, ReceiptText } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import { createCorporateInvoice, getCorporateInvoice, getEffectiveContractEntitlements, issueCorporateInvoice, listCorporateContracts, listCorporateInvoices, type ContractInvoice, type CorporateContract, type ContractEntitlement } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader } from '../../components/data-display/CorporateDataDisplay';
+import { NetworkStatusBanner } from '../../components/NetworkStatusBanner';
 
 const inputClass = 'h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
 const buttonClass = 'inline-flex h-10 items-center gap-2 rounded-[9px] bg-[#17324D] px-4 text-xs font-semibold text-white disabled:opacity-50';
@@ -93,6 +94,7 @@ export function InvoiceCenterView({ tenantId, onBack }: { tenantId: string; onBa
 
   return <div className="space-y-5">
     <CorporatePageHeader title="Invoice Center" subtitle="Invoice kontrak, item tagihan, penerbitan dan due date melalui FastAPI" onBack={onBack}
+    <NetworkStatusBanner stale={Boolean(error && !loading)} />
       actions={<button className={secondaryClass} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
