@@ -166,28 +166,28 @@ export function AIWorkforceAccessView({
           </label>
           <label className="space-y-1 text-xs font-semibold text-[#526675]">
             Organisasi
-            <select value={inviteScope.organization_id} onChange={(event) => setInviteScope({ organization_id: event.target.value, organization_unit_id: '', branch_id: '', department_id: '' })} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D]">
+            <select value={inviteScope.organization_id ?? ''} onChange={(event) => setInviteScope({ organization_id: event.target.value, organization_unit_id: '', branch_id: '', department_id: '' })} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D]">
               <option value="">Seluruh tenant</option>
               {activeOrganizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label className="space-y-1 text-xs font-semibold text-[#526675]">
             Unit organisasi
-            <select value={inviteScope.organization_unit_id} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, organization_unit_id: event.target.value, branch_id: '', department_id: '' }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
+            <select value={inviteScope.organization_unit_id ?? ''} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, organization_unit_id: event.target.value, branch_id: '', department_id: '' }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
               <option value="">Semua unit</option>
               {activeUnits.filter((item) => item.organization_id === inviteScope.organization_id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label className="space-y-1 text-xs font-semibold text-[#526675]">
             Cabang
-            <select value={inviteScope.branch_id} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, branch_id: event.target.value, department_id: '' }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
+            <select value={inviteScope.branch_id ?? ''} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, branch_id: event.target.value, department_id: '' }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
               <option value="">Semua cabang</option>
               {activeBranches.filter((item) => item.organization_id === inviteScope.organization_id && item.organization_unit_id === (inviteScope.organization_unit_id || null)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label className="space-y-1 text-xs font-semibold text-[#526675] md:col-span-2">
             Departemen
-            <select value={inviteScope.department_id} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, department_id: event.target.value }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
+            <select value={inviteScope.department_id ?? ''} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, department_id: event.target.value }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
               <option value="">Semua departemen</option>
               {activeDepartments.filter((item) => item.organization_id === inviteScope.organization_id && item.branch_id === (inviteScope.branch_id || null)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
