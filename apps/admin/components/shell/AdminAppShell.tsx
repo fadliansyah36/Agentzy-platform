@@ -107,6 +107,7 @@ export function AdminAppShell({
         items: [
           { id: 'tenants', label: '2. Tenant Directory', icon: Building2 },
           { id: 'onboarding', label: '3. Onboarding & Provider', icon: Rocket },
+          { id: 'partnerships', label: 'Partnership Lead Inbox', icon: Building2 },
           { id: 'master-data', label: '4. Master Data (CRUD)', icon: Database },
           { id: 'subscriptions', label: '5. Kontrak & Entitlement', icon: Layers },
           { id: 'organization', label: '6. Organisasi & Pengguna', icon: Network },
@@ -178,6 +179,7 @@ export function AdminAppShell({
     'global-analytics': 'platform.audit.read',
     tenants: 'platform.tenants.read',
     onboarding: 'platform.tenants.manage',
+    partnerships: 'platform.partnership.read',
     'master-data': 'platform.operations.manage',
     subscriptions: 'platform.finance.read',
     organization: 'platform.roles.read',
