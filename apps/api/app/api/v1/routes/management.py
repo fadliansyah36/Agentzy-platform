@@ -805,6 +805,13 @@ async def list_permission_registry(
     _require_aal2(claims)
     if not await _has_platform_permission(session, actor, "platform.roles.read"):
         raise HTTPException(status_code=403, detail="Missing platform.roles.read permission.")
+    await _authorize_platform_resource(
+        session,
+        user_id=actor,
+        permission="platform.roles.read",
+        resource={"id": "permission_registry", "scope_type": "platform"},
+        request_id=_request_id(request),
+    )
     cursor_clause = ""
     params = {"limit": limit + 1}
     if cursor:
@@ -953,6 +960,13 @@ async def list_role_templates(
     is_platform_reader = await _has_platform_permission(session, user_id, "platform.roles.read")
     if is_platform_reader:
         _require_aal2(claims)
+        await _authorize_platform_resource(
+            session,
+            user_id=user_id,
+            permission="platform.roles.read",
+            resource={"id": "role_catalogue", "scope_type": "platform"},
+            request_id=_request_id(request),
+        )
     else:
         memberships = await session.execute(
             text("""
@@ -1120,6 +1134,13 @@ async def list_platform_tenants(
     _require_aal2(claims)
     if not await _has_platform_permission(session, user_id, "platform.tenants.read"):
         raise HTTPException(status_code=403, detail="Missing platform.tenants.read permission.")
+    await _authorize_platform_resource(
+        session,
+        user_id=user_id,
+        permission="platform.tenants.read",
+        resource={"id": "platform_tenant_directory", "scope_type": "platform"},
+        request_id=_request_id(request),
+    )
     params = {"limit": limit + 1}
     cursor_clause = ""
     if cursor:
