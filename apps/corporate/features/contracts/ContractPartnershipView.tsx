@@ -23,6 +23,7 @@ import {
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
 import { AIWorkerEntitlementPanel } from './AIWorkerEntitlementPanel';
+import { NetworkStatusBanner } from '../../components/NetworkStatusBanner';
 
 type Tab = 'profile' | 'contracts' | 'sow' | 'sla' | 'approvals' | 'documents' | 'entitlements';
 const field = 'h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
@@ -270,6 +271,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
 
   return <div className="space-y-5">
     <CorporatePageHeader title="Kontrak & Kerja Sama" subtitle="Corporate profile, kontrak, SOW, amendment, approval, dokumen, SLA, entitlement dan lifecycle" onBack={onBack}
+    <NetworkStatusBanner stale={Boolean(error && !loading)} />
       actions={<button className={secondary} onClick={() => void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
     <CorporateSegmentedTabs tabs={[
       {id:'profile',label:'Corporate Profile'},{id:'contracts',label:'Kontrak'},
