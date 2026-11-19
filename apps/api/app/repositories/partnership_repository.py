@@ -183,9 +183,6 @@ async def write_application_submission_audit(
     *,
     application_id: UUID,
     request_context: dict,
-    payload: dict,
-    reference_code: str,
-    email_hash: str,
     audit_metadata: str,
 ) -> None:
     await connection.execute(
