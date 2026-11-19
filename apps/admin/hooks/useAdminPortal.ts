@@ -55,6 +55,7 @@ import {
   revokeBreakGlass,
   reviewBreakGlass,
   listAuditLogs,
+  listMySessions,
   exportAuditLogs,
   listSecurityAlerts,
   acknowledgeSecurityAlert as acknowledgeSecurityAlertApi,
@@ -324,7 +325,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   );
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogRecord[]>(initial.webhookLogs);
   const [mfaEnforced] = useState<boolean | null>(null);
-  const [activeSessionsCount] = useState<number | null>(null);
+  const [activeSessionsCount, setActiveSessionsCount] = useState<number | null>(null);
   const [ipAllowlistEnabled] = useState<boolean | null>(null);
   const [sessionTtlMinutes] = useState<number | null>(null);
   const [breakGlassRequests, setBreakGlassRequests] = useState<BreakGlassRequestRecord[]>([]);
@@ -518,6 +519,11 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     const accessToken = auth.session?.access_token;
     if (!accessToken || auth.aal !== 'aal2') return;
     let active = true;
+    void listMySessions(accessToken).then((result) => {
+      if (active) setActiveSessionsCount(result.meta.active_count);
+    }).catch((error) => {
+      if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat sesi autentikasi.');
+    });
     if (platformPermissions.includes('platform.security.manage')) {
       void listBreakGlassRequests(accessToken).then(({ data }) => {
         if (!active) return;
