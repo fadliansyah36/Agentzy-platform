@@ -12,7 +12,8 @@ from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.pagination import PageMeta, PageResponse, decode_time_id_cursor, encode_time_id_cursor
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
-from app.db.session import engine, user_session
+from app.db.session import engine
+from app.services.contract_entitlement_service import assert_membership_entitlement_capacity, user_session
 from app.services.tenant_structure_service import ensure_tenant_owner_retained
 from app.services.tenant_structure_service import (
     set_organization_unit_status as set_organization_unit_status_service,
@@ -1622,6 +1623,9 @@ async def assign_membership_role(
         target = membership.mappings().first()
         if target is None:
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        await assert_membership_entitlement_capacity(
+            session, tenant_id, role_key, exclude_membership_id=membership_id
+        )
         if context is not None:
             authorize_object(
                 context,
@@ -1768,6 +1772,9 @@ async def replace_membership_role(
         "branch": "branch_id",
         "department": "department_id",
     }
+    await assert_membership_entitlement_capacity(
+        session, tenant_id, role_key, exclude_membership_id=membership_id
+    )
     if payload.scope_type == "tenant" and payload.scope_id is not None:
         raise HTTPException(status_code=422, detail="Tenant scope tidak memerlukan scope_id.")
     if payload.scope_type != "tenant" and payload.scope_id is None:
