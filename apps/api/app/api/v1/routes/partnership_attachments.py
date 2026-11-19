@@ -157,3 +157,83 @@ async def create_attachment_download(
         },
         "meta": {"request_id": getattr(request.state, "request_id", None)},
     }
+
+
+@router.post("/partnership/attachments/{attachment_id}/retry-scan")
+async def retry_attachment_scan(
+    attachment_id: UUID,
+    request: Request,
+    claims: dict = claims_dependency,
+    session: AsyncSession = session_dependency,
+):
+    actor = UUID(claims["sub"])
+    if claims.get("aal") != "aal2":
+        raise HTTPException(status_code=403, detail="AAL2 is required for scanner recovery.")
+    await authorize_platform_action(
+        session,
+        user_id=actor,
+        permission_key="platform.partnership.manage",
+        resource_type="platform.partnership",
+        action="retry_scan",
+        resource={"id": str(attachment_id)},
+        request_id=getattr(request.state, "request_id", None),
+        request_context={
+            "correlation_id": getattr(request.state, "correlation_id", None),
+            "trace_id": getattr(request.state, "trace_id", None),
+        },
+    )
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                select id,scan_status,scan_result,scan_attempts
+                from public.public_partnership_attachments
+                where id=:id
+                for update
+            """),
+            {"id": attachment_id},
+        )
+        row = result.mappings().first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Lampiran tidak ditemukan.")
+        if (
+            row["scan_status"] != "pending_scan"
+            or (row["scan_result"] or {}).get("state") != "dead_letter"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Hanya pemindaian dead-letter yang dapat dimasukkan kembali ke antrean.",
+            )
+        await connection.execute(
+            text("""
+                update public.public_partnership_attachments
+                set scan_attempts=0,
+                    scan_result=jsonb_build_object(
+                      'state','retrying',
+                      'retry_after',now()::text,
+                      'manual_retry_by',:actor
+                    )
+                where id=:id
+            """),
+            {"id": attachment_id, "actor": str(actor)},
+        )
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(
+                  :actor,'partnership.attachment.scan_retried',
+                  'partnership_attachment',:id,:request_id,
+                  jsonb_build_object('previous_attempts',:attempts)
+                )
+            """),
+            {
+                "actor": actor,
+                "id": str(attachment_id),
+                "request_id": getattr(request.state, "request_id", None),
+                "attempts": row["scan_attempts"],
+            },
+        )
+    return {
+        "data": {"attachment_id": str(attachment_id), "scan_status": "pending_scan", "scan_state": "retrying"},
+        "meta": {"request_id": getattr(request.state, "request_id", None)},
+    }
