@@ -26,6 +26,7 @@ export function OrganizationUsersView({
   onReplaceMembershipRole,
   onActivateMembership,
   onSuspendMembership,
+  onReassignMembershipHierarchy,
   onDeleteUser,
   onBack,
 }: {
@@ -36,6 +37,7 @@ export function OrganizationUsersView({
   onReplaceMembershipRole: (membershipId: string, tenantId: string, roleKey: string) => Promise<void>;
   onActivateMembership: (membershipId: string, tenantId: string) => Promise<void>;
   onSuspendMembership: (membershipId: string, tenantId: string) => Promise<void>;
+  onReassignMembershipHierarchy: (membershipId: string, tenantId: string, scopeKey: string, currentOrganizationId?: string | null) => Promise<void>;
   onOpenOrgUnitModal: (unit?: OrgUnitRecord) => void;
   onDeleteOrgUnit: (id: string) => void;
   onOpenUserModal: (user?: PlatformUserRecord) => void;
@@ -55,6 +57,14 @@ export function OrganizationUsersView({
 
   const branches = visibleUnits.filter((u) => u.unitType === 'Cabang / Regional');
   const departments = visibleUnits.filter((u) => u.unitType === 'Departemen');
+
+  const membershipScopeValue = (user: PlatformUserRecord) => user.departmentId
+    ? `department:${user.departmentId}`
+    : user.branchId
+      ? `branch:${user.branchId}`
+      : user.organizationId
+        ? `organization:${user.organizationId}`
+        : 'tenant';
 
   return (
     <div className="space-y-5">
@@ -260,6 +270,26 @@ export function OrganizationUsersView({
                     <option value="" disabled>Belum ada role</option>
                     {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
                   </select>
+                  <select
+                    value={membershipScopeValue(u)}
+                    disabled={u.status === 'Dicabut'}
+                    onChange={(event) => void onReassignMembershipHierarchy(
+                      u.id, u.tenantId, event.target.value, u.organizationId
+                    )}
+                    className="h-9 w-full rounded-lg border border-[#D8E3E9] bg-white px-2 text-xs text-[#17324D]"
+                    aria-label={`Assignment hierarchy ${u.name}`}
+                  >
+                    <option value="tenant">Seluruh Tenant</option>
+                    {u.organizationId && <option value={`organization:${u.organizationId}`}>Organisasi saat ini</option>}
+                    {orgUnits.filter((unit) => unit.tenantId === u.tenantId).map((unit) => (
+                      <option
+                        key={`${unit.unitType}:${unit.id}`}
+                        value={unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
+                      >
+                        {unit.unitType === 'Departemen' ? 'Departemen' : 'Cabang'} · {unit.name}
+                      </option>
+                    ))}
+                  </select>
                   <div className="flex justify-end gap-1.5">
                     {u.status === 'Suspended' && <button type="button" onClick={() => void onActivateMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-3 text-xs font-semibold text-[#247A55]">Aktifkan</button>}
                     {u.status === 'Aktif' && <button type="button" onClick={() => void onSuspendMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-3 text-xs font-semibold text-[#A96816]">Tangguhkan</button>}
@@ -322,6 +352,26 @@ export function OrganizationUsersView({
                             className="h-8 max-w-[180px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D]">
                             <option value="" disabled>Belum ada role</option>
                     {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
+                          </select>
+                          <select
+                            value={membershipScopeValue(u)}
+                            disabled={u.status === 'Dicabut'}
+                            onChange={(event) => void onReassignMembershipHierarchy(
+                              u.id, u.tenantId, event.target.value, u.organizationId
+                            )}
+                            className="h-8 max-w-[180px] rounded-lg border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D]"
+                            aria-label={`Assignment hierarchy ${u.name}`}
+                          >
+                            <option value="tenant">Seluruh Tenant</option>
+                            {u.organizationId && <option value={`organization:${u.organizationId}`}>Organisasi saat ini</option>}
+                            {orgUnits.filter((unit) => unit.tenantId === u.tenantId).map((unit) => (
+                              <option
+                                key={`${unit.unitType}:${unit.id}`}
+                                value={unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
+                              >
+                                {unit.unitType === 'Departemen' ? 'Departemen' : 'Cabang'} · {unit.name}
+                              </option>
+                            ))}
                           </select>
                           <div className="flex justify-end gap-1.5">
                             {u.status === 'Suspended' && <button type="button" onClick={() => void onActivateMembership(u.id, u.tenantId)} className="h-8 rounded-lg border border-[#B8C9D3] px-2.5 text-[11px] font-semibold text-[#247A55]">Aktifkan</button>}
