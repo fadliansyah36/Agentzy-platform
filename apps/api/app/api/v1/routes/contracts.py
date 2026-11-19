@@ -128,7 +128,10 @@ async def _audit_event(
         text("""
             insert into public.audit_logs(
               tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
-            ) values(:tenant_id,:actor,:event_type,'contract',:contract_id,:request_id,cast(:metadata as jsonb))
+            ) values(
+              :tenant_id,:actor,:event_type,'contract',:contract_id,:request_id,
+              cast(:metadata as jsonb)
+            )
         """),
         {
             "tenant_id": tenant_id,
@@ -430,7 +433,8 @@ async def submit_contract_review(
             )
         await connection.execute(
             text("""
-                update public.contracts set status='review_pending',updated_by=:actor,updated_at=now()
+                update public.contracts
+                set status='review_pending',updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant_id
             """),
             {"id": contract_id, "tenant_id": tenant_id, "actor": actor},
@@ -466,7 +470,8 @@ async def decide_contract_approval(
             text("""
                 select c.status,c.current_version,a.id as approval_id
                 from public.contracts c
-                join public.contract_versions v on v.contract_id=c.id and v.version_number=c.current_version
+                join public.contract_versions v
+                  on v.contract_id=c.id and v.version_number=c.current_version
                 join public.contract_approvals a on a.contract_version_id=v.id
                 where c.id=:id and c.tenant_id=:tenant_id
                   and a.approver_user_id=:actor and a.status='pending'
