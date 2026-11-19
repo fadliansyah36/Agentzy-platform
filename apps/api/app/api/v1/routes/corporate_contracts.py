@@ -2312,9 +2312,12 @@ async def update_provider_profile(
 
 @router.patch("/provider-profiles/{provider_id}/status")
 async def update_provider_profile_status(
-    provider_id: UUID, tenant_id: UUID, status: str = Query(pattern="^(active|suspended|archived)$"),
+    provider_id: UUID,
+    tenant_id: UUID,
+    request: Request,
+    status: str = Query(pattern="^(active|suspended|archived)$"),
     reason: str = Query(min_length=3, max_length=2000),
-    request: Request = None, claims: dict = claims_dependency,
+    claims: dict = claims_dependency,
 ):
     actor = UUID(claims["sub"])
     await require_tenant_permission(actor, tenant_id, "corporate.providers.manage")
