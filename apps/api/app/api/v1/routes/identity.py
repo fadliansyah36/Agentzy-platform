@@ -250,7 +250,7 @@ async def revoke_sessions(request: Request, claims: dict = claims_dependency):
                 insert into public.revoked_sessions(
                    session_id,user_id,revoked_at,expires_at,reason,request_id
                  )
-                select s.id,s.user_id,now(),coalesce(s.not_after,now()+interval '24 hours'),
+                select s.id,s.user_id,now(),coalesce(s.not_after,'infinity'::timestamptz),
                        'user_requested_logout',:request_id
                 from auth.sessions s
                 where s.user_id=:user_id
