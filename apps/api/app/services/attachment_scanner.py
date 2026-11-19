@@ -56,6 +56,7 @@ async def _claim_batch(limit: int = 10) -> list[dict]:
                 select id,application_id,object_path,sha256,content_type,file_size
                 from public.public_partnership_attachments
                 where scan_status='pending_scan'
+                  and coalesce(scan_result->>'state','') <> 'dead_letter'
                   and (
                     scan_result->>'state' is distinct from 'scanning'
                     or coalesce((scan_result->>'started_at')::timestamptz,
@@ -74,13 +75,18 @@ async def _claim_batch(limit: int = 10) -> list[dict]:
             await connection.execute(
                 text("""
                     update public.public_partnership_attachments
-                    set scan_result=cast(:result as jsonb)
+                    set scan_attempts=scan_attempts+1,
+                        scan_result=cast(:result as jsonb)
                     where id=:id and scan_status='pending_scan'
                 """),
                 {
                     "id": row["id"],
                     "result": json.dumps(
-                        {"state": "scanning", "started_at": datetime.now(UTC).isoformat()}
+                        {
+                            "state": "scanning",
+                            "started_at": datetime.now(UTC).isoformat(),
+                            "attempt_count": int(row.get("scan_attempts") or 0) + 1,
+                        }
                     ),
                 },
             )
@@ -141,9 +147,15 @@ async def _defer(attachment_id, error_code: str) -> None:
             text("""
                 update public.public_partnership_attachments
                 set scan_result=jsonb_build_object(
-                    'state','retrying',
+                    'state',case when scan_attempts >= 8 then 'dead_letter' else 'retrying' end,
                     'error_code',:error_code,
-                    'retry_after',(now() + interval '1 minute')::text
+                    'attempt_count',scan_attempts,
+                    'retry_after',case
+                      when scan_attempts >= 8 then null
+                      else (now() + make_interval(
+                        secs => least(21600, power(2,scan_attempts)::integer * 60)
+                      ))::text
+                    end
                 )
                 where id=:id and scan_status='pending_scan'
             """),
