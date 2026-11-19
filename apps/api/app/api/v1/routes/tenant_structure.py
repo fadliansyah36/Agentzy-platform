@@ -481,6 +481,24 @@ async def create_organization_unit(
         )
     actor = UUID(claims["sub"])
     async with engine.begin() as connection:
+        if payload.parent_unit_id is not None:
+            parent = await connection.execute(
+                text("""
+                    select 1 from public.organization_units
+                    where id=:parent_id and tenant_id=:tenant_id
+                      and organization_id=:organization_id and status='active'
+                """),
+                {
+                    "parent_id": payload.parent_unit_id,
+                    "tenant_id": tenant_id,
+                    "organization_id": payload.organization_id,
+                },
+            )
+            if parent.scalar_one_or_none() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Parent organization unit tidak aktif atau berada di luar organisasi.",
+                )
         reservation = await _reserve_command(
             connection,
             request,
@@ -2419,7 +2437,7 @@ async def update_organization_unit(
                     with recursive descendants(id) as (
                       select id from public.organization_units
                       where tenant_id=:tenant_id and parent_unit_id=:unit_id
-                      union all
+                      union
                       select child.id
                       from public.organization_units child
                       join descendants parent on child.parent_unit_id=parent.id
