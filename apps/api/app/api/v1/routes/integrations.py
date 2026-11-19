@@ -74,6 +74,7 @@ async def _require_tenant_integration_permission(user_id: UUID, tenant_id: UUID)
                   join public.role_permissions rp on rp.role_id=r.id
                   where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active'
                     and rp.permission_key='corporate.integrations.manage'
+                    and mr.scope_type='tenant' and mr.scope_id is null
                     and (mr.valid_from is null or mr.valid_from<=now())
                     and (mr.valid_until is null or mr.valid_until>now())
                     and (r.tenant_id is null or r.tenant_id=m.tenant_id)
