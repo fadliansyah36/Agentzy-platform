@@ -1,123 +1,35 @@
-"""Private quarantine malware scanning via a configured ClamAV daemon."""
+"""Application orchestration for private partnership attachment scanning."""
 
 import asyncio
 import hashlib
-import json
-import struct
 from datetime import UTC, datetime
-from urllib.parse import quote
 
-import httpx
 import structlog
-from sqlalchemy import text
 
-from app.core.config import get_settings
-from app.db.session import engine
+from app.adapters.clamav import scan_bytes
+from app.adapters.supabase_storage import download_quarantined_object
+from app.repositories.attachment_repository import (
+    claim_pending_scan_batch,
+    defer_attachment_scan,
+    finish_attachment_scan,
+)
 
 logger = structlog.get_logger()
-settings = get_settings()
-BUCKET = "partnership-quarantine"
-CHUNK_SIZE = 64 * 1024
-
-
-async def _clamav_scan(content: bytes) -> tuple[str, str]:
-    if not settings.clamav_host:
-        raise RuntimeError("CLAMAV_NOT_CONFIGURED")
-    reader, writer = await asyncio.wait_for(
-        asyncio.open_connection(settings.clamav_host, settings.clamav_port),
-        timeout=settings.clamav_timeout_seconds,
-    )
-    try:
-        writer.write(b"zINSTREAM\0")
-        for offset in range(0, len(content), CHUNK_SIZE):
-            chunk = content[offset : offset + CHUNK_SIZE]
-            writer.write(struct.pack("!I", len(chunk)))
-            writer.write(chunk)
-        writer.write(struct.pack("!I", 0))
-        await writer.drain()
-        response = await asyncio.wait_for(
-            reader.readuntil(b"\0"), timeout=settings.clamav_timeout_seconds
-        )
-        message = response.rstrip(b"\0").decode("utf-8", errors="replace")
-        if message.endswith(" OK"):
-            return "clean", message
-        if " FOUND" in message:
-            return "infected", message[:500]
-        raise RuntimeError("CLAMAV_INVALID_RESPONSE")
-    finally:
-        writer.close()
-        await writer.wait_closed()
-
-
-async def _claim_batch(limit: int = 10) -> list[dict]:
-    async with engine.begin() as connection:
-        result = await connection.execute(
-            text("""
-                select id,application_id,object_path,sha256,content_type,file_size,scan_attempts
-                from public.public_partnership_attachments
-                where scan_status='pending_scan'
-                  and coalesce(scan_result->>'state','') <> 'dead_letter'
-                  and (
-                    scan_result->>'state' is distinct from 'scanning'
-                    or coalesce((scan_result->>'started_at')::timestamptz,
-                                now() - interval '1 hour') < now() - interval '10 minutes'
-                  )
-                  and coalesce((scan_result->>'retry_after')::timestamptz,
-                               '-infinity'::timestamptz) <= now()
-                order by uploaded_at
-                limit :limit
-                for update skip locked
-            """),
-            {"limit": limit},
-        )
-        rows = [dict(row) for row in result.mappings().all()]
-        for row in rows:
-            await connection.execute(
-                text("""
-                    update public.public_partnership_attachments
-                    set scan_attempts=scan_attempts+1,
-                        scan_result=cast(:result as jsonb)
-                    where id=:id and scan_status='pending_scan'
-                """),
-                {
-                    "id": row["id"],
-                    "result": json.dumps(
-                        {
-                            "state": "scanning",
-                            "started_at": datetime.now(UTC).isoformat(),
-                            "attempt_count": int(row.get("scan_attempts") or 0) + 1,
-                        }
-                    ),
-                },
-            )
-        return rows
 
 
 async def _scan_one(row: dict) -> None:
-    if not settings.supabase_service_role_key:
-        raise RuntimeError("SUPABASE_STORAGE_CREDENTIALS_NOT_CONFIGURED")
-    object_path = quote(str(row["object_path"]), safe="/")
-    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{BUCKET}/{object_path}"
-    headers = {
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
-        "apikey": settings.supabase_service_role_key,
-    }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(url, headers=headers)
-        response.raise_for_status()
-        content = response.content
-
+    content = await download_quarantined_object(str(row["object_path"]))
     content_hash = hashlib.sha256(content).hexdigest()
     if len(content) != int(row["file_size"]) or content_hash != row["sha256"]:
-        await _finish(
+        await finish_attachment_scan(
             row["id"],
             "rejected",
             {"state": "rejected", "reason": "stored_object_integrity_mismatch"},
         )
         return
 
-    verdict, detail = await _clamav_scan(content)
-    await _finish(
+    verdict, detail = await scan_bytes(content)
+    await finish_attachment_scan(
         row["id"],
         verdict,
         {
@@ -129,42 +41,8 @@ async def _scan_one(row: dict) -> None:
     )
 
 
-async def _finish(attachment_id, status: str, result: dict) -> None:
-    async with engine.begin() as connection:
-        await connection.execute(
-            text("""
-                update public.public_partnership_attachments
-                set scan_status=:status,scanned_at=now(),scan_result=cast(:result as jsonb)
-                where id=:id and scan_status='pending_scan'
-            """),
-            {"id": attachment_id, "status": status, "result": json.dumps(result)},
-        )
-
-
-async def _defer(attachment_id, error_code: str) -> None:
-    async with engine.begin() as connection:
-        await connection.execute(
-            text("""
-                update public.public_partnership_attachments
-                set scan_result=jsonb_build_object(
-                    'state',case when scan_attempts >= 8 then 'dead_letter' else 'retrying' end,
-                    'error_code',:error_code,
-                    'attempt_count',scan_attempts,
-                    'retry_after',case
-                      when scan_attempts >= 8 then null
-                      else (now() + make_interval(
-                        secs => least(21600, power(2,scan_attempts)::integer * 60)
-                      ))::text
-                    end
-                )
-                where id=:id and scan_status='pending_scan'
-            """),
-            {"id": attachment_id, "error_code": error_code},
-        )
-
-
 async def dispatch_attachment_scan_batch() -> int:
-    rows = await _claim_batch()
+    rows = await claim_pending_scan_batch()
     for row in rows:
         try:
             await _scan_one(row)
@@ -176,7 +54,7 @@ async def dispatch_attachment_scan_batch() -> int:
                 if str(exc).startswith(("CLAMAV_", "SUPABASE_"))
                 else "ATTACHMENT_SCAN_UNAVAILABLE"
             )
-            await _defer(row["id"], error_code)
+            await defer_attachment_scan(row["id"], error_code)
             logger.warning(
                 "partnership_attachment_scan_deferred",
                 attachment_id=str(row["id"]),
