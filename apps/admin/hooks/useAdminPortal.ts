@@ -24,6 +24,13 @@ import {
   listOrganizationUnits,
   listBranches,
   listDepartments,
+  listTenantOrganizations,
+  createBranch,
+  createDepartment,
+  updateBranch,
+  updateDepartment,
+  archiveBranch,
+  archiveDepartment,
   updateTenant as updateTenantApi,
   archiveTenant as archiveTenantApi,
   createAgentzyRole,
@@ -123,6 +130,53 @@ export type AdminModalState =
   | { type: 'audit-detail'; logId: string }
   | { type: 'incident-crud' }
   | { type: 'vendor-crud'; vendor?: VendorSubprocessorRecord };
+
+async function loadAdminTenantHierarchy(accessToken: string, tenantId: string): Promise<OrgUnitRecord[]> {
+  const [unitRows, branchRows, departmentRows] = await Promise.all([
+    listOrganizationUnits(accessToken, tenantId),
+    listBranches(accessToken, tenantId),
+    listDepartments(accessToken, tenantId),
+  ]);
+  const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
+  const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
+  return [
+    ...branchRows.map((item) => ({
+      id: item.id,
+      tenantId,
+      name: item.name,
+      unitType: 'Cabang / Regional' as const,
+      parentName: item.organization_unit_id ? unitNames.get(item.organization_unit_id) ?? null : null,
+      headName: null,
+      memberCount: null,
+      status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+      code: item.code,
+      organizationId: item.organization_id,
+      organizationUnitId: item.organization_unit_id,
+      branchId: item.id,
+      departmentId: null,
+    })),
+    ...departmentRows.map((item) => ({
+      id: item.id,
+      tenantId,
+      name: item.name,
+      unitType: 'Departemen' as const,
+      parentName: item.branch_id
+        ? branchNames.get(item.branch_id) ?? null
+        : item.parent_department_id
+          ? departmentRows.find((parent) => parent.id === item.parent_department_id)?.name ?? null
+          : null,
+      headName: null,
+      memberCount: null,
+      status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
+      code: item.code,
+      organizationId: item.organization_id,
+      organizationUnitId: null,
+      branchId: item.branch_id,
+      departmentId: item.id,
+      parentDepartmentId: item.parent_department_id,
+    })),
+  ];
+}
 
 export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
   const initial = useMemo(() => adminPortalService.getInitialCollections(), []);
@@ -380,44 +434,8 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
       tenants.length === 0
     ) return;
     let active = true;
-    void Promise.all(tenants.map(async (tenant) => {
-      const [unitRows, branchRows, departmentRows] = await Promise.all([
-        listOrganizationUnits(accessToken, tenant.id),
-        listBranches(accessToken, tenant.id),
-        listDepartments(accessToken, tenant.id),
-      ]);
-      const unitNames = new Map(unitRows.map((item) => [item.id, item.name]));
-      const branchNames = new Map(branchRows.map((item) => [item.id, item.name]));
-      const organizationUnits: OrgUnitRecord[] = [
-        ...branchRows.map((item) => ({
-          id: item.id,
-          tenantId: tenant.id,
-          name: item.name,
-          unitType: 'Cabang / Regional' as const,
-          parentName: item.organization_unit_id
-            ? unitNames.get(item.organization_unit_id) ?? null
-            : null,
-          headName: null,
-          memberCount: null,
-          status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
-        })),
-        ...departmentRows.map((item) => ({
-          id: item.id,
-          tenantId: tenant.id,
-          name: item.name,
-          unitType: 'Departemen' as const,
-          parentName: item.branch_id
-            ? branchNames.get(item.branch_id) ?? null
-            : item.parent_department_id
-              ? departmentRows.find((parent) => parent.id === item.parent_department_id)?.name ?? null
-              : null,
-          headName: null,
-          memberCount: null,
-          status: item.status === 'active' ? 'Aktif' as const : 'Nonaktif' as const,
-        })),
-      ];
-      return organizationUnits;
-    })).then((rows) => {
+    void Promise.all(tenants.map((tenant) => loadAdminTenantHierarchy(accessToken, tenant.id)))
+      .then((rows) => {
       if (active) setOrgUnits(rows.flat());
     }).catch((error) => {
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat hierarchy tenant dari FastAPI.');
