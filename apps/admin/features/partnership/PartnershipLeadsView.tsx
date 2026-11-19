@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, RefreshCw, UserCheck, Clock3, Building2, Activity, Download, Paperclip, RotateCcw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, UserCheck, Clock3, Building2, Activity, Download, Paperclip, RotateCcw, Mail } from 'lucide-react';
 import {
   ApiError,
   listPartnershipProspects,
@@ -9,9 +9,12 @@ import {
   listPartnershipProspectAttachments,
   createPartnershipAttachmentDownload,
   retryPartnershipAttachmentScan,
+  listPartnershipProspectNotifications,
+  retryPartnershipNotification,
   updatePartnershipProspect,
   type PartnershipAttachment,
   type PartnershipProspect,
+  type PartnershipNotification,
 } from '@/apps/web/lib/api-client';
 
 const STATUS_OPTIONS = [
@@ -53,6 +56,8 @@ export function PartnershipLeadsView({
   const [selected, setSelected] = useState<PartnershipProspect | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [attachments, setAttachments] = useState<PartnershipAttachment[]>([]);
+  const [notifications, setNotifications] = useState<PartnershipNotification[]>([]);
+  const [retryingNotification, setRetryingNotification] = useState<string | null>(null);
   const [downloadingAttachment, setDownloadingAttachment] = useState<string | null>(null);
   const [retryingAttachment, setRetryingAttachment] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -90,6 +95,28 @@ export function PartnershipLeadsView({
       setError(err instanceof ApiError ? err.message : 'Daftar lampiran tidak dapat dimuat.');
     }
   }, [accessToken]);
+
+  const loadNotifications = useCallback(async (prospectId: string) => {
+    try {
+      const response = await listPartnershipProspectNotifications(accessToken, prospectId);
+      setNotifications(response.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Status notifikasi tidak dapat dimuat.');
+    }
+  }, [accessToken]);
+
+  const retryNotification = async (notification: PartnershipNotification) => {
+    setRetryingNotification(notification.id);
+    setError(null);
+    try {
+      await retryPartnershipNotification(accessToken, notification.id);
+      if (selected) await loadNotifications(selected.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Notifikasi tidak dapat dijadwalkan ulang.');
+    } finally {
+      setRetryingNotification(null);
+    }
+  };
 
   const retryAttachmentScan = async (attachment: PartnershipAttachment) => {
     setRetryingAttachment(attachment.id);
@@ -131,7 +158,7 @@ export function PartnershipLeadsView({
   const selectProspect = async (item: PartnershipProspect) => {
     setSelected(item);
     setNote('');
-    await Promise.all([loadActivities(item.id), loadAttachments(item.id)]);
+    await Promise.all([loadActivities(item.id), loadAttachments(item.id), loadNotifications(item.id)]);
   };
 
   const update = async (payload: { status?: string; assigned_to?: string | null; note?: string }) => {
@@ -268,6 +295,37 @@ export function PartnershipLeadsView({
                     </div>
                   ))}
                   {attachments.length === 0 && <p className="text-[11px] text-[#718391]">Tidak ada lampiran pada pengajuan ini.</p>}
+                </div>
+              </div>
+              <div className="border-t border-[#EAF2F6] pt-4">
+                <h3 className="mb-2 flex items-center gap-2 text-xs font-bold text-[#17324D]"><Mail className="h-4 w-4 text-[#0284C7]" /> Notification Delivery</h3>
+                <div className="space-y-2">
+                  {notifications.map((notification) => (
+                    <div key={notification.id} className="flex items-center justify-between gap-3 rounded-[8px] bg-[#F5F8FA] p-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[11px] font-semibold text-[#17324D]">{notification.event_type.replaceAll('.', ' ')}</p>
+                        <p className="mt-1 text-[10px] text-[#718391]">
+                          Status: {notification.status} · Percobaan: {notification.attempts}
+                          {notification.last_error_code ? ` · ${notification.last_error_code}` : ''}
+                        </p>
+                        <p className="mt-1 text-[10px] text-[#718391]">
+                          {notification.processed_at ? `Diproses: ${new Date(notification.processed_at).toLocaleString('id-ID')}` : notification.available_at ? `Jadwal berikutnya: ${new Date(notification.available_at).toLocaleString('id-ID')}` : 'Menunggu antrean'}
+                        </p>
+                      </div>
+                      {(notification.status === 'failed' || notification.status === 'dead_letter') && (
+                        <button
+                          type="button"
+                          onClick={() => void retryNotification(notification)}
+                          disabled={retryingNotification === notification.id}
+                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-[#D8B58A] bg-white px-2.5 text-[10px] font-semibold text-[#8A4B08] disabled:opacity-40"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          {retryingNotification === notification.id ? 'Menjadwalkan…' : 'Retry'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {notifications.length === 0 && <p className="text-[11px] text-[#718391]">Belum ada event notifikasi untuk prospek ini.</p>}
                 </div>
               </div>
               <div className="border-t border-[#EAF2F6] pt-4">
