@@ -8,6 +8,7 @@ from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 import httpx
+import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
@@ -21,6 +22,7 @@ from app.core.security import current_claims
 from app.db.session import engine, user_session
 
 router = APIRouter()
+logger = structlog.get_logger()
 settings = get_settings()
 claims_dependency = Depends(current_claims)
 session_dependency = Depends(user_session)
@@ -509,7 +511,7 @@ async def upload_partnership_attachment(
         "Content-Type": allowed[0],
         "x-upsert": "false",
     }
-    storage_uploaded = False
+    storage_attempted = False
     attachment_id = uuid4()
 
     # Serialize attachment quota checks for the same application.
@@ -587,8 +589,6 @@ async def upload_partnership_attachment(
                     status_code=502,
                     detail="Lampiran tidak dapat disimpan ke private quarantine storage.",
                 )
-            storage_uploaded = True
-
             await connection.execute(
                 text("""
                     insert into public.public_partnership_attachments(
@@ -613,9 +613,21 @@ async def upload_partnership_attachment(
                 },
             )
     except Exception:
-        if storage_uploaded:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                await client.delete(storage_url, headers=storage_headers)
+        if storage_attempted:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    cleanup = await client.delete(storage_url, headers=storage_headers)
+                    if cleanup.status_code not in (200, 204, 404):
+                        logger.warning(
+                            "partnership_attachment_storage_compensation_failed",
+                            application_id=str(application_id),
+                            status_code=cleanup.status_code,
+                        )
+            except httpx.HTTPError:
+                logger.exception(
+                    "partnership_attachment_storage_compensation_unavailable",
+                    application_id=str(application_id),
+                )
         raise
 
     return {
