@@ -584,6 +584,26 @@ export const createOrganizationUnit = (
   { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
 );
 
+export const updateOrganizationUnit = (
+  accessToken: string,
+  tenantId: string,
+  unitId: string,
+  payload: { name?: string; code?: string; parent_unit_id?: string | null; unit_type?: string; status?: 'active' | 'inactive' },
+) => apiRequest<AgentzyOrganizationUnit>(
+  `/tenants/${encodeURIComponent(tenantId)}/organization-units/${encodeURIComponent(unitId)}`,
+  { method: "PATCH", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify(payload) },
+);
+export const archiveOrganizationUnit = (accessToken: string, tenantId: string, unitId: string) =>
+  apiRequest<AgentzyOrganizationUnit>(
+    `/tenants/${encodeURIComponent(tenantId)}/organization-units/${encodeURIComponent(unitId)}/archive`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+export const restoreOrganizationUnit = (accessToken: string, tenantId: string, unitId: string) =>
+  apiRequest<AgentzyOrganizationUnit>(
+    `/tenants/${encodeURIComponent(tenantId)}/organization-units/${encodeURIComponent(unitId)}/restore`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
 export const createBranch = (
   accessToken: string,
   tenantId: string,
