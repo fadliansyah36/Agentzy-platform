@@ -78,7 +78,10 @@ async def list_prospect_notification_records(prospect_id):
                 from public.notification_outbox n
                 join public.crm_prospects p
                   on (n.aggregate_type='crm_prospect' and n.aggregate_id=p.id)
-                  or (n.aggregate_type='partnership_application' and n.aggregate_id=p.application_id)
+                  or (
+                    n.aggregate_type='partnership_application'
+                    and n.aggregate_id=p.application_id
+                  )
                 where p.id=:prospect_id
                 order by n.created_at desc,n.id desc
             """),
