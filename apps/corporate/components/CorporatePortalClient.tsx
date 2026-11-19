@@ -164,9 +164,6 @@ export function CorporatePortalClient({
         {portal.activeSection === 'contracts' && (
           <ContractPartnershipView
             tenant={portal.activeTenant}
-            onOpenDocumentModal={(docKind) =>
-              portal.setModal({ type: 'contract-document', docKind })
-            }
             onBack={backToOverview}
           />
         )}
