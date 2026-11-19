@@ -1070,24 +1070,6 @@ function ProviderCrudModal({
             className={inputCls}
           />
         </div>
-        <div>
-          <label className={labelCls}>Organisasi Induk</label>
-          <select
-            required
-            value={selectedOrganizationId}
-            disabled={Boolean(initial)}
-            onChange={(event) => setOrganizationId(event.target.value)}
-            className={inputCls}
-          >
-            <option value="" disabled>Pilih organisasi aktif</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>{organization.name}</option>
-            ))}
-          </select>
-          {organizations.length === 0 && !initial && (
-            <p className="mt-1 text-[10px] text-[#B23A48]">Tenant belum memiliki organisasi aktif yang dapat dipilih.</p>
-          )}
-        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Mode Integrasi</label>
@@ -1678,6 +1660,24 @@ function OrgUnitCrudModal({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className={labelCls}>Organisasi Induk</label>
+          <select
+            required
+            value={selectedOrganizationId}
+            disabled={Boolean(initial)}
+            onChange={(event) => setOrganizationId(event.target.value)}
+            className={inputCls}
+          >
+            <option value="" disabled>Pilih organisasi aktif</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>{organization.name}</option>
+            ))}
+          </select>
+          {organizations.length === 0 && !initial && (
+            <p className="mt-1 text-[10px] text-[#B23A48]">Tenant belum memiliki organisasi aktif yang dapat dipilih.</p>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
