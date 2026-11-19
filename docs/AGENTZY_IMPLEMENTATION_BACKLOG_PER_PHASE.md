@@ -1051,4 +1051,4 @@ Phase 03 is IN PROGRESS:
 - FastAPI contract create/list/detail, submit-review, approval decision and activation endpoints are registered.
 - Task IDs AGZ-P03-BE-001, DB-001, API-001, PERM-001 and DOC-001 are IN PROGRESS. Frontend wiring, remaining lifecycle, documents, renewals and finance integration remain open.
 
-Latest code/workflow commit at this checkpoint: `81a9b065aef319bfb0c675b3de5f159537005130`.
+Latest code commit at this checkpoint: `e09d15a307afaa98b6e092ae930bf044ba0e65b9`. Minimum engineering workflow: `.github/workflows/agentzy-minimum-engineering.yml`.
