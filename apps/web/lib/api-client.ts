@@ -1254,3 +1254,15 @@ export const updateCorporateProviderProfileStatus = (accessToken:string,tenantId
     `/corporate/provider-profiles/${encodeURIComponent(providerId)}/status?${new URLSearchParams({tenant_id:tenantId,status,reason}).toString()}`,
     {method:'PATCH',accessToken,headers:{'Idempotency-Key':createIdempotencyKey()}},
   );
+
+export type ContractOperationalMetrics = {
+  active_contracts:number; draft_contracts:number; pending_approvals:number;
+  expired_contracts:number; expiring_30_days:number; pending_renewals:number;
+  quarantined_documents:number; available_documents:number;
+  outstanding_invoices:number; outstanding_amount:string; as_of:string;
+};
+export const getContractOperationalMetrics = (accessToken:string,tenantId:string) =>
+  apiRequest<{data:ContractOperationalMetrics}>(
+    `/corporate/metrics/contracts?tenant_id=${encodeURIComponent(tenantId)}`,
+    {method:'GET',accessToken},
+  );
