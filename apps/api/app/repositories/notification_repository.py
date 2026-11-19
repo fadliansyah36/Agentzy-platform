@@ -67,3 +67,46 @@ async def mark_notification_failed(notification_id, attempts: int, error_code: s
                 "attempts": attempts,
             },
         )
+
+
+async def list_prospect_notification_records(prospect_id):
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select n.id,n.event_type,n.status,n.attempts,n.available_at,
+                       n.processed_at,n.last_error_code,n.created_at
+                from public.notification_outbox n
+                join public.crm_prospects p
+                  on (n.aggregate_type='crm_prospect' and n.aggregate_id=p.id)
+                  or (n.aggregate_type='partnership_application' and n.aggregate_id=p.application_id)
+                where p.id=:prospect_id
+                order by n.created_at desc,n.id desc
+            """),
+            {"prospect_id": prospect_id},
+        )
+        return [dict(row) for row in result.mappings().all()]
+
+
+async def lock_notification_record(connection, notification_id):
+    result = await connection.execute(
+        text("""
+            select id,event_type,status,attempts,aggregate_type,aggregate_id
+            from public.notification_outbox
+            where id=:id
+            for update
+        """),
+        {"id": notification_id},
+    )
+    return result.mappings().first()
+
+
+async def requeue_notification_record(connection, notification_id) -> None:
+    await connection.execute(
+        text("""
+            update public.notification_outbox
+            set status='pending',attempts=0,available_at=now(),
+                processed_at=null,last_error_code=null,updated_at=now()
+            where id=:id
+        """),
+        {"id": notification_id},
+    )
