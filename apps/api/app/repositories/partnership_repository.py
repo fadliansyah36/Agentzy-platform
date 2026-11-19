@@ -118,16 +118,27 @@ async def insert_prospect(
 
 
 async def insert_application_consents(
-    connection: AsyncConnection, application_id: UUID, policy_version: str
+    connection: AsyncConnection,
+    application_id: UUID,
+    policy_version: str,
+    privacy_granted: bool,
+    communication_granted: bool,
 ) -> None:
     await connection.execute(
         text("""
             insert into public.public_partnership_consents(
               application_id,consent_type,granted,policy_version
             )
-            values(:id,'privacy',true,:version),(:id,'communication',true,:version)
+            values
+              (:id,'privacy',:privacy_granted,:version),
+              (:id,'communication',:communication_granted,:version)
         """),
-        {"id": application_id, "version": policy_version},
+        {
+            "id": application_id,
+            "version": policy_version,
+            "privacy_granted": privacy_granted,
+            "communication_granted": communication_granted,
+        },
     )
 
 
