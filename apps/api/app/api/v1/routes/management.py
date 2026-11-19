@@ -23,7 +23,8 @@ from app.core.pagination import (
 )
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
-from app.db.session import engine, user_session
+from app.db.session import engine
+from app.services.contract_entitlement_service import assert_membership_entitlement_capacity, user_session
 
 router = APIRouter()
 
@@ -608,6 +609,7 @@ async def invite_tenant_member(
             status_code=422, detail="Platform-scoped role tidak dapat diberikan ke tenant."
         )
     role_id = role_row["id"]
+    await assert_membership_entitlement_capacity(session, tenant_id, role_key)
 
     async with engine.connect() as connection:
         existing_membership = await connection.execute(
