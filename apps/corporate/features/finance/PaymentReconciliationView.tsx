@@ -27,7 +27,9 @@ export function PaymentReconciliationView({
 
   const summary = useMemo(() => {
     const totalBilled = invoices.reduce((acc, i) => acc + i.amount, 0);
-    const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+    const totalPaid = payments
+      .filter((payment) => payment.reconciliationStatus === 'Terekonsiliasi')
+      .reduce((acc, payment) => acc + payment.amount, 0);
     const outstanding = Math.max(0, totalBilled - totalPaid);
     return { totalBilled, totalPaid, outstanding };
   }, [invoices, payments]);
@@ -38,7 +40,7 @@ export function PaymentReconciliationView({
     <div className="space-y-5">
       <CorporatePageHeader
         title="Payment & Rekonsiliasi"
-        subtitle="Ringkasan status tagihan, riwayat pembayaran terverifikasi, dan rekonsiliasi settlement"
+        subtitle="Ringkasan invoice, referensi pembayaran, dan status verifikasi rekonsiliasi"
         onBack={onBack}
         actions={
           unpaidInvoices.length > 0 ? (
@@ -78,7 +80,7 @@ export function PaymentReconciliationView({
                 </span>
               </div>
               <div className="flex items-center justify-between py-3">
-                <span className="text-[#526675]">Total Dibayar</span>
+                <span className="text-[#526675]">Total Terekonsiliasi</span>
                 <span className="font-mono-tabular font-bold text-[#247A55]">
                   {formatIDR(summary.totalPaid)}
                 </span>
@@ -99,7 +101,7 @@ export function PaymentReconciliationView({
           {/* Riwayat Pembayaran */}
           <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-7">
             <h2 className="text-base font-bold text-[#17324D]">
-              Riwayat Pembayaran
+              Referensi Pembayaran
             </h2>
             <div className="mt-4 divide-y divide-[#EAF2F6]">
               {payments.map((pay) => (
@@ -114,7 +116,7 @@ export function PaymentReconciliationView({
                         {pay.paidAt}
                       </p>
                       <p className="text-xs text-[#526675]">
-                        Pembayaran {pay.invoiceId} · {pay.method}
+                        Referensi {pay.invoiceId} · {pay.method}
                       </p>
                       <p className="font-mono-tabular text-[11px] text-[#718391]">
                         Ref: {pay.referenceNo}
