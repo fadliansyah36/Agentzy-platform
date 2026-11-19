@@ -225,8 +225,15 @@ async def activate_tenant_ai_worker(
         worker = result.mappings().first()
     if not worker or worker["status"] not in ("draft","suspended"):
         raise HTTPException(status_code=409, detail="AI Worker tidak dapat diaktifkan.")
-    await _ensure_capacity(tenant_id, worker["contract_id"], worker["service_key"])
     async with engine.begin() as connection:
+        lock_key = str(tenant_id) + ":" + str(worker["contract_id"]) + ":" + worker["service_key"]
+        await connection.execute(
+            text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),
+            {"lock_key": lock_key},
+        )
+        await _ensure_capacity(
+            connection, tenant_id, worker["contract_id"], worker["service_key"]
+        )
         result = await connection.execute(
             text("""
                 update public.tenant_ai_workers set status='active',updated_by=:actor,updated_at=now()
