@@ -185,7 +185,8 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
     branch_id:profileForm.branch_id || null, legal_name:profileForm.legal_name,
     registration_number:profileForm.registration_number || null,
     billing_email:profileForm.billing_email || null,billing_phone:profileForm.billing_phone || null,
-    billing_address:profile?.billing_address ?? {},tax_profile:profile?.tax_profile ?? {},
+    billing_address:profile?.billing_address ?? {},
+    tax_profile:{tax_rate:Number(profileForm.tax_rate || '0')},
     contact_name:profileForm.contact_name || null,contact_title:profileForm.contact_title || null,
     website:profileForm.website || null,country_code:profileForm.country_code,
   }), 'Corporate profile tersimpan.');
