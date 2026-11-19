@@ -9,14 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_action, authorize_object
 from app.core.idempotency import complete_idempotency, reserve_idempotency
-from app.services.tenant_structure_service import (
-    set_organization_unit_status as set_organization_unit_status_service,
-    update_organization_unit as update_organization_unit_service,
-)
 from app.core.pagination import PageMeta, PageResponse, decode_time_id_cursor, encode_time_id_cursor
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
 from app.db.session import engine, user_session
+from app.services.tenant_structure_service import (
+    set_organization_unit_status as set_organization_unit_status_service,
+    update_organization_unit as update_organization_unit_service,
+)
 
 router = APIRouter()
 
