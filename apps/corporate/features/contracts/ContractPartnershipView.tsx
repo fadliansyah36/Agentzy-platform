@@ -34,7 +34,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const token = auth.session?.access_token ?? '';
   const [tab,setTab] = useState<Tab>('contracts');
   const [profile,setProfile] = useState<CorporateProfile | null>(null);
-  const [profileForm,setProfileForm] = useState({legal_name:'',registration_number:'',billing_email:'',billing_phone:'',contact_name:'',contact_title:'',website:'',country_code:'ID'});
+  const [profileForm,setProfileForm] = useState({legal_name:'',registration_number:'',billing_email:'',billing_phone:'',contact_name:'',contact_title:'',website:'',country_code:'ID',organization_id:'',branch_id:''});
   const [contracts,setContracts] = useState<CorporateContract[]>([]);
   const [selectedId,setSelectedId] = useState('');
   const [detail,setDetail] = useState<CorporateContract | null>(null);
@@ -68,7 +68,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     ]);
     if (results[0].status === 'fulfilled') {
       const p = results[0].value.data; setProfile(p);
-      if (p) setProfileForm({legal_name:p.legal_name ?? '',registration_number:p.registration_number ?? '',billing_email:p.billing_email ?? '',billing_phone:p.billing_phone ?? '',contact_name:p.contact_name ?? '',contact_title:p.contact_title ?? '',website:p.website ?? '',country_code:p.country_code ?? 'ID'});
+      if (p) setProfileForm({legal_name:p.legal_name ?? '',registration_number:p.registration_number ?? '',billing_email:p.billing_email ?? '',billing_phone:p.billing_phone ?? '',contact_name:p.contact_name ?? '',contact_title:p.contact_title ?? '',website:p.website ?? '',country_code:p.country_code ?? 'ID',organization_id:p.organization_id ?? '',branch_id:p.branch_id ?? ''});
     } else setError(results[0].reason instanceof Error ? results[0].reason.message : 'Gagal memuat profile.');
     if (results[1].status === 'fulfilled') {
       setContracts(results[1].value.data);
@@ -108,8 +108,8 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   };
 
   const saveProfile = () => action(() => upsertCorporateProfile(token,{
-    tenant_id:tenant.id, organization_id:profile?.organization_id ?? null,
-    branch_id:profile?.branch_id ?? null, legal_name:profileForm.legal_name,
+    tenant_id:tenant.id, organization_id:profileForm.organization_id || null,
+    branch_id:profileForm.branch_id || null, legal_name:profileForm.legal_name,
     registration_number:profileForm.registration_number || null,
     billing_email:profileForm.billing_email || null,billing_phone:profileForm.billing_phone || null,
     billing_address:profile?.billing_address ?? {},tax_profile:profile?.tax_profile ?? {},
@@ -119,7 +119,10 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
 
   const createContract = () => action(async () => {
     const result = await createCorporateContract(token,{
-      tenant_id:tenant.id,contract_number:newContract.contract_number,title:newContract.title,
+      tenant_id:tenant.id,organization_id:profile?.organization_id ?? null,
+      branch_id:profile?.branch_id ?? null,
+      parent_contract_id:newContract.parent_contract_id || null,
+      contract_number:newContract.contract_number,title:newContract.title,
       contract_type:newContract.contract_type,currency:'IDR',
       effective_start:newContract.effective_start || null,effective_end:newContract.effective_end || null,
       scope_summary:newContract.scope_summary,terms:newContract.terms || null,
@@ -178,7 +181,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
     {tab === 'profile' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
       <h2 className="text-sm font-bold text-[#17324D]">Legal & Billing Profile</h2>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {([['legal_name','Nama legal'],['registration_number','Nomor registrasi'],['billing_email','Email billing'],['billing_phone','Telepon billing'],['contact_name','Nama PIC'],['contact_title','Jabatan PIC'],['website','Website'],['country_code','Kode negara']] as const).map(([key,name]) =>
+        {([['legal_name','Nama legal'],['registration_number','Nomor registrasi'],['billing_email','Email billing'],['billing_phone','Telepon billing'],['contact_name','Nama PIC'],['contact_title','Jabatan PIC'],['website','Website'],['country_code','Kode negara'],['organization_id','Organization ID'],['branch_id','Branch ID']] as const).map(([key,name]) =>
           <label key={key}><span className={label}>{name}</span><input className={field} value={profileForm[key]} disabled={!canProfile || saving} onChange={(e)=>setProfileForm((p)=>({...p,[key]:e.target.value}))}/></label>
         )}
       </div>
@@ -204,7 +207,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
           <h3 className="mt-4 text-xs font-bold text-[#17324D]">Service & Entitlement</h3>
           {(detail.services ?? []).map((s)=><div key={s.service_key} className="border-b border-[#EAF2F6] py-3"><p className="text-sm font-semibold text-[#17324D]">{s.service_key}</p><p className="text-xs text-[#526675]">{s.service_scope}</p><p className="mt-1 text-[11px] text-[#718391]">Fee {s.monthly_fee ?? '—'} · qty {s.quantity}</p></div>)}
           <div className="mt-4 flex flex-wrap gap-2">
-            {canManage && detail.status==='draft' && <button className={primary} disabled={saving} onClick={()=>void action(()=>submitContractPolicyReview(token,tenant.id,detail.id),'Kontrak diajukan berdasarkan approval policy.')}>Submit Approval</button>}
+            {canManage && (detail.status==='draft' || (detail.status==='active' && detail.version_status==='draft')) && <button className={primary} disabled={saving} onClick={()=>void action(()=>submitContractPolicyReview(token,tenant.id,detail.id),'Kontrak diajukan berdasarkan approval policy.')}>Submit Approval</button>}
             {canLifecycle && detail.status==='active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'suspend','Suspension requested from Corporate Portal'),'Kontrak disuspend dan entitlement dihentikan.')}>Suspend</button>}
             {canLifecycle && ['active','suspended','approved'].includes(detail.status) && <button className={secondary} disabled={saving} onClick={()=>{if(window.confirm('Hentikan kontrak ini?')) void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'terminate','Termination requested from Corporate Portal'),'Kontrak dihentikan.')}}>Terminate</button>}
           </div>
