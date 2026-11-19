@@ -1175,3 +1175,27 @@ export const getCorporateInvoice = (accessToken: string, tenantId: string, invoi
     `/corporate/invoices/${encodeURIComponent(invoiceId)}?tenant_id=${encodeURIComponent(tenantId)}`,
     { method: 'GET', accessToken },
   );
+
+export type ContractApprovalDelegation = {
+  id: string; delegator_user_id: string; delegatee_user_id: string;
+  starts_at: string; ends_at: string; reason: string; status: string;
+  created_at: string; revoked_at: string | null;
+};
+export const listContractApprovalDelegations = (accessToken: string, tenantId: string) =>
+  apiRequest<{ data: ContractApprovalDelegation[] }>(
+    `/corporate/approval-delegations?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'GET', accessToken },
+  );
+export const createContractApprovalDelegation = (
+  accessToken: string, payload: {
+    tenant_id: string; delegatee_user_id: string; starts_at: string; ends_at: string; reason: string;
+  },
+) => apiRequest<{ data: { id: string; status: string } }>('/corporate/approval-delegations', {
+  method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+  body: JSON.stringify(payload),
+});
+export const archiveContractDocument = (accessToken: string, tenantId: string, documentId: string) =>
+  apiRequest<{ data: { id: string; status: string } }>(
+    `/corporate/documents/${encodeURIComponent(documentId)}/archive?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
+  );
