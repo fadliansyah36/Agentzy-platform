@@ -206,3 +206,12 @@ No staging, UAT, security acceptance or production deployment was performed.
 - Membership invitation audit metadata now passes through recursive redaction so the invitee email is not retained in clear text in JSON metadata.
 - Added `fail_idempotency` to the shared idempotency module for recoverable external-command sagas. Other transactional commands continue to commit their idempotency reservation and state mutation in one database transaction.
 - Code head for this increment: `766538b7d68512a8cd4dd70b3ef817081a3e9c15`; engineering workflow result is pending.
+### Invitation saga and idempotency recovery — final engineering evidence
+
+- Shared idempotency reservations now recover stale `processing` records after a bounded ten-minute lease; the same request fingerprint is required before takeover.
+- Membership invitation idempotency reservation occurs only after authorization and input/hierarchy validation. Provider failures and membership transaction failures mark the reservation failed for safe retry. Retry reconciles an Auth user that may have been created before a provider response was lost.
+- Membership invitation audit metadata uses recursive redaction for the invitee email.
+- Final code head: `899a981026fa04331e7dbc0e39d921d945774e70`.
+- GitHub Actions [44495060635](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44495060635) completed **SUCCESS** on this code head: frontend frozen install, ESLint, TypeScript; Python compile, Ruff, focused authorization checks, FastAPI import/OpenAPI generation; migration consistency.
+
+**Phase 01 remains PARTIAL.** Hosted Auth configuration is explicitly deferred. The remaining implementation gaps are cross-portal hierarchy/membership action parity, complete machine-generated nested-resource authorization inventory, and audit/security observability closure. Real-user runtime evidence is deferred until a real identity exists.
