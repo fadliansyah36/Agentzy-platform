@@ -1059,7 +1059,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
             if (!existing) throw new Error('Unit organisasi tidak ditemukan pada tenant terpilih.');
             const parentName = payload.parentName?.trim();
             const parent = parentName
-              ? units.find((item) => item.id !== existing.id && item.name.toLowerCase() === parentName.toLowerCase())
+              ? units.find((item) => item.status === 'active' && item.id !== existing.id && item.name.toLowerCase() === parentName.toLowerCase())
               : undefined;
             if (parentName && !parent) throw new Error('Parent unit tidak ditemukan.');
             await updateOrganizationUnit(accessToken, tenant.id, existing.id, {
@@ -1096,7 +1096,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           if (payload.unitType === 'Unit Organisasi') {
             const parentName = payload.parentName?.trim();
             const parent = parentName
-              ? units.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              ? units.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
               : undefined;
             if (parentName && !parent) throw new Error('Parent unit organisasi tidak ditemukan.');
             await createOrganizationUnit(accessToken, tenant.id, {
@@ -1123,10 +1123,10 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           } else {
             const parentName = payload.parentName?.trim();
             const parentBranch = parentName
-              ? branches.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              ? branches.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
               : undefined;
             const parentDepartment = parentName
-              ? departments.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              ? departments.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
               : undefined;
             if (!parentBranch && !parentDepartment) {
               throw new Error('Induk departemen harus berupa cabang atau departemen aktif yang terdaftar.');
