@@ -208,8 +208,8 @@ export type PublicPartnershipApplicationInput = {
   ai_needs: string[];
   provider_products: string[];
   needs_summary?: string;
-  privacy_consent: true;
-  communication_consent: true;
+  privacy_consent: boolean;
+  communication_consent: boolean;
   policy_version: string;
   captcha_token?: string;
   fax_number: string;
