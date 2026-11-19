@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { createPaymentReference, listCorporateInvoices, listPaymentReferences, type ContractInvoice, type ContractPaymentReference } from '@/apps/web/lib/api-client';
+import { createPaymentReference, listCorporateInvoices, listPaymentReferences, submitPaymentReference, type ContractInvoice, type ContractPaymentReference } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader } from '../../components/data-display/CorporateDataDisplay';
 
 const field='h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
@@ -23,6 +23,7 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [externalReferences,setExternalReferences]=useState<Record<string,string>>({});
   const canManage=auth.identity?.memberships.some(m=>m.tenant_id===tenantId && m.permissions.includes('corporate.finance.invoice.manage')) ?? false;
 
   const refresh=useCallback(async()=>{
@@ -59,6 +60,18 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
     finally {setSaving(false);}
   };
 
+  const submitReference=async(referenceId:string)=>{
+    const externalReference=externalReferences[referenceId]?.trim();
+    if(!externalReference) return;
+    setSaving(true);setError('');setNotice('');
+    try {
+      await submitPaymentReference(token,referenceId,tenantId,externalReference);
+      setNotice('External reference dicatat. Pembayaran tetap menunggu verifikasi finance.');
+      await refresh();
+    } catch(e) {setError(e instanceof Error?e.message:'Gagal mengirim external reference.');}
+    finally {setSaving(false);}
+  };
+
   return <div className="space-y-5">
     <CorporatePageHeader title="Payment References" subtitle="Pencatatan referensi, bukti eksternal dan rekonsiliasi pembayaran" onBack={onBack}
       actions={<button className={secondary} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
@@ -84,7 +97,10 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
       <div className="mt-3 divide-y divide-[#EAF2F6]">
         {references.map(reference=><div key={reference.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
           <div><p className="text-xs font-semibold text-[#17324D]">{reference.reference_number} · {reference.invoice_number}</p><p className="mt-1 text-[11px] text-[#718391]">{reference.payment_method} · {reference.created_at}</p><p className="mt-1 text-[11px] text-[#718391]">External ref: {reference.external_reference ?? 'Belum ada'}</p></div>
-          <div className="text-right"><p className="text-sm font-bold text-[#17324D]">{money(reference.amount)}</p><p className="mt-1 text-[11px] font-semibold text-[#A96816]">{reference.status}</p></div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="text-right"><p className="text-sm font-bold text-[#17324D]">{money(reference.amount)}</p><p className="mt-1 text-[11px] font-semibold text-[#A96816]">{reference.status}</p></div>
+            {canManage && reference.status==='reference_created' && <div className="flex items-end gap-2"><label><span className="mb-1 block text-[10px] text-[#718391]">External reference</span><input className="h-9 w-40 rounded-lg border border-[#D8E3E9] px-2 text-xs" value={externalReferences[reference.id] ?? ''} onChange={e=>setExternalReferences(p=>({...p,[reference.id]:e.target.value}))}/></label><button className="h-9 rounded-lg bg-[#17324D] px-3 text-[11px] font-semibold text-white disabled:opacity-50" disabled={saving || !externalReferences[reference.id]} onClick={()=>void submitReference(reference.id)}>Submit</button></div>}
+          </div>
         </div>)}
         {!references.length && <p className="py-5 text-xs text-[#718391]">Belum ada payment reference.</p>}
       </div>
