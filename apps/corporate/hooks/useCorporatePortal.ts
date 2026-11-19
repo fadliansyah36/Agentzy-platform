@@ -156,6 +156,13 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     [tenantOptions, activeTenantId]
   );
 
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3600);
+  }, []);
+
   useEffect(() => {
     const accessToken = auth.session?.access_token;
     if (!accessToken || !activeTenantId) return;
