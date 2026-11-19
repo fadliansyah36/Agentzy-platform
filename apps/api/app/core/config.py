@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     supabase_service_role_key: str | None = None
     auth_provider_webhook_secret: str | None = None
     turnstile_secret_key: str | None = None
+    clamav_host: str | None = None
+    clamav_port: int = 3310
+    clamav_timeout_seconds: float = 30.0
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -47,6 +50,10 @@ class Settings(BaseSettings):
     @property
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host and self.smtp_from)
+
+    @property
+    def attachment_scanner_configured(self) -> bool:
+        return bool(self.clamav_host and self.supabase_service_role_key)
 
     @field_validator("database_url")
     @classmethod
