@@ -289,6 +289,12 @@ async def upsert_corporate_profile(
 ):
     actor = UUID(claims["sub"])
     await require_tenant_permission(actor, payload.tenant_id, "corporate.profiles.manage")
+    try:
+        tax_rate = Decimal(str(payload.tax_profile.get("tax_rate", "0")))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Tax rate harus numerik.") from exc
+    if tax_rate < 0 or tax_rate > 100:
+        raise HTTPException(status_code=422, detail="Tax rate harus berada di antara 0 dan 100.")
     async with engine.begin() as connection:
         if payload.organization_id:
             valid = await connection.execute(
