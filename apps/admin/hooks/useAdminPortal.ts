@@ -1070,19 +1070,33 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           } else if (payload.unitType === 'Cabang / Regional') {
             const existing = branches.find((item) => item.id === payload.id);
             if (!existing) throw new Error('Cabang tidak ditemukan pada tenant terpilih.');
+            const parentName = payload.parentName?.trim();
+            const parentUnit = parentName
+              ? units.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            if (parentName && !parentUnit) throw new Error('Unit organisasi induk tidak ditemukan.');
             await updateBranch(accessToken, tenant.id, existing.id, {
               name: payload.name.trim(),
               code: existing.code,
-              organization_unit_id: existing.organization_unit_id,
+              organization_unit_id: parentUnit?.id ?? null,
             });
           } else {
             const existing = departments.find((item) => item.id === payload.id);
             if (!existing) throw new Error('Departemen tidak ditemukan pada tenant terpilih.');
+            const parentName = payload.parentName?.trim();
+            const parentBranch = parentName
+              ? branches.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            const parentDepartment = parentName
+              ? departments.find((item) => item.status === 'active' && item.id !== existing.id && item.name.toLowerCase() === parentName.toLowerCase())
+              : undefined;
+            const branchId = parentBranch?.id ?? parentDepartment?.branch_id ?? null;
+            if (!branchId) throw new Error('Induk departemen harus berupa cabang atau departemen aktif pada cabang.');
             await updateDepartment(accessToken, tenant.id, existing.id, {
               name: payload.name.trim(),
               code: existing.code,
-              branch_id: existing.branch_id,
-              parent_department_id: existing.parent_department_id,
+              branch_id: branchId,
+              parent_department_id: parentDepartment?.id ?? null,
             });
           }
         } else {
@@ -1109,7 +1123,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
           } else if (payload.unitType === 'Cabang / Regional') {
             const parentName = payload.parentName?.trim();
             const parentUnit = parentName
-              ? units.find((item) => item.name.toLowerCase() === parentName.toLowerCase())
+              ? units.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
               : undefined;
             if (parentName && !parentUnit) {
               throw new Error('Unit organisasi induk tidak ditemukan. Gunakan nama unit yang terdaftar atau kosongkan induk.');
@@ -1128,12 +1142,13 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
             const parentDepartment = parentName
               ? departments.find((item) => item.status === 'active' && item.name.toLowerCase() === parentName.toLowerCase())
               : undefined;
-            if (!parentBranch && !parentDepartment) {
-              throw new Error('Induk departemen harus berupa cabang atau departemen aktif yang terdaftar.');
+            const branchId = parentBranch?.id ?? parentDepartment?.branch_id ?? null;
+            if (!branchId) {
+              throw new Error('Induk departemen harus berupa cabang atau departemen aktif pada cabang.');
             }
             await createDepartment(accessToken, tenant.id, {
               organization_id: organizationId,
-              branch_id: parentBranch?.id ?? parentDepartment?.branch_id ?? null,
+              branch_id: branchId,
               parent_department_id: parentDepartment?.id ?? null,
               name: payload.name.trim(),
               code,
