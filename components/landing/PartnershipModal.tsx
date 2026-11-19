@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, Building2, Video } from 'lucide-react';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
+import { ApiError, createPublicPartnershipApplication, uploadPublicPartnershipAttachment } from '@/apps/web/lib/api-client';
 
 interface PartnershipModalProps {
   isOpen: boolean;
@@ -51,6 +52,10 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
+  const [faxNumber, setFaxNumber] = useState('');
 
   if (!isOpen) return null;
 
@@ -60,9 +65,10 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setAttachmentMessage(null);
     if (!companyName.trim() || !picName.trim() || !businessEmail.trim() || !businessPhone.trim()) {
       setError('Mohon lengkapi nama perusahaan, PIC, email bisnis, dan nomor telepon.');
       return;
@@ -71,13 +77,65 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
       setError('Persetujuan kebijakan privasi dan komunikasi diperlukan sebelum mengirim.');
       return;
     }
-    const ticket = `PRT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    setSubmittedRef(ticket);
+    if (attachments.length > 3) {
+      setError('Maksimal tiga lampiran per pengajuan.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await createPublicPartnershipApplication({
+        company_name: companyName.trim(),
+        company_type: companyType,
+        contact_name: picName.trim(),
+        contact_title: picTitle.trim() || undefined,
+        business_email: businessEmail.trim().toLowerCase(),
+        business_phone: businessPhone.trim(),
+        website: website.trim() || undefined,
+        operating_locations: locations.trim() || undefined,
+        estimated_workforce: estimatedWorkforce ? Number(estimatedWorkforce) : undefined,
+        human_needs: humanNeeds,
+        ai_needs: aiNeeds,
+        provider_products: products,
+        needs_summary: needsSummary.trim() || undefined,
+        privacy_consent: true,
+        communication_consent: true,
+        policy_version: '2026-01',
+        fax_number: faxNumber,
+      }, crypto.randomUUID());
+
+      setSubmittedRef(result.data.reference_code);
+      if (attachments.length) {
+        let uploaded = 0;
+        for (const file of attachments) {
+          try {
+            await uploadPublicPartnershipAttachment(result.data.id, result.data.upload_token, file);
+            uploaded += 1;
+          } catch (uploadError) {
+            setAttachmentMessage(uploadError instanceof ApiError
+              ? `Pengajuan tercatat, tetapi lampiran gagal diunggah: ${uploadError.message}`
+              : 'Pengajuan tercatat, tetapi sebagian lampiran gagal diunggah.');
+          }
+        }
+        if (uploaded === attachments.length) {
+          setAttachmentMessage(`${uploaded} lampiran diterima di private quarantine dan menunggu pemindaian.`);
+        } else if (uploaded > 0) {
+          setAttachmentMessage(`${uploaded} dari ${attachments.length} lampiran diterima; sisanya perlu dikirim ulang.`);
+        }
+      }
+    } catch (submitError) {
+      setError(submitError instanceof ApiError
+        ? submitError.message
+        : 'Pengajuan belum dapat dikirim. Silakan coba kembali.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleResetAndClose = () => {
     setSubmittedRef(null);
     setError(null);
+    setAttachmentMessage(null);
+    setAttachments([]);
     onClose();
   };
 
@@ -123,6 +181,8 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
               </span>{' '}
               (Kebijakan Privasi v2026-01).
             </p>
+            {attachmentMessage && <p className="mx-auto mt-3 max-w-md rounded-[10px] bg-[#E6F4F9] px-3 py-2 text-xs text-[#17324D]">{attachmentMessage}</p>}
+            <p className="mt-2 text-xs text-[#526675]">Notifikasi pengajuan telah masuk ke antrean sistem untuk diproses.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
@@ -360,6 +420,21 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
                 className="w-full rounded-[10px] border border-[#B8C9D3] p-3 text-sm text-[#172B3A] focus:border-[#0284C7] focus:outline-none"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[#17324D]">Lampiran (Opsional, PDF/JPG/PNG, maks. 10 MB per file)</label>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                onChange={(e) => setAttachments(Array.from(e.target.files ?? []).slice(0, 3))}
+                className="block w-full rounded-[10px] border border-[#B8C9D3] bg-white p-2 text-xs text-[#526675]"
+              />
+              {attachments.length > 0 && <p className="mt-1 text-[11px] text-[#526675]">{attachments.length} file dipilih. File akan disimpan secara privat dan menunggu pemindaian.</p>}
+            </div>
+            <div aria-hidden="true" className="hidden">
+              <label htmlFor="partnership-fax">Fax</label>
+              <input id="partnership-fax" tabIndex={-1} autoComplete="off" value={faxNumber} onChange={(e) => setFaxNumber(e.target.value)} />
+            </div>
 
             <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#D8E3E9] bg-[#F5F8FA] p-3 text-xs text-[#526675]">
               <input
@@ -382,7 +457,8 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
             <div className="grid grid-cols-1 gap-2.5 pt-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
               <button
                 type="submit"
-                className="h-11 rounded-[10px] bg-[#17324D] px-5 text-sm font-semibold text-white transition hover:bg-[#245477] sm:order-2"
+                disabled={submitting}
+                className="h-11 rounded-[10px] bg-[#17324D] px-5 text-sm font-semibold text-white transition hover:bg-[#245477] disabled:cursor-not-allowed disabled:opacity-60 sm:order-2"
               >
                 Kirim Pengajuan Kerja Sama
               </button>
