@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { AIWorkforceAccessView } from './AIWorkforceAccessView';
+import type { AgentzyWorkforceTenantContext, AgentzyTenantMembership, AgentzyRoleTemplate, InviteTenantMemberInput, ReassignMembershipHierarchyInput } from '@/apps/web/lib/api-client';
 import {
   ShieldCheck,
   FileSearch,
@@ -52,6 +54,18 @@ export function SafetyAuditSettingsView({
   onToggleOfflinePwa,
   onNavigate,
   onNotify,
+  canManageAccess,
+  accessMemberships,
+  accessRoles,
+  accessLoading,
+  accessError,
+  workforceTenantContext,
+  onInviteMember,
+  onReplaceMembershipRole,
+  onActivateMembership,
+  onSuspendMembership,
+  onRevokeMembership,
+  onReassignMembership,
 }: {
   activeTenant: AIWMTenant;
   auditLogs: AuditIncidentItem[];
@@ -59,8 +73,20 @@ export function SafetyAuditSettingsView({
   onToggleOfflinePwa: (next: boolean) => void;
   onNavigate: (section: AIWorkforceSectionId) => void;
   onNotify: (msg: string) => void;
+  canManageAccess: boolean;
+  accessMemberships: AgentzyTenantMembership[];
+  accessRoles: AgentzyRoleTemplate[];
+  accessLoading: boolean;
+  accessError: string | null;
+  workforceTenantContext: AgentzyWorkforceTenantContext | null;
+  onInviteMember: (payload: InviteTenantMemberInput) => Promise<void>;
+  onReplaceMembershipRole: (membershipId: string, roleKey: string) => Promise<void>;
+  onActivateMembership: (membershipId: string) => Promise<void>;
+  onSuspendMembership: (membershipId: string) => Promise<void>;
+  onRevokeMembership: (membershipId: string) => Promise<void>;
+  onReassignMembership: (membershipId: string, payload: ReassignMembershipHierarchyInput) => Promise<void>;
 }) {
-  const [tab, setTab] = useState<'safety' | 'audit' | 'settings'>('safety');
+  const [tab, setTab] = useState<'safety' | 'audit' | 'settings' | 'access'>('safety');
   const [auditFilter, setAuditFilter] = useState<
     'Semua' | 'Audit Log' | 'Insiden' | 'Run History'
   >('Semua');
@@ -86,12 +112,13 @@ export function SafetyAuditSettingsView({
           </p>
         </div>
 
-        <div className="grid w-full grid-cols-3 gap-1 rounded-[10px] border border-[#D8E3E9] bg-white p-1 sm:inline-flex sm:w-auto">
+        <div className="grid w-full grid-cols-4 gap-1 rounded-[10px] border border-[#D8E3E9] bg-white p-1 sm:inline-flex sm:w-auto">
           {(
             [
               { id: 'safety', label: 'Kebijakan & SLA', shortLabel: 'Kebijakan', icon: ShieldCheck },
               { id: 'audit', label: 'Audit & Insiden', shortLabel: 'Audit Log', icon: FileSearch },
               { id: 'settings', label: 'Pengaturan', shortLabel: 'Pengaturan', icon: Settings },
+              { id: 'access', label: 'Akses & Membership', shortLabel: 'Akses', icon: Users },
             ] as const
           ).map((t) => (
             <button
@@ -256,6 +283,31 @@ export function SafetyAuditSettingsView({
       )}
 
       {/* Tab 3: Screens 24 & 45 (Pengaturan, Integrasi, Mode Offline PWA) */}
+      {tab === 'access' && canManageAccess && workforceTenantContext && (
+        <AIWorkforceAccessView
+          tenantId={activeTenant.id}
+          tenantName={activeTenant.name}
+          memberships={accessMemberships}
+          roles={accessRoles}
+          organizations={workforceTenantContext.organizations}
+          organizationUnits={workforceTenantContext.organization_units}
+          branches={workforceTenantContext.branches}
+          departments={workforceTenantContext.departments}
+          loading={accessLoading}
+          error={accessError}
+          onInvite={onInviteMember}
+          onReplaceRole={onReplaceMembershipRole}
+          onActivate={onActivateMembership}
+          onSuspend={onSuspendMembership}
+          onRevoke={onRevokeMembership}
+          onReassign={onReassignMembership}
+        />
+      )}
+      {tab === 'access' && !canManageAccess && (
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 text-xs text-[#526675]">
+          Membership management memerlukan permission <strong>corporate.organization.manage</strong> atau <strong>platform.memberships.manage</strong>.
+        </div>
+      )}
       {tab === 'settings' && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 space-y-3">
