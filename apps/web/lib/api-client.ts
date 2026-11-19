@@ -17,6 +17,19 @@ export class ApiError extends Error {
 
 type ApiOptions = Omit<RequestInit, "headers"> & { accessToken: string; headers?: HeadersInit };
 
+async function readApiPayload<T>(response: Response): Promise<T> {
+  const payload = await response.json();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    payload.meta?.envelope_version === 1 &&
+    Object.prototype.hasOwnProperty.call(payload, "data")
+  ) {
+    return payload.data as T;
+  }
+  return payload as T;
+}
+
 export async function apiRequest<T>(path: string, options: ApiOptions): Promise<T> {
   if (!API_BASE_URL) throw new ApiError("API belum dikonfigurasi. Hubungi administrator.", 503, "API_NOT_CONFIGURED");
   const { accessToken, headers: inputHeaders, ...requestOptions } = options;
@@ -44,7 +57,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
     );
   }
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  return readApiPayload<T>(response);
 }
 
 
@@ -74,7 +87,7 @@ export async function publicApiRequest<T>(path: string, options: RequestInit = {
     );
   }
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  return readApiPayload<T>(response);
 }
 
 
