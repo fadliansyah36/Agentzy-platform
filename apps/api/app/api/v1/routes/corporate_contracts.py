@@ -1040,9 +1040,9 @@ async def decide_policy_approval(
 async def upload_contract_document_endpoint(
     contract_id: UUID,
     tenant_id: UUID,
+    request: Request,
     document_type: str = Query(pattern="^(master_agreement|statement_of_work|sla|amendment|supporting)$"),
     contract_version_id: UUID | None = None,
-    request: Request = None,
     claims: dict = claims_dependency,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     file_name: str = Header(alias="X-File-Name", min_length=1, max_length=240),
@@ -1074,6 +1074,27 @@ async def upload_contract_document_endpoint(
     if not safe_name or safe_name in {".", ".."}:
         raise HTTPException(status_code=422, detail="Nama file tidak valid.")
     digest = hashlib.sha256(content).hexdigest()
+    fingerprint = hashlib.sha256(
+        f"{contract_id}:{contract_version_id}:{document_type}:{safe_name}:{digest}".encode()
+    ).hexdigest()
+    async with engine.connect() as connection:
+        existing = await connection.execute(
+            text("""
+                select id,upload_fingerprint,lifecycle_status,original_filename,content_type,
+                       file_size,sha256,created_at
+                from public.contract_documents
+                where tenant_id=:tenant and idempotency_key=:key
+            """),
+            {"tenant": tenant_id, "key": idempotency_key},
+        )
+        previous = existing.mappings().first()
+    if previous:
+        if previous["upload_fingerprint"] != fingerprint:
+            raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk dokumen berbeda.")
+        return {"data": {
+            **dict(previous), "id": str(previous["id"]),
+            "created_at": previous["created_at"].isoformat(),
+        }}
     doc_id = uuid4()
     object_path = f"{tenant_id}/{contract_id}/{doc_id}{MIME_EXTENSIONS[content_type]}"
     uploaded = False
@@ -1106,10 +1127,10 @@ async def upload_contract_document_endpoint(
                     insert into public.contract_documents(
                       id,tenant_id,contract_id,contract_version_id,document_type,
                       original_filename,object_path,content_type,file_size,sha256,
-                      lifecycle_status,uploaded_by,verified_at
+                      lifecycle_status,uploaded_by,verified_at,idempotency_key,upload_fingerprint
                     ) values(
                       :id,:tenant,:contract,:version,:type,:name,:path,:content_type,
-                      :size,:sha,'available',:actor,now()
+                      :size,:sha,'available',:actor,now(),:key,:fingerprint
                     ) returning id,document_type,original_filename,content_type,file_size,
                       sha256,lifecycle_status,created_at
                 """),
@@ -1118,6 +1139,7 @@ async def upload_contract_document_endpoint(
                     "version": contract_version_id, "type": document_type,
                     "name": safe_name, "path": object_path, "content_type": content_type,
                     "size": len(content), "sha": digest, "actor": actor,
+                    "key": idempotency_key, "fingerprint": fingerprint,
                 },
             )
             await audit_contract_event(
@@ -1270,9 +1292,9 @@ async def request_contract_renewal(
 async def decide_contract_renewal(
     renewal_id: UUID,
     tenant_id: UUID,
+    request: Request,
     decision: str = Query(pattern="^(approved|rejected)$"),
     reason: str = Query(min_length=3, max_length=2000),
-    request: Request = None,
     claims: dict = claims_dependency,
 ):
     actor = UUID(claims["sub"])
