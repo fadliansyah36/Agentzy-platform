@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
-import { createPaymentReference, listCorporateInvoices, listPaymentReferences, submitPaymentReference, type ContractInvoice, type ContractPaymentReference } from '@/apps/web/lib/api-client';
+import { createPaymentReference, listCorporateInvoices, listPaymentReferences, submitPaymentReference, verifyPaymentReference, type ContractInvoice, type ContractPaymentReference } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader } from '../../components/data-display/CorporateDataDisplay';
 
 const field='h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
@@ -24,6 +24,7 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [externalReferences,setExternalReferences]=useState<Record<string,string>>({});
+  const [verificationInputs,setVerificationInputs]=useState<Record<string,{evidence:string;reason:string}>>({});
   const canManage=auth.identity?.memberships.some(m=>m.tenant_id===tenantId && m.permissions.includes('corporate.finance.invoice.manage')) ?? false;
 
   const refresh=useCallback(async()=>{
@@ -72,6 +73,22 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
     finally {setSaving(false);}
   };
 
+  const verifyReference=async(referenceId:string,decision:'approved'|'rejected')=>{
+    const value=verificationInputs[referenceId];
+    if(!value?.evidence.trim() || !value.reason.trim()) return;
+    setSaving(true);setError('');setNotice('');
+    try {
+      await verifyPaymentReference(token,referenceId,{
+        tenant_id:tenantId,decision,evidence_reference:value.evidence.trim(),reason:value.reason.trim(),
+      });
+      setNotice(decision==='approved'
+        ? 'Pembayaran direkonsiliasi berdasarkan bukti yang diverifikasi finance.'
+        : 'Payment reference ditolak berdasarkan review finance.');
+      await refresh();
+    } catch(e) {setError(e instanceof Error?e.message:'Gagal memverifikasi payment reference.');}
+    finally {setSaving(false);}
+  };
+
   return <div className="space-y-5">
     <CorporatePageHeader title="Payment References" subtitle="Pencatatan referensi, bukti eksternal dan rekonsiliasi pembayaran" onBack={onBack}
       actions={<button className={secondary} onClick={()=>void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
@@ -100,6 +117,7 @@ export function PaymentReconciliationView({tenantId,onBack}:{tenantId:string;onB
           <div className="flex flex-wrap items-end gap-2">
             <div className="text-right"><p className="text-sm font-bold text-[#17324D]">{money(reference.amount)}</p><p className="mt-1 text-[11px] font-semibold text-[#A96816]">{reference.status}</p></div>
             {canManage && reference.status==='reference_created' && <div className="flex items-end gap-2"><label><span className="mb-1 block text-[10px] text-[#718391]">External reference</span><input className="h-9 w-40 rounded-lg border border-[#D8E3E9] px-2 text-xs" value={externalReferences[reference.id] ?? ''} onChange={e=>setExternalReferences(p=>({...p,[reference.id]:e.target.value}))}/></label><button className="h-9 rounded-lg bg-[#17324D] px-3 text-[11px] font-semibold text-white disabled:opacity-50" disabled={saving || !externalReferences[reference.id]} onClick={()=>void submitReference(reference.id)}>Submit</button></div>}
+            {canManage && reference.status==='submitted' && <div className="grid gap-2 md:grid-cols-2"><label><span className="mb-1 block text-[10px] text-[#718391]">Bukti / external settlement reference</span><input className="h-9 w-44 rounded-lg border border-[#D8E3E9] px-2 text-xs" value={verificationInputs[reference.id]?.evidence ?? ''} onChange={e=>setVerificationInputs(p=>({...p,[reference.id]:{evidence:e.target.value,reason:p[reference.id]?.reason ?? ''}}))}/></label><label><span className="mb-1 block text-[10px] text-[#718391]">Alasan verifikasi</span><input className="h-9 w-44 rounded-lg border border-[#D8E3E9] px-2 text-xs" value={verificationInputs[reference.id]?.reason ?? ''} onChange={e=>setVerificationInputs(p=>({...p,[reference.id]:{evidence:p[reference.id]?.evidence ?? '',reason:e.target.value}}))}/></label><div className="flex gap-2 md:col-span-2"><button className="h-9 rounded-lg bg-[#247A55] px-3 text-[11px] font-semibold text-white disabled:opacity-50" disabled={saving || !verificationInputs[reference.id]?.evidence || !verificationInputs[reference.id]?.reason} onClick={()=>void verifyReference(reference.id,'approved')}>Verify & Reconcile</button><button className={secondary} disabled={saving || !verificationInputs[reference.id]?.evidence || !verificationInputs[reference.id]?.reason} onClick={()=>void verifyReference(reference.id,'rejected')}>Reject</button></div></div>}
           </div>
         </div>)}
         {!references.length && <p className="py-5 text-xs text-[#718391]">Belum ada payment reference.</p>}
