@@ -71,8 +71,9 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
       if (p) setProfileForm({legal_name:p.legal_name ?? '',registration_number:p.registration_number ?? '',billing_email:p.billing_email ?? '',billing_phone:p.billing_phone ?? '',contact_name:p.contact_name ?? '',contact_title:p.contact_title ?? '',website:p.website ?? '',country_code:p.country_code ?? 'ID',organization_id:p.organization_id ?? '',branch_id:p.branch_id ?? ''});
     } else setError(results[0].reason instanceof Error ? results[0].reason.message : 'Gagal memuat profile.');
     if (results[1].status === 'fulfilled') {
-      setContracts(results[1].value.data);
-      setSelectedId((id) => id || results[1].value.data[0]?.id || '');
+      const contractRows = results[1].value.data;
+      setContracts(contractRows);
+      setSelectedId((id) => id || contractRows[0]?.id || '');
     } else setError(results[1].reason instanceof Error ? results[1].reason.message : 'Gagal memuat kontrak.');
     if (results[2].status === 'fulfilled') setEntitlements(results[2].value.data);
     if (results[3].status === 'fulfilled') setPolicies(results[3].value.data);
