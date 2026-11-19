@@ -4,7 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
   getWorkforceTenantContext,
+  listTenantMemberships,
+  listRoleTemplates,
+  inviteTenantMember,
+  activateTenantMembership,
+  suspendTenantMembership,
+  revokeTenantMembership,
+  replaceMembershipRole,
+  reassignMembershipHierarchy,
   type AgentzyWorkforceTenantContext,
+  type AgentzyTenantMembership,
+  type AgentzyRoleTemplate,
+  type InviteTenantMemberInput,
+  type ReassignMembershipHierarchyInput,
 } from '@/apps/web/lib/api-client';
 
 import type {
@@ -133,6 +145,16 @@ export function useAIWorkforcePortal(
   const activeMembership = auth.identity?.memberships.find(
     (membership) => membership.tenant_id === activeTenantId
   );
+  const canManageMemberships = Boolean(
+    activeMembership?.permissions.includes('corporate.organization.manage') ||
+    activeMembership?.permissions.includes('platform.memberships.manage')
+  );
+  const [accessManagementResult, setAccessManagementResult] = useState<{
+    tenantId: string;
+    memberships: AgentzyTenantMembership[];
+    roles: AgentzyRoleTemplate[];
+    error?: string;
+  } | null>(null);
   const managerRole = useMemo<AgentzyManagerRole>(() => {
     if (activeMembership?.permissions.includes('platform.security.manage')) return 'Admin Agentzy';
     if (
@@ -174,6 +196,90 @@ export function useAIWorkforcePortal(
       });
     return () => { active = false; };
   }, [auth.session?.access_token, activeTenantId]);
+
+  const refreshAccessManagement = useCallback(async () => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId || !canManageMemberships) return;
+    const [memberships, roles] = await Promise.all([
+      listTenantMemberships(accessToken, activeTenantId),
+      listRoleTemplates(accessToken),
+    ]);
+    setAccessManagementResult({ tenantId: activeTenantId, memberships, roles });
+  }, [auth.session?.access_token, activeTenantId, canManageMemberships]);
+
+  useEffect(() => {
+    if (!canManageMemberships || !auth.session?.access_token || !activeTenantId) return;
+    let active = true;
+    void refreshAccessManagement().catch((error) => {
+      if (active) setAccessManagementResult({
+        tenantId: activeTenantId,
+        memberships: [],
+        roles: [],
+        error: error instanceof Error ? error.message : 'Gagal memuat directory membership tenant.',
+      });
+    });
+    return () => { active = false; };
+  }, [refreshAccessManagement, canManageMemberships, auth.session?.access_token, activeTenantId]);
+
+  const runMembershipCommand = useCallback(async (action: () => Promise<unknown>, successMessage: string) => {
+    await action();
+    await refreshAccessManagement();
+    showToast(successMessage);
+  }, [refreshAccessManagement, showToast]);
+
+  const handleInviteTenantMember = useCallback((payload: InviteTenantMemberInput) => {
+    const token = auth.session?.access_token;
+    if (!token) throw new Error('Sesi autentikasi tidak tersedia.');
+    return runMembershipCommand(
+      () => inviteTenantMember(token, activeTenantId, payload),
+      'Undangan membership berhasil diproses.',
+    );
+  }, [auth.session?.access_token, activeTenantId, runMembershipCommand]);
+
+  const handleReplaceMembershipRole = useCallback((membershipId: string, roleKey: string) => {
+    const token = auth.session?.access_token;
+    if (!token) throw new Error('Sesi autentikasi tidak tersedia.');
+    return runMembershipCommand(
+      () => replaceMembershipRole(token, activeTenantId, membershipId, { role_key: roleKey, scope_type: 'tenant', scope_id: null }),
+      'Role membership berhasil diperbarui.',
+    );
+  }, [auth.session?.access_token, activeTenantId, runMembershipCommand]);
+
+  const handleActivateTenantMembership = useCallback((membershipId: string) => {
+    const token = auth.session?.access_token;
+    if (!token) throw new Error('Sesi autentikasi tidak tersedia.');
+    return runMembershipCommand(
+      () => activateTenantMembership(token, activeTenantId, membershipId),
+      'Membership berhasil diaktifkan.',
+    );
+  }, [auth.session?.access_token, activeTenantId, runMembershipCommand]);
+
+  const handleSuspendTenantMembership = useCallback((membershipId: string) => {
+    const token = auth.session?.access_token;
+    if (!token) throw new Error('Sesi autentikasi tidak tersedia.');
+    return runMembershipCommand(
+      () => suspendTenantMembership(token, activeTenantId, membershipId),
+      'Membership berhasil disuspensi.',
+    );
+  }, [auth.session?.access_token, activeTenantId, runMembershipCommand]);
+
+  const handleRevokeTenantMembership = useCallback((membershipId: string) => {
+    const token = auth.session?.access_token;
+    if (!token) throw new Error('Sesi autentikasi tidak tersedia.');
+    return runMembershipCommand(
+      () => revokeTenantMembership(token, activeTenantId, membershipId),
+      'Akses membership berhasil dicabut.',
+    );
+  }, [auth.session?.access_token, activeTenantId, runMembershipCommand]);
+
+  const handleReassignTenantMembership = useCallback((membershipId: string, payload: ReassignMembershipHierarchyInput) => {
+    const token = auth.session?.access_token;
+    if (!token) throw new Error('Sesi autentikasi tidak tersedia.');
+    return runMembershipCommand(
+      () => reassignMembershipHierarchy(token, activeTenantId, membershipId, payload),
+      'Assignment hierarchy membership berhasil diperbarui.',
+    );
+  }, [auth.session?.access_token, activeTenantId, runMembershipCommand]);
 
   const selectedWorker = useMemo(
     () => aiWorkers.find((w) => w.id === selectedWorkerId) ?? aiWorkers[0],
@@ -957,6 +1063,18 @@ export function useAIWorkforcePortal(
     activeTenantId,
     activeTenant,
     activeMembership,
+    canManageMemberships,
+    accessManagementMemberships: accessManagementResult?.tenantId === activeTenantId ? accessManagementResult.memberships : [],
+    accessManagementRoles: accessManagementResult?.tenantId === activeTenantId ? accessManagementResult.roles : [],
+    accessManagementLoading: canManageMemberships && accessManagementResult?.tenantId !== activeTenantId,
+    accessManagementError: accessManagementResult?.tenantId === activeTenantId ? accessManagementResult.error ?? null : null,
+    handleInviteTenantMember,
+    handleReplaceMembershipRole,
+    handleActivateTenantMembership,
+    handleSuspendTenantMembership,
+    handleRevokeTenantMembership,
+    handleReassignTenantMembership,
+    refreshAccessManagement,
     workforceTenantContext,
     workforceContextError,
     tenantOptions,
