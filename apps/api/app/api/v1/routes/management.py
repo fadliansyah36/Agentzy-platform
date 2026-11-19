@@ -23,8 +23,8 @@ from app.core.pagination import (
 )
 from app.core.redaction import redact_audit_value
 from app.core.security import current_claims
-from app.db.session import engine
-from app.services.contract_entitlement_service import assert_membership_entitlement_capacity, user_session
+from app.db.session import engine, user_session
+from app.services.contract_entitlement_service import assert_membership_entitlement_capacity
 
 router = APIRouter()
 
