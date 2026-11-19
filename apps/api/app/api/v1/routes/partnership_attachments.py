@@ -2,7 +2,6 @@
 
 import json
 from datetime import UTC, datetime
-from urllib.parse import quote
 from uuid import UUID
 
 import httpx
