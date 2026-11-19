@@ -122,6 +122,28 @@ export const listPartnershipProspectActivities = (accessToken: string, prospectI
     { method: "GET", accessToken },
   );
 
+export type PartnershipAttachment = {
+  id: string;
+  original_filename: string;
+  content_type: string;
+  file_size: number;
+  sha256: string;
+  scan_status: "pending_scan" | "clean" | "infected" | "rejected";
+  uploaded_at: string;
+  scanned_at: string | null;
+  download_available: boolean;
+};
+export const listPartnershipProspectAttachments = (accessToken: string, prospectId: string) =>
+  apiRequest<{ data: PartnershipAttachment[] }>(
+    `/partnership/prospects/${encodeURIComponent(prospectId)}/attachments`,
+    { method: "GET", accessToken },
+  );
+export const createPartnershipAttachmentDownload = (accessToken: string, attachmentId: string) =>
+  apiRequest<{ data: { attachment_id: string; filename: string; signed_url: string; expires_in_seconds: number } }>(
+    `/partnership/attachments/${encodeURIComponent(attachmentId)}/download`,
+    { method: "POST", accessToken },
+  );
+
 export type PublicCatalogueItem = {
   audience: "human" | "ai";
   service_key: string;
