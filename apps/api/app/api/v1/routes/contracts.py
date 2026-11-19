@@ -25,7 +25,11 @@ class ContractServiceInput(BaseModel):
     quantity: int = Field(default=1, ge=1, le=100000)
     monthly_fee: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
     sla: dict = Field(default_factory=dict)
+    kpi: dict = Field(default_factory=dict)
     entitlement: dict = Field(default_factory=dict)
+    human_workforce_limit: int | None = Field(default=None, ge=0)
+    ai_worker_limit: int | None = Field(default=None, ge=0)
+    ai_credits_limit: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
 
 
 class ContractCreate(BaseModel):
@@ -259,10 +263,12 @@ async def create_contract(
                 text("""
                     insert into public.contract_services(
                       tenant_id,contract_id,contract_version_id,service_key,service_scope,
-                      quantity,monthly_fee,currency,sla,entitlement
+                      quantity,monthly_fee,currency,sla,entitlement,kpi,
+                      human_workforce_limit,ai_worker_limit,ai_credits_limit
                     ) values(
                       :tenant_id,:contract_id,:version_id,:service_key,:scope,
-                      :quantity,:fee,:currency,cast(:sla as jsonb),cast(:entitlement as jsonb)
+                      :quantity,:fee,:currency,cast(:sla as jsonb),cast(:entitlement as jsonb),
+                      cast(:kpi as jsonb),:human_limit,:ai_limit,:credits_limit
                     )
                 """),
                 {
@@ -276,6 +282,10 @@ async def create_contract(
                     "currency": payload.currency.upper(),
                     "sla": json.dumps(item.sla),
                     "entitlement": json.dumps(item.entitlement),
+                    "kpi": json.dumps(item.kpi),
+                    "human_limit": item.human_workforce_limit,
+                    "ai_limit": item.ai_worker_limit,
+                    "credits_limit": item.ai_credits_limit,
                 },
             )
         await _audit_event(
@@ -603,6 +613,30 @@ async def activate_contract(
                 where id=:id and tenant_id=:tenant_id
             """),
             {"id": contract_id, "tenant_id": tenant_id, "actor": actor},
+        )
+        await connection.execute(
+            text("""
+                insert into public.contract_entitlement_grants(
+                  tenant_id,contract_id,contract_version_id,service_key,service_scope,
+                  sla,kpi,human_workforce_limit,ai_worker_limit,ai_credits_limit,
+                  status,effective_start,effective_end
+                )
+                select s.tenant_id,s.contract_id,s.contract_version_id,s.service_key,
+                  jsonb_build_object('scope',s.service_scope,'entitlement',s.entitlement),
+                  s.sla,s.kpi,s.human_workforce_limit,s.ai_worker_limit,s.ai_credits_limit,
+                  'active',coalesce(s.effective_start,c.effective_start),
+                  coalesce(s.effective_end,c.effective_end)
+                from public.contract_services s
+                join public.contracts c on c.id=s.contract_id and c.tenant_id=s.tenant_id
+                where s.contract_id=:id and s.tenant_id=:tenant_id
+                  and s.contract_version_id=(
+                    select id from public.contract_versions
+                    where contract_id=:id and version_number=c.current_version
+                  )
+                on conflict(contract_version_id,service_key) do update set
+                  status='active',updated_at=now()
+            """),
+            {"id": contract_id, "tenant_id": tenant_id},
         )
         await _audit_event(
             connection,
