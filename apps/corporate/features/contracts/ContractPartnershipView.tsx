@@ -55,7 +55,7 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
   const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',effective_start:'',effective_end:''});
-  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:''});
+  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:''});
   const [policyName,setPolicyName] = useState('');
   const [policyType,setPolicyType] = useState<'master'|'statement_of_work'|'amendment'>('master');
   const [policySteps,setPolicySteps] = useState(1);
@@ -301,6 +301,12 @@ export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateT
         <label className="mt-3 block"><span className={label}>Ringkasan perubahan</span><input className={field} value={amendment.change_summary} onChange={(e)=>setAmendment(p=>({...p,change_summary:e.target.value}))}/></label>
         <label className="mt-3 block"><span className={label}>Scope versi baru</span><textarea className="min-h-20 w-full rounded-lg border border-[#D8E3E9] p-3 text-sm" value={amendment.scope_summary} onChange={(e)=>setAmendment(p=>({...p,scope_summary:e.target.value}))}/></label>
         <label className="mt-3 block"><span className={label}>Effective from</span><input type="date" className={field} value={amendment.effective_from} onChange={(e)=>setAmendment(p=>({...p,effective_from:e.target.value}))}/></label>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <label><span className={label}>Service scope baru (opsional)</span><input className={field} value={amendment.service_scope} onChange={e=>setAmendment(p=>({...p,service_scope:e.target.value}))}/></label>
+          <label><span className={label}>Fee bulanan baru</span><input type="number" min="0" className={field} value={amendment.monthly_fee} onChange={e=>setAmendment(p=>({...p,monthly_fee:e.target.value}))}/></label>
+          <label><span className={label}>Human workforce limit</span><input type="number" min="0" className={field} value={amendment.human_limit} onChange={e=>setAmendment(p=>({...p,human_limit:e.target.value}))}/></label>
+          <label><span className={label}>AI Worker limit</span><input type="number" min="0" className={field} value={amendment.ai_limit} onChange={e=>setAmendment(p=>({...p,ai_limit:e.target.value}))}/></label>
+        </div>
         {canManage && detail && ['active','approved'].includes(detail.status) && <button className={primary+' mt-3'} disabled={saving || !amendment.change_summary || !amendment.scope_summary || !amendment.effective_from} onClick={()=>void createAmendment()}>Buat Amendment Version</button>}
         {detail && <p className="mt-4 text-xs text-[#526675]">Selected {detail.contract_number} · current v{detail.current_version}</p>}
         <div className="mt-4 divide-y divide-[#EAF2F6]">{versions.map(v=><div key={v.id} className="py-3"><div className="flex justify-between gap-2"><p className="text-xs font-semibold">Version {v.version_number} · {v.version_status}</p><p className="text-[11px] text-[#718391]">{fmt(v.effective_from)}</p></div><p className="mt-1 text-xs text-[#526675]">{v.change_summary ?? v.scope_summary}</p><p className="mt-1 break-all font-mono text-[10px] text-[#718391]">SHA-256 {v.content_hash}</p></div>)}{!versions.length && <p className="py-3 text-xs text-[#718391]">Riwayat versi belum tersedia.</p>}</div>
