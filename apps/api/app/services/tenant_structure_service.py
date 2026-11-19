@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.core.authorization import authorize_object
 from app.repositories.tenant_structure_repository import (
     get_active_parent_unit,
     get_organization_status,
@@ -23,10 +24,18 @@ async def update_organization_unit(
     unit_id: UUID,
     actor_id: UUID,
     changes: dict,
+    authorization_context=None,
 ) -> dict:
     current = await get_organization_unit_for_update(connection, tenant_id, unit_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Organization unit tidak ditemukan.")
+    if authorization_context is not None:
+        authorize_object(
+            authorization_context,
+            resource_tenant_id=tenant_id,
+            organization_id=current["organization_id"],
+            organization_unit_id=unit_id,
+        )
     organization_status = await get_organization_status(
         connection, tenant_id, current["organization_id"]
     )
@@ -89,10 +98,18 @@ async def set_organization_unit_status(
     unit_id: UUID,
     actor_id: UUID,
     status: str,
+    authorization_context=None,
 ) -> tuple[dict, str]:
     current = await get_organization_unit_for_update(connection, tenant_id, unit_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Organization unit tidak ditemukan.")
+    if authorization_context is not None:
+        authorize_object(
+            authorization_context,
+            resource_tenant_id=tenant_id,
+            organization_id=current["organization_id"],
+            organization_unit_id=unit_id,
+        )
     previous_status = current["status"]
 
     if status == "archived":
