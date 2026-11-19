@@ -25,7 +25,7 @@
 - Created private Storage bucket `partnership-quarantine` with 10 MB object limit and PDF/JPG/PNG MIME allowlist.
 - Added a capability-protected raw upload endpoint. It checks application capability, filename, MIME, magic bytes, size and per-application attachment count.
 - Object names are random and private. Metadata includes SHA-256 and `pending_scan`.
-- Added a ClamAV INSTREAM scanner worker. It retrieves objects from private Storage, verifies size and SHA-256 against metadata, and records `clean`, `infected` or `rejected`; scanner outages defer/retry without releasing files.
+- Added a ClamAV INSTREAM scanner worker. It retrieves objects from private Storage, verifies size and SHA-256 against metadata, and records `clean`, `infected` or `rejected`; scanner outages atomically defer/retry without releasing files.
 - Added AAL2 + `platform.partnership.read` + global ABAC protected attachment listing and 60-second signed download issuance. Only `clean` objects can receive a signed URL; issuance is audited.
 - CRM Lead Inbox now shows attachment names, scan status and download controls. The scanner worker remains disabled until `CLAMAV_HOST` and server-side Storage credentials are configured.
 
@@ -106,7 +106,7 @@ Minimum engineering checks are defined in `.github/workflows/phase-00-engineerin
 The run on commit `1421b314a2af1706f5454c0380a45fb494919610` completed successfully:  
 https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44489073610
 
-Subsequent backend-only hardening commits are included in the current branch; the latest run for the final head must be used for final acceptance evidence.
+The final implementation code head `5f7f59208545badc99f454d2885de093284ff2ab` passed minimum engineering run [44492471392](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44492471392). Migration source filenames now match the exact five applied Supabase migration versions.
 
 No staging, UAT, load test, penetration test or production deployment was run.
 
