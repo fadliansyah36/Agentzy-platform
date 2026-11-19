@@ -35,6 +35,9 @@ class ContractServiceInput(BaseModel):
 class ContractCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tenant_id: UUID
+    organization_id: UUID | None = None
+    branch_id: UUID | None = None
+    parent_contract_id: UUID | None = None
     contract_number: str = Field(min_length=3, max_length=80, pattern=r"^[A-Za-z0-9._/-]+$")
     title: str = Field(min_length=3, max_length=240)
     contract_type: Literal["master", "statement_of_work", "amendment"] = "master"
@@ -159,6 +162,25 @@ async def create_contract(
     if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
         raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi (8–128 karakter).")
     await _require_permission(actor, payload.tenant_id, "corporate.contracts.manage")
+    async with engine.connect() as validation_connection:
+        for table, entity_id in (
+            ("organizations", payload.organization_id),
+            ("branches", payload.branch_id),
+        ):
+            if entity_id:
+                valid = await validation_connection.execute(
+                    text(f"select exists(select 1 from public.{table} where id=:id and tenant_id=:tenant)"),
+                    {"id": entity_id, "tenant": payload.tenant_id},
+                )
+                if not valid.scalar_one():
+                    raise HTTPException(status_code=422, detail=f"{table} tidak dimiliki tenant ini.")
+        if payload.parent_contract_id:
+            parent = await validation_connection.execute(
+                text("select exists(select 1 from public.contracts where id=:id and tenant_id=:tenant and status in ('approved','active'))"),
+                {"id": payload.parent_contract_id, "tenant": payload.tenant_id},
+            )
+            if not parent.scalar_one():
+                raise HTTPException(status_code=422, detail="Kontrak induk tidak valid.")
     canonical = payload.model_dump(mode="json")
     fingerprint = hashlib.sha256(
         json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
@@ -190,11 +212,12 @@ async def create_contract(
             text("""
                 insert into public.contracts(
                   tenant_id,contract_number,title,contract_type,status,currency,
-                  effective_start,effective_end,renewal_at,idempotency_key,
-                  idempotency_fingerprint,created_by,updated_by
+                  effective_start,effective_end,renewal_at,organization_id,branch_id,
+                  parent_contract_id,idempotency_key,idempotency_fingerprint,created_by,updated_by
                 ) values(
                   :tenant_id,:number,:title,:type,'draft',:currency,
-                  :start,:end,:renewal,:key,:fingerprint,:actor,:actor
+                  :start,:end,:renewal,:organization_id,:branch_id,:parent_contract_id,
+                  :key,:fingerprint,:actor,:actor
                 ) returning id
             """),
             {
@@ -206,6 +229,9 @@ async def create_contract(
                 "start": payload.effective_start,
                 "end": payload.effective_end,
                 "renewal": payload.renewal_at,
+                "organization_id": payload.organization_id,
+                "branch_id": payload.branch_id,
+                "parent_contract_id": payload.parent_contract_id,
                 "key": idempotency_key,
                 "fingerprint": fingerprint,
                 "actor": actor,
