@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes.access_policies import router as access_policies_router
+from app.api.v1.routes.contracts import router as contracts_router
 from app.api.v1.routes.bootstrap import router as bootstrap_router
 from app.api.v1.routes.identity import router as identity_router
 from app.api.v1.routes.integrations import router as integrations_router
@@ -22,5 +23,6 @@ router.include_router(partnership_router)
 router.include_router(partnership_attachments_router)
 router.include_router(partnership_notifications_router)
 router.include_router(integrations_router)
+router.include_router(contracts_router)
 router.include_router(access_policies_router)
 router.include_router(security_lifecycle_router)
