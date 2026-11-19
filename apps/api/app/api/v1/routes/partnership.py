@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import re
+from urllib.parse import unquote
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -204,17 +205,23 @@ async def create_partnership_application(
 
     upload_token = _upload_token_for_key(idempotency_key)
     upload_token_hash = hashlib.sha256(upload_token.encode()).hexdigest()
+    request_fingerprint = hashlib.sha256(json.dumps(
+        payload.model_dump(exclude={"captcha_token", "fax_number"}, mode="json"),
+        sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
     context = _request_context(request)
     async with engine.begin() as connection:
         existing = await connection.execute(
             text("""
-                select id,reference_code,status from public.public_partnership_applications
+                select id,reference_code,status,request_fingerprint from public.public_partnership_applications
                 where submission_idempotency_key=:key
             """),
             {"key": idempotency_key},
         )
         prior = existing.mappings().first()
         if prior:
+            if prior["request_fingerprint"] != request_fingerprint:
+                raise HTTPException(status_code=409, detail="Idempotency-Key telah digunakan untuk payload yang berbeda.")
             return {
                 "data": {
                     "id": str(prior["id"]),
@@ -247,11 +254,11 @@ async def create_partnership_application(
                   id,reference_code,company_name,company_type,contact_name,contact_title,
                   business_email,business_phone,website,operating_locations,estimated_workforce,
                   human_needs,ai_needs,provider_products,needs_summary,status,source,
-                  request_id,correlation_id,trace_id,upload_token_hash,submission_idempotency_key
+                  request_id,correlation_id,trace_id,upload_token_hash,submission_idempotency_key,request_fingerprint
                 ) values (
                   :id,:reference,:company,:company_type,:contact,:title,:email,:phone,
                   :website,:locations,:workforce,:human,:ai,:products,:summary,'submitted',
-                  'public_landing',:request_id,:correlation_id,:trace_id,:upload_hash,:idempotency
+                  'public_landing',:request_id,:correlation_id,:trace_id,:upload_hash,:idempotency,:fingerprint
                 ) returning id,reference_code,status,created_at
             """),
             {
@@ -275,6 +282,7 @@ async def create_partnership_application(
                 "trace_id": context["trace_id"],
                 "upload_hash": upload_token_hash,
                 "idempotency": idempotency_key,
+                "fingerprint": request_fingerprint,
             },
         )
         application = dict(result.mappings().one())
@@ -383,14 +391,19 @@ async def upload_partnership_attachment(
         if not app_result.first():
             raise HTTPException(status_code=404, detail="Pengajuan atau akses upload tidak tersedia.")
 
-    safe_filename = (filename or "").strip()
+    safe_filename = unquote((filename or "").strip()).replace("\\", "/").rsplit("/", 1)[-1]
     extension = "." + safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     allowed = ALLOWED_UPLOADS.get(extension)
     if not allowed or content_type != allowed[0]:
         raise HTTPException(status_code=415, detail="Format lampiran tidak didukung. Gunakan PDF, JPG, atau PNG.")
-    content = await request.body()
-    if not content or len(content) > MAX_UPLOAD_BYTES or not content.startswith(allowed[1]):
+    chunks = bytearray()
+    async for chunk in request.stream():
+        chunks.extend(chunk)
+        if len(chunks) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File melebihi batas 10 MB.")
+    content = bytes(chunks)
+    if not content or not content.startswith(allowed[1]):
         raise HTTPException(status_code=413 if len(content) > MAX_UPLOAD_BYTES else 400, detail="File tidak valid atau melebihi 10 MB.")
     if not settings.supabase_service_role_key:
         raise HTTPException(status_code=503, detail="Private attachment storage belum dikonfigurasi.")
