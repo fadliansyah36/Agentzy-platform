@@ -2170,3 +2170,175 @@ async def update_contract_signature_status(
             },
         )
     return {"data": {"id": str(contract_id), "signature_status": payload.status}}
+
+
+class ProviderProfileInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: UUID
+    provider_code: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9._/-]+$")
+    provider_name: str = Field(min_length=2, max_length=200)
+    provider_type: str = Field(pattern="^(isp|telecom|managed_service|technology|other)$")
+    registration_number: str | None = Field(default=None, max_length=120)
+    contact_email: str | None = Field(default=None, max_length=320)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    service_regions: list[str] = Field(default_factory=list, max_length=100)
+    service_metadata: dict = Field(default_factory=dict)
+
+
+class ProviderProfilePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: UUID
+    provider_name: str | None = Field(default=None, min_length=2, max_length=200)
+    provider_type: str | None = Field(default=None, pattern="^(isp|telecom|managed_service|technology|other)$")
+    registration_number: str | None = Field(default=None, max_length=120)
+    contact_email: str | None = Field(default=None, max_length=320)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    service_regions: list[str] | None = Field(default=None, max_length=100)
+    service_metadata: dict | None = None
+
+
+@router.get("/provider-profiles")
+async def list_provider_profiles(tenant_id: UUID, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.providers.read")
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select id,provider_code,provider_name,provider_type,registration_number,
+                       contact_email,contact_phone,service_regions,status,created_at,updated_at
+                from public.provider_profiles where tenant_id=:tenant
+                order by provider_name,id
+            """),
+            {"tenant": tenant_id},
+        )
+    return {"data": [{
+        **dict(row), "id": str(row["id"]),
+        "created_at": row["created_at"].isoformat(),
+        "updated_at": row["updated_at"].isoformat(),
+    } for row in result.mappings().all()]}
+
+
+@router.post("/provider-profiles", status_code=201)
+async def create_provider_profile(
+    payload: ProviderProfileInput, request: Request, claims: dict = claims_dependency
+):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, payload.tenant_id, "corporate.providers.manage")
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                insert into public.provider_profiles(
+                  tenant_id,corporate_tenant_id,provider_code,provider_name,provider_type,
+                  registration_number,contact_email,contact_phone,service_regions,
+                  service_metadata,created_by,updated_by
+                ) values(
+                  :tenant,:tenant,:code,:name,:type,:registration,:email,:phone,
+                  cast(:regions as jsonb),cast(:metadata as jsonb),:actor,:actor
+                ) returning id,status
+            """),
+            {
+                "tenant": payload.tenant_id, "code": payload.provider_code,
+                "name": payload.provider_name, "type": payload.provider_type,
+                "registration": payload.registration_number, "email": payload.contact_email,
+                "phone": payload.contact_phone, "regions": json.dumps(payload.service_regions),
+                "metadata": json.dumps(payload.service_metadata), "actor": actor,
+            },
+        )
+        row = result.mappings().one()
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(:tenant,:actor,'corporate.provider_profile.created',
+                  'provider_profile',:id,:request_id,cast(:metadata as jsonb))
+            """),
+            {
+                "tenant": payload.tenant_id, "actor": actor, "id": str(row["id"]),
+                "request_id": _request_id(request),
+                "metadata": json.dumps({"provider_code": payload.provider_code,
+                                        "provider_type": payload.provider_type}),
+            },
+        )
+    return {"data": {"id": str(row["id"]), "status": row["status"]}}
+
+
+@router.patch("/provider-profiles/{provider_id}")
+async def update_provider_profile(
+    provider_id: UUID, payload: ProviderProfilePatch, request: Request,
+    claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, payload.tenant_id, "corporate.providers.manage")
+    values = payload.model_dump(exclude={"tenant_id"}, exclude_unset=True)
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                update public.provider_profiles set
+                  provider_name=coalesce(:name,provider_name),
+                  provider_type=coalesce(:type,provider_type),
+                  registration_number=coalesce(:registration,registration_number),
+                  contact_email=coalesce(:email,contact_email),
+                  contact_phone=coalesce(:phone,contact_phone),
+                  service_regions=coalesce(cast(:regions as jsonb),service_regions),
+                  service_metadata=coalesce(cast(:metadata as jsonb),service_metadata),
+                  updated_by=:actor,updated_at=now()
+                where id=:id and tenant_id=:tenant and status<>'archived'
+                returning id,status
+            """),
+            {
+                "name": values.get("provider_name"), "type": values.get("provider_type"),
+                "registration": values.get("registration_number"), "email": values.get("contact_email"),
+                "phone": values.get("contact_phone"),
+                "regions": json.dumps(values["service_regions"]) if "service_regions" in values else None,
+                "metadata": json.dumps(values["service_metadata"]) if "service_metadata" in values else None,
+                "actor": actor, "id": provider_id, "tenant": payload.tenant_id,
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider profile tidak ditemukan.")
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(:tenant,:actor,'corporate.provider_profile.updated',
+                  'provider_profile',:id,:request_id,'{}'::jsonb)
+            """),
+            {"tenant": payload.tenant_id, "actor": actor, "id": str(provider_id),
+             "request_id": _request_id(request)},
+        )
+    return {"data": {"id": str(row["id"]), "status": row["status"]}}
+
+
+@router.patch("/provider-profiles/{provider_id}/status")
+async def update_provider_profile_status(
+    provider_id: UUID, tenant_id: UUID, status: str = Query(pattern="^(active|suspended|archived)$"),
+    reason: str = Query(min_length=3, max_length=2000),
+    request: Request = None, claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.providers.manage")
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                update public.provider_profiles set status=:status,updated_by=:actor,updated_at=now()
+                where id=:id and tenant_id=:tenant and status<>'archived'
+                returning status
+            """),
+            {"status": status, "actor": actor, "id": provider_id, "tenant": tenant_id},
+        )
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider profile tidak ditemukan.")
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(:tenant,:actor,'corporate.provider_profile.status_changed',
+                  'provider_profile',:id,:request_id,cast(:metadata as jsonb))
+            """),
+            {"tenant": tenant_id, "actor": actor, "id": str(provider_id),
+             "request_id": _request_id(request),
+             "metadata": json.dumps({"status": status, "reason": reason})},
+        )
+    return {"data": {"id": str(provider_id), "status": status}}
