@@ -456,7 +456,9 @@ async def upload_partnership_attachment(
             {"id": application_id},
         )
         if int(attachment_count.scalar_one()) >= 5:
-            raise HTTPException(status_code=409, detail="Batas lima lampiran per pengajuan tercapai.")
+            raise HTTPException(
+                status_code=409, detail="Batas lima lampiran per pengajuan tercapai."
+            )
 
     safe_filename = unquote((filename or "").strip()).replace("\\", "/").rsplit("/", 1)[-1]
     safe_filename = re.sub(r"[\\x00-\\x1f\\x7f]", "", safe_filename)
