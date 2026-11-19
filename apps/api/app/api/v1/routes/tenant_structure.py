@@ -1449,6 +1449,20 @@ async def activate_membership(
         target = target_result.mappings().first()
         if target is None:
             raise HTTPException(status_code=404, detail="Membership tidak ditemukan.")
+        existing_role_rows = await session.execute(
+            text("""
+                select r.key
+                from public.membership_roles mr
+                join public.roles r on r.id=mr.role_id
+                where mr.membership_id=:membership_id and mr.scope_type='tenant'
+                  and mr.valid_from<=now() and (mr.valid_until is null or mr.valid_until>now())
+            """),
+            {"membership_id": membership_id},
+        )
+        for existing_role in existing_role_rows.scalars().all():
+            await assert_membership_entitlement_capacity(
+                session, tenant_id, existing_role, exclude_membership_id=membership_id
+            )
         if context is not None:
             authorize_object(
                 context,
