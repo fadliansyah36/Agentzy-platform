@@ -26,6 +26,13 @@ def _message_for(event_type: str, payload: dict) -> tuple[str, str]:
             "Pembaruan Pengajuan Kemitraan Agentzy",
             f"Status pengajuan kemitraan Anda ({reference}) telah diperbarui menjadi: {status}.",
         )
+    if event_type == "partnership.prospect.assigned":
+        company = str(payload.get("company_name") or "Perusahaan")
+        return (
+            "Lead Kemitraan Baru Ditugaskan",
+            f"Prospek {company} ({reference}) telah ditugaskan kepada Anda. "
+            "Silakan tindak lanjuti melalui Super Admin Partnership Lead Inbox.",
+        )
     raise ValueError("Unsupported notification event type")
 
 
