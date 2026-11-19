@@ -17,7 +17,8 @@ def _message_for(event_type: str, payload: dict) -> tuple[str, str]:
     if event_type == "partnership.application_received":
         return (
             "Pengajuan Kerja Sama Agentzy diterima",
-            f"Pengajuan kerja sama Anda telah diterima oleh Agentzy. Nomor referensi: {reference}. Tim Agentzy akan menindaklanjuti proses kualifikasi.",
+            f"Pengajuan kerja sama Anda telah diterima oleh Agentzy. Nomor referensi: {reference}. "
+            "Tim Agentzy akan menindaklanjuti proses kualifikasi.",
         )
     if event_type == "partnership.prospect.updated":
         status = str(payload.get("status") or "diperbarui")
@@ -94,18 +95,28 @@ async def dispatch_notification_batch(batch_size: int = 20) -> int:
                     text("""
                         update public.notification_outbox
                         set status=:status,last_error_code=:error_code,
-                            available_at=now() + make_interval(secs => least(3600, power(2,:attempts)::integer * 30)),
+                            available_at=now() + make_interval(
+                              secs => least(3600, power(2,:attempts)::integer * 30)
+                            ),
                             updated_at=now()
                         where id=:id
                     """),
                     {
                         "id": row["id"],
                         "status": state,
-                        "error_code": "SMTP_DELIVERY_FAILED" if not isinstance(exc, ValueError) else "NOTIFICATION_CONFIGURATION_INVALID",
+                        "error_code": (
+                            "SMTP_DELIVERY_FAILED"
+                            if not isinstance(exc, ValueError)
+                            else "NOTIFICATION_CONFIGURATION_INVALID"
+                        ),
                         "attempts": attempts,
                     },
                 )
-            logger.warning("notification_delivery_failed", event_type=row["event_type"], attempt=attempts)
+            logger.warning(
+                "notification_delivery_failed",
+                event_type=row["event_type"],
+                attempt=attempts,
+            )
     return len(claimed)
 
 
