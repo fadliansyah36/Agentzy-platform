@@ -2428,6 +2428,7 @@ async def update_organization_unit(
             unit_id=unit_id,
             actor_id=actor,
             changes=payload.model_dump(exclude_unset=True),
+            authorization_context=context,
         )
         await _audit(
             connection,
@@ -2478,6 +2479,7 @@ async def _set_organization_unit_status(
             unit_id=unit_id,
             actor_id=actor,
             status=status_value,
+            authorization_context=context,
         )
         await _audit(
             connection,
