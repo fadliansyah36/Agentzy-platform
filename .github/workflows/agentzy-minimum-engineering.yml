@@ -3,6 +3,10 @@ name: Agentzy Minimum Engineering Checks
 on:
   push:
     branches: [main]
+    paths:
+      - 'apps/**'
+      - 'supabase/migrations/**'
+      - '.github/workflows/agentzy-minimum-engineering.yml'
   pull_request:
     branches: [main]
 
@@ -65,6 +69,11 @@ jobs:
           assert "/api/v1/corporate/contracts" in paths
           assert "/api/v1/integrations/google/oauth/start" in paths
           assert "/api/v1/public/catalogue" in paths
+          assert "/api/v1/corporate/provider-profiles" in paths
+          assert "/api/v1/corporate/ai-workers" in paths
+          assert "/api/v1/corporate/contracts/{contract_id}/versions" in paths
+          assert "/api/v1/corporate/payment-references/{reference_id}/verify" in paths
+          assert "/api/v1/corporate/metrics/contracts" in paths
           print(f"OpenAPI paths: {len(paths)}")
           PY
 
