@@ -455,41 +455,10 @@ async def upload_partnership_attachment(
     await _rate_limit(request, action="partnership-attachment", limit=20)
     if not upload_token:
         raise HTTPException(status_code=401, detail="Upload capability diperlukan.")
-    token_hash = hashlib.sha256(upload_token.encode()).hexdigest()
-    async with engine.connect() as connection:
-        app_result = await connection.execute(
-            text("""
-                select upload_token_hash,upload_token_expires_at
-                from public.public_partnership_applications
-                where id=:id and status not in ('closed','disqualified')
-            """),
-            {"id": application_id},
+    if not settings.supabase_service_role_key:
+        raise HTTPException(
+            status_code=503, detail="Private attachment storage belum dikonfigurasi."
         )
-        stored_application = app_result.mappings().first()
-        stored_token_hash = stored_application["upload_token_hash"] if stored_application else None
-        token_expires_at = (
-            stored_application["upload_token_expires_at"] if stored_application else None
-        )
-        if (
-            not stored_token_hash
-            or not token_expires_at
-            or token_expires_at <= datetime.now(UTC)
-            or not hmac.compare_digest(stored_token_hash, token_hash)
-        ):
-            raise HTTPException(
-                status_code=404, detail="Pengajuan atau akses upload tidak tersedia."
-            )
-        attachment_count = await connection.execute(
-            text("""
-                select count(*) from public.public_partnership_attachments
-                where application_id=:id
-            """),
-            {"id": application_id},
-        )
-        if int(attachment_count.scalar_one()) >= 5:
-            raise HTTPException(
-                status_code=409, detail="Batas lima lampiran per pengajuan tercapai."
-            )
 
     safe_filename = unquote((filename or "").strip()).replace("\\", "/").rsplit("/", 1)[-1]
     safe_filename = re.sub(r"[\\x00-\\x1f\\x7f]", "", safe_filename)
@@ -501,6 +470,7 @@ async def upload_partnership_attachment(
             status_code=415,
             detail="Format lampiran tidak didukung. Gunakan PDF, JPG, atau PNG.",
         )
+
     chunks = bytearray()
     async for chunk in request.stream():
         chunks.extend(chunk)
@@ -509,33 +479,75 @@ async def upload_partnership_attachment(
     content = bytes(chunks)
     if not content or not content.startswith(allowed[1]):
         raise HTTPException(status_code=400, detail="File tidak valid atau melebihi 10 MB.")
-    if not settings.supabase_service_role_key:
-        raise HTTPException(
-            status_code=503, detail="Private attachment storage belum dikonfigurasi."
-        )
 
+    token_hash = hashlib.sha256(upload_token.encode()).hexdigest()
     object_path = f"{application_id}/{uuid4().hex}{extension}"
     storage_url = (
         f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
         f"partnership-quarantine/{object_path}"
     )
-    headers = {
+    storage_headers = {
         "Authorization": f"Bearer {settings.supabase_service_role_key}",
         "apikey": settings.supabase_service_role_key,
         "Content-Type": allowed[0],
         "x-upsert": "false",
     }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(storage_url, content=content, headers=headers)
-    if response.status_code not in (200, 201):
-        raise HTTPException(
-            status_code=502,
-            detail="Lampiran tidak dapat disimpan ke private quarantine storage.",
-        )
-
+    storage_uploaded = False
     attachment_id = uuid4()
+
+    # Serialize attachment quota checks for the same application.
+    # Keep the application row locked through Storage upload and metadata insert.
     try:
         async with engine.begin() as connection:
+            await connection.execute(
+                text("select pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                {"key": str(application_id)},
+            )
+            app_result = await connection.execute(
+                text("""
+                    select upload_token_hash,upload_token_expires_at,status
+                    from public.public_partnership_applications
+                    where id=:id
+                    for update
+                """),
+                {"id": application_id},
+            )
+            application = app_result.mappings().first()
+            if (
+                application is None
+                or application["status"] in ("closed", "disqualified")
+                or not application["upload_token_hash"]
+                or not application["upload_token_expires_at"]
+                or application["upload_token_expires_at"] <= datetime.now(UTC)
+                or not hmac.compare_digest(application["upload_token_hash"], token_hash)
+            ):
+                raise HTTPException(
+                    status_code=404, detail="Pengajuan atau akses upload tidak tersedia."
+                )
+
+            attachment_count = await connection.execute(
+                text("""
+                    select count(*) from public.public_partnership_attachments
+                    where application_id=:id
+                """),
+                {"id": application_id},
+            )
+            if int(attachment_count.scalar_one()) >= 5:
+                raise HTTPException(
+                    status_code=409, detail="Batas lima lampiran per pengajuan tercapai."
+                )
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    storage_url, content=content, headers=storage_headers
+                )
+            if response.status_code not in (200, 201):
+                raise HTTPException(
+                    status_code=502,
+                    detail="Lampiran tidak dapat disimpan ke private quarantine storage.",
+                )
+            storage_uploaded = True
+
             await connection.execute(
                 text("""
                     insert into public.public_partnership_attachments(
@@ -557,8 +569,9 @@ async def upload_partnership_attachment(
                 },
             )
     except Exception:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            await client.delete(storage_url, headers=headers)
+        if storage_uploaded:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                await client.delete(storage_url, headers=storage_headers)
         raise
 
     return {
