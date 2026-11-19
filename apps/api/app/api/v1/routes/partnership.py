@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import authorize_platform_action, has_platform_permission
+from app.adapters.supabase_storage import delete_quarantined_object, upload_quarantined_object
 from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.redaction import redact_audit_value
@@ -501,16 +502,6 @@ async def upload_partnership_attachment(
         ).encode()
     ).hexdigest()
     object_path = f"{application_id}/{uuid4().hex}{extension}"
-    storage_url = (
-        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
-        f"partnership-quarantine/{object_path}"
-    )
-    storage_headers = {
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
-        "apikey": settings.supabase_service_role_key,
-        "Content-Type": allowed[0],
-        "x-upsert": "false",
-    }
     storage_attempted = False
     attachment_id = uuid4()
 
@@ -582,13 +573,8 @@ async def upload_partnership_attachment(
                     status_code=409, detail="Batas lima lampiran per pengajuan tercapai."
                 )
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(storage_url, content=content, headers=storage_headers)
-            if response.status_code not in (200, 201):
-                raise HTTPException(
-                    status_code=502,
-                    detail="Lampiran tidak dapat disimpan ke private quarantine storage.",
-                )
+            storage_attempted = True
+            await upload_quarantined_object(object_path, content, allowed[0])
             await connection.execute(
                 text("""
                     insert into public.public_partnership_attachments(
@@ -615,15 +601,8 @@ async def upload_partnership_attachment(
     except Exception:
         if storage_attempted:
             try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    cleanup = await client.delete(storage_url, headers=storage_headers)
-                    if cleanup.status_code not in (200, 204, 404):
-                        logger.warning(
-                            "partnership_attachment_storage_compensation_failed",
-                            application_id=str(application_id),
-                            status_code=cleanup.status_code,
-                        )
-            except httpx.HTTPError:
+                await delete_quarantined_object(object_path)
+            except Exception:
                 logger.exception(
                     "partnership_attachment_storage_compensation_unavailable",
                     application_id=str(application_id),
