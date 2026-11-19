@@ -671,6 +671,20 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     };
     if (scopeKey.startsWith('organization:')) {
       payload.organization_id = scopeKey.slice('organization:'.length);
+    } else if (scopeKey.startsWith('organization_unit:')) {
+      const unit = tenantRows.find(
+        (item) => item.unitType === 'Unit Organisasi' && item.id === scopeKey.slice('organization_unit:'.length),
+      );
+      if (!unit?.organizationId) {
+        showToast('Unit organisasi tidak memiliki organisasi induk yang valid.');
+        return;
+      }
+      payload = {
+        organization_id: unit.organizationId,
+        organization_unit_id: unit.id,
+        branch_id: null,
+        department_id: null,
+      };
     } else if (scopeKey.startsWith('branch:')) {
       const branch = tenantRows.find(
         (item) => item.unitType === 'Cabang / Regional' && item.id === scopeKey.slice('branch:'.length),
