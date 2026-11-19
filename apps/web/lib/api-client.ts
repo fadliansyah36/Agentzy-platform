@@ -151,6 +151,27 @@ export const retryPartnershipAttachmentScan = (accessToken: string, attachmentId
     { method: "POST", accessToken },
   );
 
+export type PartnershipNotification = {
+  id: string;
+  event_type: string;
+  status: "pending" | "processing" | "sent" | "failed" | "dead_letter";
+  attempts: number;
+  available_at: string | null;
+  processed_at: string | null;
+  last_error_code: string | null;
+  created_at: string | null;
+};
+export const listPartnershipProspectNotifications = (accessToken: string, prospectId: string) =>
+  apiRequest<{ data: PartnershipNotification[]; meta: { count: number; request_id?: string | null } }>(
+    `/partnership/prospects/${encodeURIComponent(prospectId)}/notifications`,
+    { method: "GET", accessToken },
+  );
+export const retryPartnershipNotification = (accessToken: string, notificationId: string) =>
+  apiRequest<{ notification_id: string; status: string }>(
+    `/partnership/notifications/${encodeURIComponent(notificationId)}/retry`,
+    { method: "POST", accessToken, headers: { "Idempotency-Key": createIdempotencyKey() }, body: JSON.stringify({}) },
+  );
+
 export type PublicCatalogueItem = {
   audience: "human" | "ai";
   service_key: string;
