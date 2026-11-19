@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str | None = None
     smtp_starttls: bool = True
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_uri: str | None = None
+    oauth_token_encryption_key: str | None = None
     platform_bootstrap_token: str | None = None
     app_base_url: str = "http://localhost:3000"
     database_url: str
@@ -58,6 +62,15 @@ class Settings(BaseSettings):
     @property
     def attachment_scanner_configured(self) -> bool:
         return bool(self.clamav_host and self.supabase_service_role_key)
+
+    @property
+    def google_oauth_configured(self) -> bool:
+        return bool(
+            self.google_oauth_client_id
+            and self.google_oauth_client_secret
+            and self.google_oauth_redirect_uri
+            and self.oauth_token_encryption_key
+        )
 
     @field_validator("database_url")
     @classmethod
