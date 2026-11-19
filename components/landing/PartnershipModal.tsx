@@ -77,6 +77,14 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
       setError('Persetujuan kebijakan privasi dan komunikasi diperlukan sebelum mengirim.');
       return;
     }
+    if (attachments.some((file) => file.size > 10 * 1024 * 1024)) {
+      setError('Setiap lampiran maksimal 10 MB.');
+      return;
+    }
+    if (attachments.some((file) => !['application/pdf', 'image/jpeg', 'image/png'].includes(file.type))) {
+      setError('Format lampiran harus PDF, JPG, atau PNG.');
+      return;
+    }
     if (attachments.length > 3) {
       setError('Maksimal tiga lampiran per pengajuan.');
       return;
@@ -431,7 +439,7 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
               />
               {attachments.length > 0 && <p className="mt-1 text-[11px] text-[#526675]">{attachments.length} file dipilih. File akan disimpan secara privat dan menunggu pemindaian.</p>}
             </div>
-            <div aria-hidden="true" className="hidden">
+            <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
               <label htmlFor="partnership-fax">Fax</label>
               <input id="partnership-fax" tabIndex={-1} autoComplete="off" value={faxNumber} onChange={(e) => setFaxNumber(e.target.value)} />
             </div>
