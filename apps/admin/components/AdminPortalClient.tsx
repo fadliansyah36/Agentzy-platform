@@ -9,6 +9,7 @@ import { AdminLoginView } from '../features/auth/AdminLoginView';
 import { GlobalOverviewView } from '../features/overview/GlobalOverviewView';
 import { TenantDirectoryView } from '../features/tenants/TenantDirectoryView';
 import { CorporateOnboardingView } from '../features/tenants/CorporateOnboardingView';
+import { PartnershipLeadsView } from '../features/partnership/PartnershipLeadsView';
 import { MasterDataView } from '../features/master-data/MasterDataView';
 import { SubscriptionPlansView } from '../features/master-data/SubscriptionPlansView';
 import { OrganizationUsersView } from '../features/organization/OrganizationUsersView';
@@ -117,6 +118,14 @@ export function AdminPortalClient({
               portal.setModal({ type: 'provider-crud', provider })
             }
             onDeleteProvider={portal.deleteIspProvider}
+            onBack={backToOverview}
+          />
+        )}
+
+        {portal.activeSection === 'partnerships' && portal.accessToken && (
+          <PartnershipLeadsView
+            accessToken={portal.accessToken}
+            currentUserId={portal.currentUserId}
             onBack={backToOverview}
           />
         )}
