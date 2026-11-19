@@ -60,19 +60,25 @@ async def _active_grant(tenant_id: UUID, contract_id: UUID, service_key: str) ->
     return grant
 
 
-async def _ensure_capacity(tenant_id: UUID, contract_id: UUID, service_key: str) -> None:
-    grant = await _active_grant(tenant_id, contract_id, service_key)
+async def _ensure_capacity(connection, tenant_id: UUID, contract_id: UUID, service_key: str) -> None:
+    grants = await resolve_effective_entitlements(connection, tenant_id)
+    grant = next(
+        (item for item in grants
+         if item["contract_id"] == contract_id and item["service_key"] == service_key),
+        None,
+    )
+    if grant is None:
+        raise HTTPException(status_code=403, detail="Service entitlement is not active for this contract.")
     if grant["ai_worker_limit"] is None:
         return
-    async with engine.connect() as connection:
-        result = await connection.execute(
-            text("""
-                select count(*) from public.tenant_ai_workers
-                where tenant_id=:tenant and contract_id=:contract and service_key=:service
-                  and status='active'
-            """),
-            {"tenant": tenant_id, "contract": contract_id, "service": service_key},
-        )
+    result = await connection.execute(
+        text("""
+            select count(*) from public.tenant_ai_workers
+            where tenant_id=:tenant and contract_id=:contract and service_key=:service
+              and status='active'
+        """),
+        {"tenant": tenant_id, "contract": contract_id, "service": service_key},
+    )
     if result.scalar_one() >= grant["ai_worker_limit"]:
         raise HTTPException(status_code=409, detail="AI Worker contract entitlement limit reached.")
 
