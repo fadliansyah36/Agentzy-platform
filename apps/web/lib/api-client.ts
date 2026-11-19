@@ -271,7 +271,7 @@ const fetchAllAgentzyPages = async <T>(accessToken: string, path: string): Promi
     const query = new URLSearchParams({ limit: '100' });
     if (cursor) query.set('cursor', cursor);
     const page = await apiRequest<AgentzyPage<T>>(
-      `${path}?${query.toString()}`,
+      `${path}${path.includes('?') ? '&' : '?'}${query.toString()}`,
       { method: 'GET', accessToken },
     );
     rows.push(...page.data);
