@@ -129,6 +129,8 @@ export type PartnershipAttachment = {
   file_size: number;
   sha256: string;
   scan_status: "pending_scan" | "clean" | "infected" | "rejected";
+  scan_attempts: number;
+  scan_state: "queued" | "scanning" | "retrying" | "dead_letter" | "clean" | "infected" | "rejected";
   uploaded_at: string;
   scanned_at: string | null;
   download_available: boolean;
@@ -141,6 +143,11 @@ export const listPartnershipProspectAttachments = (accessToken: string, prospect
 export const createPartnershipAttachmentDownload = (accessToken: string, attachmentId: string) =>
   apiRequest<{ data: { attachment_id: string; filename: string; signed_url: string; expires_in_seconds: number } }>(
     `/partnership/attachments/${encodeURIComponent(attachmentId)}/download`,
+    { method: "POST", accessToken },
+  );
+export const retryPartnershipAttachmentScan = (accessToken: string, attachmentId: string) =>
+  apiRequest<{ data: { attachment_id: string; scan_status: string; scan_state: string } }>(
+    `/partnership/attachments/${encodeURIComponent(attachmentId)}/retry-scan`,
     { method: "POST", accessToken },
   );
 
