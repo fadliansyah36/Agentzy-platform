@@ -170,7 +170,7 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
         let uploaded = 0;
         for (const file of attachments) {
           try {
-            await uploadPublicPartnershipAttachment(result.data.id, result.data.upload_token, file);
+            await uploadPublicPartnershipAttachment(result.data.id, result.data.upload_token, file, crypto.randomUUID());
             uploaded += 1;
           } catch (uploadError) {
             setAttachmentMessage(uploadError instanceof ApiError
