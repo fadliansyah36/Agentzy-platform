@@ -882,7 +882,7 @@ export type CorporateContract = {
   contract_type: 'master' | 'statement_of_work' | 'amendment';
   status: string; currency: string; effective_start: string | null;
   effective_end: string | null; renewal_at: string | null; current_version: number;
-  row_version?: number; version_id?: string; version_status?: string; scope_summary?: string;
+  row_version?: number; version_id?: string; version_status?: string; signature_status?: string; scope_summary?: string;
   terms?: string | null; services?: CorporateContractService[];
   approvals?: Array<Record<string, unknown>>;
 };
@@ -1209,4 +1209,13 @@ export const verifyPaymentReference = (
   `/corporate/payment-references/${encodeURIComponent(referenceId)}/verify`,
   { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
     body: JSON.stringify(payload) },
+);
+
+export const updateContractSignatureStatus = (
+  accessToken: string, tenantId: string, contractId: string,
+  payload: { status: 'pending'|'signed'|'rejected'|'cancelled'|'expired'; provider?: string; signature_reference?: string; reason?: string },
+) => apiRequest<{ data: { id: string; signature_status: string } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/signature-status`,
+  { method: 'PATCH', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
+    body: JSON.stringify({tenant_id:tenantId,...payload}) },
 );
