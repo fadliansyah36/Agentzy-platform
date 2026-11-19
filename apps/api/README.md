@@ -24,6 +24,9 @@ Never commit database passwords, JWT secrets, service-role keys or the bootstrap
 - `GET /api/v1/tenants/directory` — platform-wide tenant directory (AAL2 + permission required).
 - `POST /api/v1/tenants`, `PATCH /api/v1/tenants/{tenant_id}`, `DELETE /api/v1/tenants/{tenant_id}` — tenant create, update and archive (AAL2 + permission required).
 - `POST /api/v1/bootstrap/platform-admin` — one-time first administrator invitation, protected by `X-Platform-Bootstrap-Token`.
+- `GET /api/v1/public/catalogue` and `POST /api/v1/public/partnership-applications` — public catalogue and partnership intake.
+- `GET /api/v1/partnership/prospects` and `PATCH /api/v1/partnership/prospects/{id}` — authorized CRM inbox and qualification lifecycle.
+- `GET /api/v1/partnership/prospects/{id}/attachments` and `POST /api/v1/partnership/attachments/{id}/download` — AAL2-gated attachment listing and 60-second signed download, only after malware scan status is `clean`.
 
 ## First administrator bootstrap
 
@@ -32,6 +35,9 @@ Set the following secrets on the API service only:
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service-role key. Server-side only.
 - `AUTH_PROVIDER_WEBHOOK_SECRET`: random secret of at least 32 characters; configure the same value in the Supabase Auth webhook delivery header `X-Provider-Webhook-Secret`.
 - `PLATFORM_BOOTSTRAP_TOKEN`: long random one-time secret used only while bootstrapping the first administrator.
+- `CLAMAV_HOST` / `CLAMAV_PORT`: private network address for the ClamAV daemon. The attachment scanner remains disabled unless this and `SUPABASE_SERVICE_ROLE_KEY` are present; files remain quarantined when scanning is unavailable.
+- `TURNSTILE_SECRET_KEY`: Cloudflare Turnstile secret; when set, public submissions require successful server-side verification.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS`: notification outbox delivery settings. No email is reported as delivered until the worker succeeds.
 - `APP_BASE_URL`: frontend origin used for the Auth invitation callback.
 
 Open `/bootstrap` in the frontend, enter the first administrator's full name and email plus the bootstrap token. The endpoint invites the user through Supabase Auth, creates the internal Agentzy Platform tenant membership, assigns the `platform_super_admin` role and writes an audit event. It refuses to run once an active platform super-admin membership exists.
