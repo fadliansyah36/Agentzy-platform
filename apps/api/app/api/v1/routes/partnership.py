@@ -538,9 +538,7 @@ async def upload_partnership_attachment(
                 )
 
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    storage_url, content=content, headers=storage_headers
-                )
+                response = await client.post(storage_url, content=content, headers=storage_headers)
             if response.status_code not in (200, 201):
                 raise HTTPException(
                     status_code=502,
