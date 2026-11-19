@@ -59,16 +59,12 @@ export function PartnershipLeadsView({
     try {
       const response = await listPartnershipProspects(accessToken, filter || undefined);
       setItems(response.data);
-      if (selected) {
-        const current = response.data.find((item) => item.id === selected.id);
-        setSelected(current ?? null);
-      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Lead inbox tidak dapat dimuat.');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, filter, selected]);
+  }, [accessToken, filter]);
 
   const loadActivities = useCallback(async (prospectId: string) => {
     try {
@@ -92,7 +88,8 @@ export function PartnershipLeadsView({
     setUpdating(true);
     setError(null);
     try {
-      await updatePartnershipProspect(accessToken, selected.id, payload);
+      const response = await updatePartnershipProspect(accessToken, selected.id, payload);
+      setSelected((current) => current ? { ...current, status: response.data.status, assigned_to: response.data.assigned_to } : current);
       await load();
       await loadActivities(selected.id);
       setNote('');
