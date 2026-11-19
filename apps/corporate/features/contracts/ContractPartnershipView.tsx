@@ -1,245 +1,271 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { FileText, RefreshCw } from 'lucide-react';
+import { useAgentzyAuth } from '@/apps/web/lib/auth/useAgentzyAuth';
 import {
-  FileText,
-  FileCheck2,
-  ShieldCheck,
-  ChevronRight,
-  CheckCircle2,
-  Calendar,
-} from 'lucide-react';
-import {
-  CorporatePageHeader,
-  CorporateSegmentedTabs,
-} from '../../components/data-display/CorporateDataDisplay';
+  createCorporateAmendment, createCorporateContract, createContractApprovalPolicy,
+  decideContractApproval, getCorporateContract, getCorporateProfile,
+  getContractDocumentDownload, getEffectiveContractEntitlements,
+  listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
+  requestContractRenewal, submitContractPolicyReview, updateCorporateProfileStatus,
+  upsertCorporateProfile, uploadContractDocument,
+  changeContractLifecycle,
+  type CorporateContract, type CorporateProfile, type ContractDocument,
+  type ContractEntitlement,
+} from '@/apps/web/lib/api-client';
+import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import type { CorporateTenant } from '../../lib/corporate-types';
 
-export function ContractPartnershipView({
-  tenant,
-  onOpenDocumentModal,
-  onBack,
-}: {
-  tenant: CorporateTenant;
-  onOpenDocumentModal: (docKind: 'msa' | 'sow' | 'sla' | 'amendment') => void;
-  onBack: () => void;
-}) {
-  const [tab, setTab] = useState<'kontrak' | 'sow' | 'sla'>('kontrak');
+type Tab = 'profile' | 'contracts' | 'sow' | 'sla' | 'approvals' | 'documents' | 'entitlements';
+const field = 'h-10 w-full rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-sm text-[#17324D]';
+const label = 'mb-1 block text-xs font-semibold text-[#526675]';
+const primary = 'inline-flex h-10 items-center rounded-[9px] bg-[#17324D] px-4 text-xs font-semibold text-white disabled:opacity-50';
+const secondary = 'inline-flex h-9 items-center rounded-[9px] border border-[#D8E3E9] bg-white px-3 text-xs font-semibold text-[#17324D] disabled:opacity-50';
+const fmt = (v?: string | null) => v ? new Date(v).toLocaleDateString('id-ID') : '—';
+const statusName: Record<string,string> = {
+  draft: 'Draft', review_pending: 'Menunggu approval', approved: 'Disetujui',
+  active: 'Aktif', suspended: 'Ditangguhkan', expired: 'Kedaluwarsa',
+  terminated: 'Dihentikan', rejected: 'Ditolak',
+};
 
-  return (
-    <div className="space-y-5">
-      <CorporatePageHeader
-        title="Kontrak & Kerja Sama"
-        subtitle="Dokumen kontrak induk, Statement of Work (SOW), SLA, dan batas entitlement layanan"
-        onBack={onBack}
-        actions={
-          <button
-            type="button"
-            onClick={() => onOpenDocumentModal('amendment')}
-            className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#17324D] px-4 text-xs font-semibold text-white hover:bg-[#245477] whitespace-nowrap"
-          >
-            <span>Ajukan Perpanjangan / Amandemen</span>
-          </button>
-        }
-      />
+export function ContractPartnershipView({ tenant, onBack }: { tenant: CorporateTenant; onBack: () => void }) {
+  const auth = useAgentzyAuth();
+  const token = auth.session?.access_token ?? '';
+  const [tab,setTab] = useState<Tab>('contracts');
+  const [profile,setProfile] = useState<CorporateProfile | null>(null);
+  const [profileForm,setProfileForm] = useState({legal_name:'',registration_number:'',billing_email:'',billing_phone:'',contact_name:'',contact_title:'',website:'',country_code:'ID'});
+  const [contracts,setContracts] = useState<CorporateContract[]>([]);
+  const [selectedId,setSelectedId] = useState('');
+  const [detail,setDetail] = useState<CorporateContract | null>(null);
+  const [documents,setDocuments] = useState<ContractDocument[]>([]);
+  const [entitlements,setEntitlements] = useState<ContractEntitlement[]>([]);
+  const [policies,setPolicies] = useState<Array<Record<string,unknown>>>([]);
+  const [loading,setLoading] = useState(false);
+  const [saving,setSaving] = useState(false);
+  const [error,setError] = useState('');
+  const [notice,setNotice] = useState('');
+  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',effective_start:'',effective_end:''});
+  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:''});
+  const [policyName,setPolicyName] = useState('');
+  const [renewalEnd,setRenewalEnd] = useState('');
+  const [documentType,setDocumentType] = useState<'master_agreement'|'statement_of_work'|'sla'|'amendment'|'supporting'>('master_agreement');
 
-      <CorporateSegmentedTabs
-        tabs={[
-          { id: 'kontrak', label: 'Kontrak' },
-          { id: 'sow', label: 'SOW' },
-          { id: 'sla', label: 'SLA' },
-        ]}
-        activeTab={tab}
-        onChange={setTab}
-      />
+  const can = (permission:string) => auth.identity?.memberships.some((m) => m.tenant_id === tenant.id && m.permissions.includes(permission)) ?? false;
+  const canManage = can('corporate.contracts.manage');
+  const canProfile = can('corporate.profiles.manage');
+  const canApprove = can('corporate.contracts.approve');
+  const canLifecycle = can('corporate.contracts.lifecycle');
 
-      {tab === 'kontrak' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-          {/* Kontrak Utama Card (Matches Screen 12) */}
-          <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-5">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold text-[#0284C7]">Kontrak Utama</p>
-                <h2 className="mt-1 text-lg font-bold text-[#17324D]">
-                  PT {tenant.name} × Agentzy
-                </h2>
-              </div>
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-[#247A55]">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Aktif</span>
-              </span>
-            </div>
+  const refresh = useCallback(async () => {
+    if (!token) return;
+    setLoading(true); setError('');
+    const results = await Promise.allSettled([
+      getCorporateProfile(token,tenant.id),
+      listCorporateContracts(token,tenant.id),
+      getEffectiveContractEntitlements(token,tenant.id),
+      listContractApprovalPolicies(token,tenant.id),
+    ]);
+    if (results[0].status === 'fulfilled') {
+      const p = results[0].value.data; setProfile(p);
+      if (p) setProfileForm({legal_name:p.legal_name ?? '',registration_number:p.registration_number ?? '',billing_email:p.billing_email ?? '',billing_phone:p.billing_phone ?? '',contact_name:p.contact_name ?? '',contact_title:p.contact_title ?? '',website:p.website ?? '',country_code:p.country_code ?? 'ID'});
+    } else setError(results[0].reason instanceof Error ? results[0].reason.message : 'Gagal memuat profile.');
+    if (results[1].status === 'fulfilled') {
+      setContracts(results[1].value.data);
+      setSelectedId((id) => id || results[1].value.data[0]?.id || '');
+    } else setError(results[1].reason instanceof Error ? results[1].reason.message : 'Gagal memuat kontrak.');
+    if (results[2].status === 'fulfilled') setEntitlements(results[2].value.data);
+    if (results[3].status === 'fulfilled') setPolicies(results[3].value.data);
+    setLoading(false);
+  },[token,tenant.id]);
 
-            <div className="mt-4 flex items-center gap-2 text-xs text-[#526675]">
-              <Calendar className="h-4 w-4 text-[#0284C7]" />
-              <span>Periode: 1 Jan 2026 – 31 Des 2026</span>
-            </div>
+  const loadDetail = useCallback(async (id:string) => {
+    if (!id || !token) { setDetail(null); setDocuments([]); return; }
+    try {
+      const [d,docs] = await Promise.all([
+        getCorporateContract(token,tenant.id,id),
+        listContractDocuments(token,tenant.id,id),
+      ]);
+      setDetail(d.data); setDocuments(docs.data);
+    } catch(e) { setError(e instanceof Error ? e.message : 'Gagal memuat detail kontrak.'); }
+  },[token,tenant.id]);
 
-            <div className="mt-5 rounded-[12px] border border-[#247A55]/25 bg-[#F2FBF6] p-4">
-              <p className="text-xs font-semibold text-[#526675]">
-                Persetujuan &amp; Tanda Tangan
-              </p>
-              <p className="mt-1 text-sm font-bold text-[#247A55]">
-                Ditandatangani (12 Des 2025)
-              </p>
-              <p className="mt-0.5 text-[11px] text-[#526675]">
-                Versi Kontrak v2.0 · Penandatangan: Arif Budiman &amp; Manajemen Agentzy
-              </p>
+  useEffect(() => { void refresh(); },[refresh]);
+  useEffect(() => { if(selectedId) void loadDetail(selectedId); },[selectedId,loadDetail]);
+
+  const action = async (fn:()=>Promise<unknown>,message:string) => {
+    setSaving(true); setError(''); setNotice('');
+    try { await fn(); setNotice(message); await refresh(); if(selectedId) await loadDetail(selectedId); }
+    catch(e) { setError(e instanceof Error ? e.message : 'Permintaan gagal.'); }
+    finally { setSaving(false); }
+  };
+
+  const saveProfile = () => action(() => upsertCorporateProfile(token,{
+    tenant_id:tenant.id, organization_id:profile?.organization_id ?? null,
+    branch_id:profile?.branch_id ?? null, legal_name:profileForm.legal_name,
+    registration_number:profileForm.registration_number || null,
+    billing_email:profileForm.billing_email || null,billing_phone:profileForm.billing_phone || null,
+    billing_address:profile?.billing_address ?? {},tax_profile:profile?.tax_profile ?? {},
+    contact_name:profileForm.contact_name || null,contact_title:profileForm.contact_title || null,
+    website:profileForm.website || null,country_code:profileForm.country_code,
+  }), 'Corporate profile tersimpan.');
+
+  const createContract = () => action(async () => {
+    const result = await createCorporateContract(token,{
+      tenant_id:tenant.id,contract_number:newContract.contract_number,title:newContract.title,
+      contract_type:newContract.contract_type,currency:'IDR',
+      effective_start:newContract.effective_start || null,effective_end:newContract.effective_end || null,
+      scope_summary:newContract.scope_summary,terms:newContract.terms || null,
+      commercial_snapshot:{},services:[{
+        service_key:newContract.service_key,service_scope:newContract.service_scope,quantity:1,
+        monthly_fee:newContract.monthly_fee || null,sla:{},kpi:{},entitlement:{},
+        human_workforce_limit:newContract.human_limit ? Number(newContract.human_limit) : null,
+        ai_worker_limit:newContract.ai_limit ? Number(newContract.ai_limit) : null,
+      }],
+    });
+    setSelectedId(result.data.id); setTab('contracts');
+  }, 'Draft kontrak dibuat.');
+
+  const createPolicy = () => action(() => createContractApprovalPolicy(token,{
+    tenant_id:tenant.id,policy_name:policyName,contract_type:'master',currency:'IDR',
+    min_amount:'0',steps:[{required_permission_key:'corporate.contracts.approve',minimum_approvals:1}],
+  }), 'Approval policy tersimpan.');
+
+  const createAmendment = () => {
+    if(!detail) return;
+    return action(() => createCorporateAmendment(token,detail.id,{
+      tenant_id:tenant.id,change_summary:amendment.change_summary,
+      scope_summary:amendment.scope_summary,effective_from:amendment.effective_from,
+      services:(detail.services ?? []).map((s) => ({
+        service_key:s.service_key,service_scope:s.service_scope,quantity:s.quantity,
+        monthly_fee:s.monthly_fee,sla:s.sla ?? {},kpi:s.kpi ?? {},entitlement:s.entitlement ?? {},
+      })),
+    }), 'Amendment version baru tersimpan sebagai draft.');
+  };
+
+  const uploadDoc = (file?:File) => {
+    if(!file || !detail) return;
+    return action(() => uploadContractDocument(token,tenant.id,detail.id,file,documentType), 'Dokumen berhasil diunggah ke private storage.');
+  };
+
+  const downloadDoc = async (id:string) => {
+    try {
+      const result = await getContractDocumentDownload(token,tenant.id,id);
+      window.open(result.data.signed_url,'_blank','noopener,noreferrer');
+    } catch(e) { setError(e instanceof Error ? e.message : 'Gagal membuat secure download URL.'); }
+  };
+
+  return <div className="space-y-5">
+    <CorporatePageHeader title="Kontrak & Kerja Sama" subtitle="Corporate profile, kontrak, SOW, amendment, approval, dokumen, SLA, entitlement dan lifecycle" onBack={onBack}
+      actions={<button className={secondary} onClick={() => void refresh()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</button>}/>
+    <CorporateSegmentedTabs tabs={[
+      {id:'profile',label:'Corporate Profile'},{id:'contracts',label:'Kontrak'},
+      {id:'sow',label:'SOW / Amendment'},{id:'sla',label:'SLA & KPI'},
+      {id:'approvals',label:'Approval'},{id:'documents',label:'Dokumen'},
+      {id:'entitlements',label:'Entitlements'},
+    ]} activeTab={tab} onChange={(v) => setTab(v as Tab)}/>
+    {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+    {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
+    {loading && <p className="text-xs text-[#718391]">Memuat data dari FastAPI…</p>}
+
+    {tab === 'profile' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
+      <h2 className="text-sm font-bold text-[#17324D]">Legal & Billing Profile</h2>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {([['legal_name','Nama legal'],['registration_number','Nomor registrasi'],['billing_email','Email billing'],['billing_phone','Telepon billing'],['contact_name','Nama PIC'],['contact_title','Jabatan PIC'],['website','Website'],['country_code','Kode negara']] as const).map(([key,name]) =>
+          <label key={key}><span className={label}>{name}</span><input className={field} value={profileForm[key]} disabled={!canProfile || saving} onChange={(e)=>setProfileForm((p)=>({...p,[key]:e.target.value}))}/></label>
+        )}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3"><span className="text-xs text-[#718391]">Status: {profile?.profile_status ?? 'Belum dibuat'}</span>
+        {canProfile && <button className={primary} disabled={saving || !profileForm.legal_name} onClick={()=>void saveProfile()}>Simpan Profile</button>}
+        {canProfile && profile?.profile_status === 'active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>updateCorporateProfileStatus(token,tenant.id,{status:'suspended',reason:'Suspended by tenant administrator'}),'Profile ditangguhkan.')}>Suspend Profile</button>}
+      </div>
+    </section>}
+
+    {tab === 'contracts' && <div className="grid gap-5 lg:grid-cols-12">
+      <section className="space-y-3 lg:col-span-5"><div className="flex justify-between"><h2 className="text-sm font-bold text-[#17324D]">Kontrak Tenant</h2><span className="text-xs text-[#718391]">{contracts.length} kontrak</span></div>
+        {contracts.map((c)=><button key={c.id} onClick={()=>setSelectedId(c.id)} className={'w-full rounded-xl border p-4 text-left '+(selectedId===c.id?'border-[#0284C7] bg-[#F2FAFD]':'border-[#D8E3E9] bg-white')}>
+          <div className="flex justify-between gap-2"><span className="font-mono text-xs font-bold text-[#0284C7]">{c.contract_number}</span><span className="text-[11px] text-[#526675]">{statusName[c.status] ?? c.status}</span></div>
+          <p className="mt-1 text-sm font-bold text-[#17324D]">{c.title}</p><p className="mt-1 text-[11px] text-[#718391]">v{c.current_version} · {c.contract_type} · {fmt(c.effective_end)}</p>
+        </button>)}
+        {!contracts.length && <div className="rounded-xl border border-dashed border-[#D8E3E9] p-6 text-center text-xs text-[#718391]">Belum ada kontrak untuk tenant ini.</div>}
+      </section>
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-7">
+        {detail ? <>
+          <p className="text-xs font-semibold text-[#0284C7]">{detail.contract_number}</p><h2 className="mt-1 text-lg font-bold text-[#17324D]">{detail.title}</h2>
+          <p className="mt-1 text-xs text-[#718391]">{statusName[detail.status] ?? detail.status} · v{detail.current_version} · {fmt(detail.effective_start)} — {fmt(detail.effective_end)}</p>
+          <div className="mt-4 rounded-lg bg-[#F5F8FA] p-4"><p className="text-xs font-semibold text-[#526675]">Scope</p><p className="mt-1 whitespace-pre-wrap text-sm text-[#17324D]">{detail.scope_summary ?? 'Scope belum tersedia.'}</p></div>
+          <h3 className="mt-4 text-xs font-bold text-[#17324D]">Service & Entitlement</h3>
+          {(detail.services ?? []).map((s)=><div key={s.service_key} className="border-b border-[#EAF2F6] py-3"><p className="text-sm font-semibold text-[#17324D]">{s.service_key}</p><p className="text-xs text-[#526675]">{s.service_scope}</p><p className="mt-1 text-[11px] text-[#718391]">Fee {s.monthly_fee ?? '—'} · qty {s.quantity}</p></div>)}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {canManage && detail.status==='draft' && <button className={primary} disabled={saving} onClick={()=>void action(()=>submitContractPolicyReview(token,tenant.id,detail.id),'Kontrak diajukan berdasarkan approval policy.')}>Submit Approval</button>}
+            {canLifecycle && detail.status==='active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'suspend','Suspension requested from Corporate Portal'),'Kontrak disuspend dan entitlement dihentikan.')}>Suspend</button>}
+            {canLifecycle && ['active','suspended','approved'].includes(detail.status) && <button className={secondary} disabled={saving} onClick={()=>{if(window.confirm('Hentikan kontrak ini?')) void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'terminate','Termination requested from Corporate Portal'),'Kontrak dihentikan.')}}>Terminate</button>}
+          </div>
+          {canLifecycle && ['active','approved'].includes(detail.status) && <div className="mt-4 grid gap-2 border-t border-[#EAF2F6] pt-4 md:grid-cols-2">
+            <label><span className={label}>Tanggal akhir renewal</span><input type="date" className={field} value={renewalEnd} onChange={(e)=>setRenewalEnd(e.target.value)}/></label>
+            <button className={secondary+' self-end'} disabled={!renewalEnd || saving} onClick={()=>void action(()=>requestContractRenewal(token,detail.id,{tenant_id:tenant.id,renewal_type:'renewal',requested_end:renewalEnd}),'Renewal request tercatat.')}>Ajukan Renewal</button>
+          </div>}
+        </> : <p className="py-16 text-center text-xs text-[#718391]">Pilih kontrak untuk melihat detail dan lifecycle.</p>}
+      </section>
+    </div>}
+
+    {tab === 'sow' && <div className="grid gap-5 lg:grid-cols-2">
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Buat Master Agreement / SOW</h2>
+        <div className="mt-3 grid gap-3">
+          <label><span className={label}>Nomor kontrak</span><input className={field} value={newContract.contract_number} onChange={(e)=>setNewContract(p=>({...p,contract_number:e.target.value}))}/></label>
+          <label><span className={label}>Judul</span><input className={field} value={newContract.title} onChange={(e)=>setNewContract(p=>({...p,title:e.target.value}))}/></label>
+          <label><span className={label}>Jenis</span><select className={field} value={newContract.contract_type} onChange={(e)=>setNewContract(p=>({...p,contract_type:e.target.value as 'master'|'statement_of_work'}))}><option value="master">Master Agreement</option><option value="statement_of_work">Statement of Work</option></select></label>
+          {newContract.contract_type==='statement_of_work' && <label><span className={label}>Kontrak induk</span><select className={field} value={newContract.parent_contract_id} onChange={(e)=>setNewContract(p=>({...p,parent_contract_id:e.target.value}))}><option value="">Pilih kontrak induk</option>{contracts.filter(c=>['active','approved'].includes(c.status)).map(c=><option key={c.id} value={c.id}>{c.contract_number} — {c.title}</option>)}</select></label>}
+          <label><span className={label}>Tanggal mulai</span><input type="date" className={field} value={newContract.effective_start} onChange={(e)=>setNewContract(p=>({...p,effective_start:e.target.value}))}/></label>
+          <label><span className={label}>Tanggal akhir</span><input type="date" className={field} value={newContract.effective_end} onChange={(e)=>setNewContract(p=>({...p,effective_end:e.target.value}))}/></label>
+          <label><span className={label}>Ringkasan scope</span><textarea className="min-h-20 rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.scope_summary} onChange={(e)=>setNewContract(p=>({...p,scope_summary:e.target.value}))}/></label>
+          <label><span className={label}>Terms</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.terms} onChange={(e)=>setNewContract(p=>({...p,terms:e.target.value}))}/></label>
+          <div className="rounded-lg bg-[#F5F8FA] p-3"><p className="mb-2 text-xs font-bold text-[#17324D]">Service scope / SLA entitlement</p>
+            <label><span className={label}>Service key katalog</span><input className={field} value={newContract.service_key} onChange={(e)=>setNewContract(p=>({...p,service_key:e.target.value}))}/></label>
+            <label className="mt-2 block"><span className={label}>Deskripsi scope</span><textarea className="min-h-16 w-full rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.service_scope} onChange={(e)=>setNewContract(p=>({...p,service_scope:e.target.value}))}/></label>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <label><span className={label}>Fee/bulan</span><input type="number" min="0" className={field} value={newContract.monthly_fee} onChange={(e)=>setNewContract(p=>({...p,monthly_fee:e.target.value}))}/></label>
+              <label><span className={label}>Human limit</span><input type="number" min="0" className={field} value={newContract.human_limit} onChange={(e)=>setNewContract(p=>({...p,human_limit:e.target.value}))}/></label>
+              <label><span className={label}>AI limit</span><input type="number" min="0" className={field} value={newContract.ai_limit} onChange={(e)=>setNewContract(p=>({...p,ai_limit:e.target.value}))}/></label>
             </div>
           </div>
-
-          {/* Document Links & Entitlements */}
-          <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-7">
-            <h2 className="text-base font-bold text-[#17324D]">
-              Dokumen Legal &amp; Entitlements Layanan
-            </h2>
-            <div className="mt-4 divide-y divide-[#EAF2F6]">
-              <button
-                type="button"
-                onClick={() => onOpenDocumentModal('msa')}
-                className="flex w-full items-center justify-between py-3.5 text-left hover:bg-[#F5F8FA] rounded-lg px-2"
-              >
-                <span className="inline-flex items-center gap-3 text-sm font-semibold text-[#17324D]">
-                  <FileText className="h-4 w-4 text-[#0284C7]" />
-                  <span>Master Agreement (PDF)</span>
-                </span>
-                <ChevronRight className="h-4 w-4 text-[#718391]" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onOpenDocumentModal('sow')}
-                className="flex w-full items-center justify-between py-3.5 text-left hover:bg-[#F5F8FA] rounded-lg px-2"
-              >
-                <span className="inline-flex items-center gap-3 text-sm font-semibold text-[#17324D]">
-                  <FileCheck2 className="h-4 w-4 text-[#0284C7]" />
-                  <span>Statement of Work (SOW)</span>
-                </span>
-                <ChevronRight className="h-4 w-4 text-[#718391]" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onOpenDocumentModal('sla')}
-                className="flex w-full items-center justify-between py-3.5 text-left hover:bg-[#F5F8FA] rounded-lg px-2"
-              >
-                <span className="inline-flex items-center gap-3 text-sm font-semibold text-[#17324D]">
-                  <ShieldCheck className="h-4 w-4 text-[#0284C7]" />
-                  <span>SLA &amp; KPI</span>
-                </span>
-                <ChevronRight className="h-4 w-4 text-[#718391]" />
-              </button>
-            </div>
-
-            <div className="mt-4 rounded-[12px] bg-[#F5F8FA] p-4">
-              <p className="text-xs font-bold text-[#17324D]">
-                Entitlements Layanan Aktif
-              </p>
-              <ul className="mt-2.5 space-y-1.5 text-xs text-[#526675]">
-                <li>· 1.500 Human Workforce (Staff Sales, Affiliate, Teknisi)</li>
-                <li>· 50 AI Workforce Slots dengan AI Gateway &amp; Memory Isolation</li>
-                <li>· Akses API &amp; Analytics Real-Time (4 Regional)</li>
-              </ul>
-            </div>
-          </div>
+          {canManage && <button className={primary} disabled={saving || !newContract.contract_number || !newContract.title || !newContract.scope_summary || !newContract.service_key || !newContract.service_scope || (newContract.contract_type==='statement_of_work' && !newContract.parent_contract_id)} onClick={()=>void createContract()}>Simpan Draft ke Backend</button>}
         </div>
-      )}
+      </section>
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Amendment / Versioning</h2><p className="mt-1 text-xs text-[#718391]">Pilih kontrak aktif di tab Kontrak untuk membuat snapshot perubahan baru.</p>
+        <label className="mt-3 block"><span className={label}>Ringkasan perubahan</span><input className={field} value={amendment.change_summary} onChange={(e)=>setAmendment(p=>({...p,change_summary:e.target.value}))}/></label>
+        <label className="mt-3 block"><span className={label}>Scope versi baru</span><textarea className="min-h-20 w-full rounded-lg border border-[#D8E3E9] p-3 text-sm" value={amendment.scope_summary} onChange={(e)=>setAmendment(p=>({...p,scope_summary:e.target.value}))}/></label>
+        <label className="mt-3 block"><span className={label}>Effective from</span><input type="date" className={field} value={amendment.effective_from} onChange={(e)=>setAmendment(p=>({...p,effective_from:e.target.value}))}/></label>
+        {canManage && detail && <button className={primary+' mt-3'} disabled={saving || !amendment.change_summary || !amendment.scope_summary || !amendment.effective_from} onClick={()=>void createAmendment()}>Buat Amendment Version</button>}
+        {detail && <p className="mt-4 text-xs text-[#526675]">Selected {detail.contract_number} · version {detail.current_version}</p>}
+      </section>
+    </div>}
 
-      {tab === 'sow' && (
-        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
-          <h2 className="text-base font-bold text-[#17324D]">
-            Ruang Lingkup Statement of Work (SOW-2026-ISP01)
-          </h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {[
-              {
-                title: 'Managed Staff Sales & Affiliate Operations',
-                detail: 'Penyediaan & pengelolaan tim Staff Sales dan jaringan Affiliate Freelance dengan skema pembagian produktivitas inkremental 60/40.',
-              },
-              {
-                title: 'Managed Field Technician Workforce',
-                detail: 'Eksekusi instalasi FTTH/FWA, troubleshooting, foto bukti redaman optik, dan Quality Control sesuai SLA.',
-              },
-              {
-                title: 'Managed AI Workforce & AI Gateway',
-                detail: 'Pengoperasian AI Sales, AI Lead Qualification, AI Marketing, dan AI Technical Assistant dengan kontrol batas AI Credits.',
-              },
-              {
-                title: 'Provider Integration & Reconciliation',
-                detail: 'Sinkronisasi status order & aktivasi melalui kanal resmi terotorisasi beserta buku besar komisi deterministik.',
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-[12px] border border-[#D8E3E9] bg-[#F5F8FA] p-4"
-              >
-                <p className="text-sm font-bold text-[#17324D]">{item.title}</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-[#526675]">
-                  {item.detail}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    {tab === 'sla' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">SLA & KPI pada versi kontrak</h2>
+      {(detail?.services ?? []).map(s=><div key={s.service_key} className="grid gap-3 border-b border-[#EAF2F6] py-3 md:grid-cols-3"><div><p className="text-xs font-bold">{s.service_key}</p><p className="text-xs text-[#526675]">{s.service_scope}</p></div><div><p className="text-[11px] font-semibold text-[#718391]">SLA</p><pre className="whitespace-pre-wrap text-xs">{JSON.stringify(s.sla ?? {},null,2)}</pre></div><div><p className="text-[11px] font-semibold text-[#718391]">KPI</p><pre className="whitespace-pre-wrap text-xs">{JSON.stringify(s.kpi ?? {},null,2)}</pre></div></div>)}
+      {!(detail?.services ?? []).length && <p className="mt-4 text-xs text-[#718391]">Tidak ada data SLA/KPI pada kontrak terpilih.</p>}
+    </section>}
 
-      {tab === 'sla' && (
-        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
-          <h2 className="text-base font-bold text-[#17324D]">
-            Matriks SLA &amp; Target KPI Kontraktual
-          </h2>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-[#D8E3E9] text-xs font-semibold text-[#526675]">
-                  <th className="py-3 pr-4">Metrik Layanan</th>
-                  <th className="py-3 px-4 text-right">Target Kontrak</th>
-                  <th className="py-3 px-4 text-right">Aktual Bulan Ini</th>
-                  <th className="py-3 pl-4 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EAF2F6]">
-                <tr>
-                  <td className="py-3.5 pr-4 font-semibold text-[#17324D]">
-                    Penyelesaian Work Order FTTH (≤ 24 Jam)
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono-tabular">95,0%</td>
-                  <td className="py-3.5 px-4 text-right font-mono-tabular font-bold text-[#247A55]">
-                    98,6%
-                  </td>
-                  <td className="py-3.5 pl-4 text-right text-xs font-bold text-[#247A55]">
-                    Memenuhi
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-3.5 pr-4 font-semibold text-[#17324D]">
-                    First Time Fix Rate
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono-tabular">92,0%</td>
-                  <td className="py-3.5 px-4 text-right font-mono-tabular font-bold text-[#247A55]">
-                    96,2%
-                  </td>
-                  <td className="py-3.5 pl-4 text-right text-xs font-bold text-[#247A55]">
-                    Memenuhi
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-3.5 pr-4 font-semibold text-[#17324D]">
-                    Waktu Respon Awal AI Lead Qualification
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono-tabular">&lt; 30 dtk</td>
-                  <td className="py-3.5 px-4 text-right font-mono-tabular font-bold text-[#247A55]">
-                    4,2 dtk
-                  </td>
-                  <td className="py-3.5 pl-4 text-right text-xs font-bold text-[#247A55]">
-                    Memenuhi
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    {tab === 'approvals' && <div className="grid gap-5 lg:grid-cols-2">
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Approval Policy</h2>
+        {policies.map(p=><div key={String(p.id)} className="mt-3 rounded-lg bg-[#F5F8FA] p-3"><p className="text-sm font-semibold">{String(p.policy_name)}</p><p className="text-xs text-[#718391]">{String(p.contract_type)} · {Array.isArray(p.steps)?p.steps.length:0} step(s)</p></div>)}
+        {!policies.length && <p className="mt-3 text-xs text-[#718391]">Belum ada policy.</p>}
+        {canManage && <div className="mt-4 border-t border-[#EAF2F6] pt-4"><label><span className={label}>Nama policy</span><input className={field} value={policyName} onChange={e=>setPolicyName(e.target.value)}/></label><p className="mt-2 text-[11px] text-[#718391]">Default policy menggunakan permission corporate.contracts.approve; approver dipilih dari membership aktif yang memenuhi permission.</p><button className={primary+' mt-3'} disabled={saving || !policyName} onClick={()=>void createPolicy()}>Simpan Policy</button></div>}
+      </section>
+      <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Approval History</h2>
+        {(detail?.approvals ?? []).map((a,i)=><div key={String(a.id ?? i)} className="border-b border-[#EAF2F6] py-3"><p className="text-xs font-semibold">Step {String(a.approval_step)} · {String(a.status)}</p><p className="text-[11px] text-[#718391]">Approver {String(a.approver_user_id)}</p>
+          {canApprove && a.status==='pending' && <div className="mt-2 flex gap-2"><button className={secondary} disabled={saving} onClick={()=>void action(()=>decideContractApproval(token,detail!.id,{tenant_id:tenant.id,approval_id:String(a.id),decision:'approved',reason:'Approved from Corporate Portal'}),'Approval tersimpan.')}>Approve</button><button className={secondary} disabled={saving} onClick={()=>void action(()=>decideContractApproval(token,detail!.id,{tenant_id:tenant.id,approval_id:String(a.id),decision:'rejected',reason:'Rejected from Corporate Portal'}),'Rejection tersimpan.')}>Reject</button></div>}
+        </div>)}
+        {!(detail?.approvals ?? []).length && <p className="mt-3 text-xs text-[#718391]">Belum ada approval untuk versi ini.</p>}
+      </section>
+    </div>}
+
+    {tab === 'documents' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Dokumen Kontrak</h2><p className="mt-1 text-xs text-[#718391]">Upload melewati FastAPI; file disimpan pada private bucket Supabase Storage dan hash metadata direkam.</p>
+      {detail && canManage && <div className="mt-4 flex flex-wrap items-end gap-3"><label><span className={label}>Jenis dokumen</span><select className={field} value={documentType} onChange={e=>setDocumentType(e.target.value as typeof documentType)}><option value="master_agreement">Master Agreement</option><option value="statement_of_work">SOW</option><option value="sla">SLA</option><option value="amendment">Amendment</option><option value="supporting">Supporting</option></select></label><label><span className={label}>File PDF/JPG/PNG/DOCX, max 25 MB</span><input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" disabled={saving} onChange={e=>{const file=e.target.files?.[0];if(file)void uploadDoc(file);e.currentTarget.value='';}}/></label></div>}
+      {documents.map(d=><div key={d.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAF2F6] py-3"><div className="flex items-center gap-3"><FileText className="h-4 w-4 text-[#0284C7]"/><div><p className="text-xs font-semibold">{d.original_filename}</p><p className="text-[11px] text-[#718391]">{d.document_type} · {Math.ceil(d.file_size/1024)} KB · {d.lifecycle_status}</p></div></div>{d.lifecycle_status==='available' && <button className={secondary} onClick={()=>void (async()=>{try{const url=await getContractDocumentDownload(token,tenant.id,d.id);window.open(url.data.signed_url,'_blank','noopener,noreferrer');}catch(e){setError(e instanceof Error?e.message:'Gagal membuat tautan.');}})()}>Secure Download</button>}</div>)}
+      {!documents.length && <p className="mt-4 text-xs text-[#718391]">Belum ada dokumen.</p>}
+    </section>}
+
+    {tab === 'entitlements' && <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Effective Entitlements</h2><p className="mt-1 text-xs text-[#718391]">Hanya grant dari kontrak aktif dan tanggal efektif yang berlaku.</p><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-[#D8E3E9] text-[#718391]"><th className="py-3">Service</th><th>Human</th><th>AI Worker</th><th>AI Credits</th><th>Periode</th></tr></thead><tbody>{entitlements.map(e=><tr key={e.id} className="border-b border-[#EAF2F6]"><td className="py-3 font-semibold">{e.service_key}</td><td>{e.human_workforce_limit ?? 'Unlimited'}</td><td>{e.ai_worker_limit ?? 'Unlimited'}</td><td>{e.ai_credits_limit ?? 'Unlimited'}</td><td>{fmt(e.effective_start)} — {fmt(e.effective_end)}</td></tr>)}</tbody></table></div>{!entitlements.length && <p className="mt-4 text-xs text-[#718391]">Belum ada entitlement aktif.</p>}</section>}
+  </div>;
 }
