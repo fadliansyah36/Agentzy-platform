@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Network, Plus, Pencil, Trash2, Building2, Users, Layers } from 'lucide-react';
+import { Network, Plus, Pencil, Trash2, Building2, Users, Layers, RotateCcw } from 'lucide-react';
 import {
   AdminPageHeader,
   AdminSegmentedTabs,
@@ -21,6 +21,7 @@ export function OrganizationUsersView({
   users,
   onOpenOrgUnitModal,
   onDeleteOrgUnit,
+  onRestoreOrgUnit,
   onOpenUserModal,
   roles,
   onReplaceMembershipRole,
@@ -40,6 +41,7 @@ export function OrganizationUsersView({
   onReassignMembershipHierarchy: (membershipId: string, tenantId: string, scopeKey: string, currentOrganizationId?: string | null) => Promise<void>;
   onOpenOrgUnitModal: (unit?: OrgUnitRecord) => void;
   onDeleteOrgUnit: (id: string) => void;
+  onRestoreOrgUnit: (id: string) => void;
   onOpenUserModal: (user?: PlatformUserRecord) => void;
   onDeleteUser?: (id: string) => void;
   onBack: () => void;
@@ -179,7 +181,7 @@ export function OrganizationUsersView({
                     <div>
                       <p className="text-xs font-bold text-[#17324D]">{u.name}</p>
                       <p className="text-[11px] text-[#526675]">
-                        Induk: {u.parentName ?? '—'} · Kepala: {u.headName ?? 'Belum ditetapkan'} ·{' '}
+                        Induk: {u.parentName ?? '—'} · Status: {u.status} · Kepala: {u.headName ?? 'Belum ditetapkan'} ·{' '}
                         <span className="font-mono-tabular">
                           {u.memberCount === null ? '—' : formatNumberID(u.memberCount)} anggota
                         </span>
@@ -194,14 +196,25 @@ export function OrganizationUsersView({
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteOrgUnit(u.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]"
-                        aria-label={`Hapus ${u.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {u.status === 'Diarsipkan' ? (
+                        <button
+                          type="button"
+                          onClick={() => onRestoreOrgUnit(u.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#247A55]"
+                          aria-label={`Pulihkan ${u.name}`}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteOrgUnit(u.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]"
+                          aria-label={`Arsipkan ${u.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -234,7 +247,7 @@ export function OrganizationUsersView({
                     <div>
                       <p className="text-xs font-bold text-[#17324D]">{u.name}</p>
                       <p className="text-[11px] text-[#526675]">
-                        PIC: {u.headName ?? 'Belum ditetapkan'} ·{' '}
+                        Induk: {u.parentName ?? '—'} · Status: {u.status} ·{' '}
                         <span className="font-mono-tabular">
                           {u.memberCount === null ? '—' : formatNumberID(u.memberCount)} personel
                         </span>
@@ -249,14 +262,25 @@ export function OrganizationUsersView({
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteOrgUnit(u.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]"
-                        aria-label={`Hapus ${u.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {u.status === 'Diarsipkan' ? (
+                        <button
+                          type="button"
+                          onClick={() => onRestoreOrgUnit(u.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#247A55]"
+                          aria-label={`Pulihkan ${u.name}`}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteOrgUnit(u.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]"
+                          aria-label={`Arsipkan ${u.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
