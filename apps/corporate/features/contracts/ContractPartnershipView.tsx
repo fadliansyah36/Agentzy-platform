@@ -10,14 +10,14 @@ import {
   getContractDocumentDownload, getEffectiveContractEntitlements,
   listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
   requestContractRenewal, listContractVersions, listContractRenewals, decideContractRenewal,
-  getPublicCatalogue, listCorporateProviderProfiles, createCorporateProviderProfile,
+  getPublicCatalogue, getContractOperationalMetrics, listCorporateProviderProfiles, createCorporateProviderProfile,
   updateCorporateProviderProfile, updateCorporateProviderProfileStatus,
   submitContractPolicyReview, updateContractSignatureStatus, updateCorporateProfileStatus,
   upsertCorporateProfile, uploadContractDocument,
   changeContractLifecycle,
   type CorporateContract, type CorporateProfile, type ContractDocument,
   type ContractEntitlement, type ContractVersionRecord, type ContractRenewalRecord, type PublicCatalogueItem,
-  type ContractApprovalDelegation, type CorporateProviderProfile,
+  type ContractApprovalDelegation, type CorporateProviderProfile, type ContractOperationalMetrics,
   type AgentzyOrganization, type AgentzyBranch,
 } from '@/apps/web/lib/api-client';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
@@ -56,6 +56,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
   const [entitlements,setEntitlements] = useState<ContractEntitlement[]>([]);
   const [policies,setPolicies] = useState<Array<Record<string,unknown>>>([]);
   const [catalogue,setCatalogue] = useState<PublicCatalogueItem[]>([]);
+  const [metrics,setMetrics] = useState<ContractOperationalMetrics | null>(null);
   const [providerProfiles,setProviderProfiles] = useState<CorporateProviderProfile[]>([]);
   const [providerForm,setProviderForm] = useState({provider_code:'',provider_name:'',provider_type:'isp' as CorporateProviderProfile['provider_type'],registration_number:'',contact_email:'',contact_phone:'',service_regions:''});
   const [editingProviderId,setEditingProviderId] = useState('');
@@ -90,6 +91,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
       listCorporateContracts(token,tenant.id),
       getEffectiveContractEntitlements(token,tenant.id),
       listContractApprovalPolicies(token,tenant.id),
+      getContractOperationalMetrics(token,tenant.id),
     ]);
     if (results[0].status === 'fulfilled') {
       const p = results[0].value.data; setProfile(p);
@@ -102,6 +104,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
     } else setError(results[1].reason instanceof Error ? results[1].reason.message : 'Gagal memuat kontrak.');
     if (results[2].status === 'fulfilled') setEntitlements(results[2].value.data);
     if (results[3].status === 'fulfilled') setPolicies(results[3].value.data);
+    if (results[4].status === 'fulfilled') setMetrics(results[4].value.data);
     try {
       const catalogueResult = await getPublicCatalogue();
       setCatalogue([...catalogueResult.data.human_workforce, ...catalogueResult.data.ai_workforce]);
@@ -274,6 +277,9 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
       {id:'approvals',label:'Approval'},{id:'documents',label:'Dokumen'},
       {id:'entitlements',label:'Entitlements'},
     ]} activeTab={tab} onChange={(v) => setTab(v as Tab)}/>
+    {metrics && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {[['Active Contracts',metrics.active_contracts],['Pending Approval',metrics.pending_approvals],['Expiring 30 Days',metrics.expiring_30_days],['Pending Renewals',metrics.pending_renewals],['Outstanding Invoice',metrics.outstanding_invoices]].map(([name,value])=><div key={String(name)} className="rounded-[12px] border border-[#D8E3E9] bg-white p-4"><p className="text-[11px] font-medium text-[#718391]">{name}</p><p className="mt-1 text-xl font-bold text-[#17324D]">{value}</p></div>)}
+    </div>}
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</div>}
     {loading && <p className="text-xs text-[#718391]">Memuat data dari FastAPI…</p>}
