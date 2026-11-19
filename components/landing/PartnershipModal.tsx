@@ -75,6 +75,40 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
   const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
   const [faxNumber, setFaxNumber] = useState('');
 
+  useEffect(() => {
+    if (!isOpen || !TURNSTILE_SITE_KEY) {
+      setCaptchaToken('');
+      return;
+    }
+    let disposed = false;
+    let widgetId: string | null = null;
+    const renderWidget = () => {
+      const container = document.getElementById('agentzy-partnership-turnstile');
+      if (disposed || !container || !window.turnstile || widgetId) return;
+      widgetId = window.turnstile.render(container, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token) => setCaptchaToken(token),
+        'expired-callback': () => setCaptchaToken(''),
+        'error-callback': () => setCaptchaToken(''),
+      });
+    };
+    let script = document.querySelector<HTMLScriptElement>('script[data-agentzy-turnstile]');
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.dataset.agentzyTurnstile = 'true';
+      document.head.appendChild(script);
+    }
+    if (window.turnstile) renderWidget();
+    else script.addEventListener('load', renderWidget, { once: true });
+    return () => {
+      disposed = true;
+      if (widgetId && window.turnstile) window.turnstile.remove(widgetId);
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const toggleItem = (list: string[], setter: (v: string[]) => void, item: string) => {
@@ -91,8 +125,12 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
       setError('Mohon lengkapi nama perusahaan, PIC, email bisnis, dan nomor telepon.');
       return;
     }
-    if (!consent) {
+    if (!privacyConsent || !communicationConsent) {
       setError('Persetujuan kebijakan privasi dan komunikasi diperlukan sebelum mengirim.');
+      return;
+    }
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError('Selesaikan verifikasi anti-bot sebelum mengirim pengajuan.');
       return;
     }
     if (attachments.some((file) => file.size > 10 * 1024 * 1024)) {
@@ -124,7 +162,8 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
         provider_products: products,
         needs_summary: needsSummary.trim() || undefined,
         privacy_consent: true,
-        communication_consent: true,
+        communication_consent: communicationConsent,
+        captcha_token: captchaToken || undefined,
         policy_version: '2026-01',
         fax_number: faxNumber,
       }, crypto.randomUUID());
@@ -162,6 +201,9 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
     setError(null);
     setAttachmentMessage(null);
     setAttachments([]);
+    setPrivacyConsent(false);
+    setCommunicationConsent(false);
+    setCaptchaToken('');
     onClose();
   };
 
