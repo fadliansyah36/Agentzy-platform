@@ -16,7 +16,7 @@ export function NetworkStatusBanner({ stale = false }: { stale?: boolean }) {
   if(online && !stale)return null;
   return <div role="status" aria-live="polite" className="rounded-[10px] border border-[#E8D7B8] bg-[#FFF9EF] px-3 py-2 text-xs text-[#76551F]">
     {!online
-      ? 'Offline — data yang tampil adalah snapshot halaman terakhir. Perubahan baru akan dikirim setelah koneksi pulih.'
+      ? 'Offline — data yang tampil adalah snapshot halaman terakhir. Perubahan tidak dikirim saat offline; sambungkan kembali lalu coba ulangi.'
       : 'Refresh API gagal — data yang tampil mungkin sudah stale. Gunakan Refresh untuk mengambil kondisi terbaru.'}
   </div>;
 }
