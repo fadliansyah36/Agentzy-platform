@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import type { AgentzyOrganization, AgentzyPermissionDefinition } from '@/apps/web/lib/api-client';
 import {
   X,
@@ -1074,7 +1074,7 @@ function ProviderCrudModal({
           <label className={labelCls}>Organisasi Induk</label>
           <select
             required
-            value={organizationId}
+            value={selectedOrganizationId}
             disabled={Boolean(initial)}
             onChange={(event) => setOrganizationId(event.target.value)}
             className={inputCls}
@@ -1635,9 +1635,7 @@ function OrgUnitCrudModal({
   );
   const [organizationId, setOrganizationId] = useState(initial?.organizationId ?? '');
   const organizations = (organizationsByTenant[tenantId] ?? []).filter((item) => item.status === 'active');
-  useEffect(() => {
-    if (!organizationId && organizations.length === 1) setOrganizationId(organizations[0].id);
-  }, [organizationId, organizations]);
+  const selectedOrganizationId = organizationId || (organizations.length === 1 ? organizations[0].id : '');
   const [name, setName] = useState(initial?.name ?? '');
   const [unitType, setUnitType] = useState<OrgUnitRecord['unitType']>(
     initial?.unitType ?? 'Cabang / Regional'
@@ -1655,7 +1653,7 @@ function OrgUnitCrudModal({
           onSubmit({
             id: initial?.id,
             tenantId,
-            organizationId,
+            organizationId: selectedOrganizationId,
             name,
             unitType,
             parentName,
