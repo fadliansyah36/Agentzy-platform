@@ -2490,21 +2490,25 @@ async def get_contract_operational_metrics(tenant_id: UUID, claims: dict = claim
         )
         invoices = await connection.execute(
             text("""
-                select count(*) filter (where status in ('issued','partially_paid','overdue')) as outstanding_invoices,
-                       coalesce(sum(total_amount-paid_amount) filter (
-                         where status in ('issued','partially_paid','overdue')
+                select count(*) filter (where i.status in ('issued','partially_paid','overdue')) as outstanding_invoices,
+                       coalesce(sum(i.total_amount-coalesce((
+                         select sum(p.amount) from public.contract_payment_references p
+                         where p.invoice_id=i.id and p.tenant_id=i.tenant_id and p.status='reconciled'
+                       ),0)) filter (
+                         where i.status in ('issued','partially_paid','overdue')
                        ),0) as outstanding_amount
-                from public.contract_invoices where tenant_id=:tenant
+                from public.contract_invoices i where i.tenant_id=:tenant
             """),
             {"tenant": tenant_id},
         )
+    invoice_metrics = invoices.mappings().one()
     return {
         "data": {
             **contract_metrics,
             "pending_renewals": renewals.scalar_one(),
             **dict(docs.mappings().one()),
-            "outstanding_invoices": invoices.mappings().one()["outstanding_invoices"],
-            "outstanding_amount": str(invoices.mappings().one()["outstanding_amount"]),
+            "outstanding_invoices": invoice_metrics["outstanding_invoices"],
+            "outstanding_amount": str(invoice_metrics["outstanding_amount"]),
             "as_of": datetime.now(timezone.utc).isoformat(),
         }
     }
