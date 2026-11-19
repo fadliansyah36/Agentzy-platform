@@ -53,7 +53,7 @@ async def _claim_batch(limit: int = 10) -> list[dict]:
     async with engine.begin() as connection:
         result = await connection.execute(
             text("""
-                select id,application_id,object_path,sha256,content_type,file_size
+                select id,application_id,object_path,sha256,content_type,file_size,scan_attempts
                 from public.public_partnership_attachments
                 where scan_status='pending_scan'
                   and coalesce(scan_result->>'state','') <> 'dead_letter'
