@@ -164,6 +164,8 @@ export function CorporatePortalClient({
         {portal.activeSection === 'contracts' && (
           <ContractPartnershipView
             tenant={portal.activeTenant}
+            organizations={portal.organizations}
+            branches={portal.branches}
             onBack={backToOverview}
           />
         )}
