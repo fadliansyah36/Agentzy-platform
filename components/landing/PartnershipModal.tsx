@@ -158,7 +158,7 @@ export function PartnershipModal({ isOpen, onClose }: PartnershipModalProps) {
         ai_needs: aiNeeds,
         provider_products: products,
         needs_summary: needsSummary.trim() || undefined,
-        privacy_consent: true,
+        privacy_consent: privacyConsent,
         communication_consent: communicationConsent,
         captcha_token: captchaToken || undefined,
         policy_version: '2026-01',
