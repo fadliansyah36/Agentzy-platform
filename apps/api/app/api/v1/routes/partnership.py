@@ -853,6 +853,35 @@ async def update_partnership_prospect(
                     ),
                 },
             )
+
+        if assigned_to is not None and assigned_to != current["assigned_to"]:
+            assignee = await connection.execute(
+                text("select email from auth.users where id=:user_id and deleted_at is null"),
+                {"user_id": assigned_to},
+            )
+            assignee_email = assignee.scalar_one_or_none()
+            if assignee_email:
+                await connection.execute(
+                    text("""
+                        insert into public.notification_outbox(
+                          event_type,aggregate_type,aggregate_id,recipient_email,payload
+                        ) values(
+                          'partnership.prospect.assigned','crm_prospect',:id,
+                          :email,cast(:payload as jsonb)
+                        )
+                    """),
+                    {
+                        "id": prospect_id,
+                        "email": assignee_email,
+                        "payload": json.dumps(
+                            {
+                                "reference_code": current["reference_code"],
+                                "company_name": current["company_name"],
+                                "event": "partnership.prospect.assigned",
+                            }
+                        ),
+                    },
+                )
         response_body = {
             "data": {
                 "id": str(prospect_id),
