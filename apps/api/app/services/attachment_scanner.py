@@ -140,30 +140,14 @@ async def _defer(attachment_id, error_code: str) -> None:
         await connection.execute(
             text("""
                 update public.public_partnership_attachments
-                set scan_result=cast(:result as jsonb)
-                where id=:id and scan_status='pending_scan'
-            """),
-            {
-                "id": attachment_id,
-                "result": json.dumps(
-                    {
-                        "state": "retrying",
-                        "error_code": error_code,
-                        "retry_after": (datetime.now(UTC)).isoformat(),
-                    }
-                ),
-            },
-        )
-        await connection.execute(
-            text("""
-                update public.public_partnership_attachments
-                set scan_result=jsonb_set(
-                    scan_result,'{retry_after}',
-                    to_jsonb((now() + interval '1 minute')::text),true
+                set scan_result=jsonb_build_object(
+                    'state','retrying',
+                    'error_code',:error_code,
+                    'retry_after',(now() + interval '1 minute')::text
                 )
                 where id=:id and scan_status='pending_scan'
             """),
-            {"id": attachment_id},
+            {"id": attachment_id, "error_code": error_code},
         )
 
 
