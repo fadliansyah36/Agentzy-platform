@@ -14,6 +14,7 @@ import type {
 } from '@/apps/web/lib/api-client';
 
 type Props = {
+  tenantId: string;
   tenantName: string;
   memberships: AgentzyTenantMembership[];
   roles: AgentzyRoleTemplate[];
@@ -34,6 +35,7 @@ type Props = {
 type ScopeDraft = ReassignMembershipHierarchyInput;
 
 export function AIWorkforceAccessView({
+  tenantId,
   tenantName,
   memberships,
   roles,
@@ -65,8 +67,8 @@ export function AIWorkforceAccessView({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const tenantRoles = useMemo(
-    () => roles.filter((role) => role.scope_type === 'tenant' && (role.tenant_id === null || role.tenant_id === organizations[0]?.tenant_id)),
-    [roles, organizations],
+    () => roles.filter((role) => role.scope_type === 'tenant' && (role.tenant_id === null || role.tenant_id === tenantId)),
+    [roles, tenantId],
   );
   const activeOrganizations = organizations.filter((item) => item.status === 'active');
   const activeUnits = organizationUnits.filter((item) => item.status === 'active');
@@ -180,14 +182,14 @@ export function AIWorkforceAccessView({
             Cabang
             <select value={inviteScope.branch_id} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, branch_id: event.target.value, department_id: '' }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
               <option value="">Semua cabang</option>
-              {activeBranches.filter((item) => item.organization_id === inviteScope.organization_id && (!inviteScope.organization_unit_id || item.organization_unit_id === inviteScope.organization_unit_id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {activeBranches.filter((item) => item.organization_id === inviteScope.organization_id && item.organization_unit_id === (inviteScope.organization_unit_id || null)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label className="space-y-1 text-xs font-semibold text-[#526675] md:col-span-2">
             Departemen
             <select value={inviteScope.department_id} disabled={!inviteScope.organization_id} onChange={(event) => setInviteScope((current) => ({ ...current, department_id: event.target.value }))} className="h-10 w-full rounded-[8px] border border-[#D8E3E9] bg-white px-3 text-sm font-normal text-[#17324D] disabled:bg-[#F5F8FA]">
               <option value="">Semua departemen</option>
-              {activeDepartments.filter((item) => item.organization_id === inviteScope.organization_id && (!inviteScope.branch_id || item.branch_id === inviteScope.branch_id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {activeDepartments.filter((item) => item.organization_id === inviteScope.organization_id && item.branch_id === (inviteScope.branch_id || null)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <div className="md:col-span-2">
@@ -235,7 +237,7 @@ export function AIWorkforceAccessView({
                         <option value="">Pilih role</option>
                         {tenantRoles.map((role) => <option key={role.id} value={role.key}>{role.name}</option>)}
                       </select>
-                      <button type="button" disabled={!roleValue || rowBusy || roleValue === member.role_keys[0]} onClick={() => void run(member.id, () => onReplaceRole(member.id, roleValue))} className="h-9 rounded-[8px] border border-[#D8E3E9] px-3 text-[11px] font-semibold text-[#17324D] disabled:opacity-40">Ganti role</button>
+                      <button type="button" disabled={!roleValue || rowBusy || member.role_keys.length === 1 && roleValue === member.role_keys[0]} onClick={() => void run(member.id, () => onReplaceRole(member.id, roleValue))} className="h-9 rounded-[8px] border border-[#D8E3E9] px-3 text-[11px] font-semibold text-[#17324D] disabled:opacity-40">Ganti role</button>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-[#718391]"><ShieldCheck className="h-4 w-4 text-[#0284C7]" /> Perubahan role dan scope tercatat pada audit tenant.</div>
                   </div>
@@ -250,11 +252,11 @@ export function AIWorkforceAccessView({
                     </select>
                     <select value={scope.branch_id ?? ''} disabled={!scope.organization_id} onChange={(event) => updateScope(member.id, { branch_id: event.target.value, department_id: '' })} className="h-9 rounded-[8px] border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D] disabled:bg-[#F5F8FA]">
                       <option value="">Semua cabang</option>
-                      {activeBranches.filter((item) => item.organization_id === scope.organization_id && (!scope.organization_unit_id || item.organization_unit_id === scope.organization_unit_id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      {activeBranches.filter((item) => item.organization_id === scope.organization_id && item.organization_unit_id === (scope.organization_unit_id || null)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                     </select>
                     <select value={scope.department_id ?? ''} disabled={!scope.organization_id} onChange={(event) => updateScope(member.id, { department_id: event.target.value })} className="h-9 rounded-[8px] border border-[#D8E3E9] bg-white px-2 text-[11px] text-[#17324D] disabled:bg-[#F5F8FA]">
                       <option value="">Semua departemen</option>
-                      {activeDepartments.filter((item) => item.organization_id === scope.organization_id && (!scope.branch_id || item.branch_id === scope.branch_id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      {activeDepartments.filter((item) => item.organization_id === scope.organization_id && item.branch_id === (scope.branch_id || null)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                     </select>
                   </div>
                   <div className="mt-2 flex justify-end">
@@ -263,7 +265,7 @@ export function AIWorkforceAccessView({
                       scope.organization_unit_id === (member.organization_unit_id ?? '') &&
                       scope.branch_id === (member.branch_id ?? '') &&
                       scope.department_id === (member.department_id ?? '')
-                    )} onClick={() => void run(member.id, () => onReassign(member.id, scope))} className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-[#D8E3E9] px-3 text-[11px] font-semibold text-[#17324D] disabled:opacity-40">
+                    )} onClick={() => void run(member.id, () => onReassign(member.id, { organization_id: scope.organization_id || null, organization_unit_id: scope.organization_unit_id || null, branch_id: scope.branch_id || null, department_id: scope.department_id || null }))} className="inline-flex h-8 items-center gap-1.5 rounded-[7px] border border-[#D8E3E9] px-3 text-[11px] font-semibold text-[#17324D] disabled:opacity-40">
                       <RefreshCw className="h-3.5 w-3.5" /> Simpan assignment
                     </button>
                   </div>
