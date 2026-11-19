@@ -434,6 +434,8 @@ export function AdminPortalClient({
           <SecurityCenterView
             mfaEnforced={portal.mfaEnforced}
             activeSessionsCount={portal.activeSessionsCount}
+            mySessions={portal.mySessions}
+            onRevokeSession={portal.handleRevokeMySession}
             ipAllowlistEnabled={portal.ipAllowlistEnabled}
             sessionTtlMinutes={portal.sessionTtlMinutes}
             breakGlassRequests={portal.breakGlassRequests}
