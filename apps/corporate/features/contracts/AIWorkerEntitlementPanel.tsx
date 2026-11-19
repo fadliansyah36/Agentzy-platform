@@ -14,6 +14,7 @@ const secondary='inline-flex h-9 items-center rounded-[9px] border border-[#D8E3
 export function AIWorkerEntitlementPanel({tenantId,entitlements}:{tenantId:string;entitlements:ContractEntitlement[]}) {
   const auth=useAgentzyAuth();
   const token=auth.session?.access_token ?? '';
+  const canRead=auth.identity?.memberships.some(m=>m.tenant_id===tenantId && (m.permissions.includes('corporate.ai_workers.read') || m.permissions.includes('corporate.ai_workers.manage'))) ?? false;
   const canManage=auth.identity?.memberships.some(m=>m.tenant_id===tenantId && m.permissions.includes('corporate.ai_workers.manage')) ?? false;
   const [workers,setWorkers]=useState<CorporateAIWorker[]>([]);
   const [saving,setSaving]=useState(false);
@@ -22,10 +23,10 @@ export function AIWorkerEntitlementPanel({tenantId,entitlements}:{tenantId:strin
   const [form,setForm]=useState({entitlement:'',worker_code:'',display_name:'',model_provider:'openai',model_key:''});
 
   const refresh=useCallback(async()=>{
-    if(!token || !tenantId)return;
+    if(!token || !tenantId || !canRead)return;
     try{const result=await listCorporateAIWorkers(token,tenantId);setWorkers(result.data);}
     catch(e){setError(e instanceof Error?e.message:'Gagal memuat AI Worker.');}
-  },[token,tenantId]);
+  },[token,tenantId,canRead]);
   useEffect(()=>{let active=true;void(async()=>{if(active)await refresh();})();return()=>{active=false;};},[refresh]);
 
   const act=async(fn:()=>Promise<unknown>,message:string)=>{
@@ -44,13 +45,15 @@ export function AIWorkerEntitlementPanel({tenantId,entitlements}:{tenantId:strin
     }),'AI Worker draft tersimpan. Aktivasi akan memeriksa limit kontrak kembali.');
   };
 
+  if(!canRead)return null;
+
   return <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
     <h2 className="text-sm font-bold text-[#17324D]">Tenant AI Worker Registry</h2>
     <p className="mt-1 text-xs text-[#718391]">Aktivasi diproteksi oleh limit AI Worker kontrak aktif. Provider credentials tidak disimpan di runtime config.</p>
     {error && <p role="alert" className="mt-3 text-xs text-red-700">{error}</p>}
     {notice && <p role="status" className="mt-3 text-xs text-emerald-700">{notice}</p>}
     {canManage && <div className="mt-4 grid gap-3 md:grid-cols-2">
-      <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Contract entitlement</span><select className={field} value={form.entitlement} onChange={e=>setForm(p=>({...p,entitlement:e.target.value}))}><option value="">Pilih service entitlement</option>{entitlements.filter(e=>e.ai_worker_limit!==null).map(e=><option key={e.id} value={e.contract_id+'|'+e.service_key}>{e.service_key} · limit {e.ai_worker_limit}</option>)}</select></label>
+      <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Contract entitlement</span><select className={field} value={form.entitlement} onChange={e=>setForm(p=>({...p,entitlement:e.target.value}))}><option value="">Pilih service entitlement</option>{entitlements.map(e=><option key={e.id} value={e.contract_id+'|'+e.service_key}>{e.service_key} · limit {e.ai_worker_limit ?? 'unlimited'}</option>)}</select></label>
       <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Worker code</span><input className={field} value={form.worker_code} onChange={e=>setForm(p=>({...p,worker_code:e.target.value}))}/></label>
       <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Display name</span><input className={field} value={form.display_name} onChange={e=>setForm(p=>({...p,display_name:e.target.value}))}/></label>
       <label><span className="mb-1 block text-xs font-semibold text-[#526675]">Model provider</span><input className={field} value={form.model_provider} onChange={e=>setForm(p=>({...p,model_provider:e.target.value}))}/></label>
