@@ -75,7 +75,11 @@ export function PartnershipLeadsView({
     }
   }, [accessToken]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => active ? load() : undefined);
+    return () => { active = false; };
+  }, [load]);
 
   const selectProspect = async (item: PartnershipProspect) => {
     setSelected(item);
