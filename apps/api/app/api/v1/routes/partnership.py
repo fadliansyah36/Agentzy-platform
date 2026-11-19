@@ -137,7 +137,9 @@ async def _rate_limit(request: Request, *, action: str, limit: int = 10) -> None
         )
         count = int(result.scalar_one())
     if count > limit:
-        raise HTTPException(status_code=429, detail="Batas permintaan tercapai. Coba kembali nanti.")
+        raise HTTPException(
+            status_code=429, detail="Batas permintaan tercapai. Coba kembali nanti."
+        )
 
 
 def _upload_token_for_key(idempotency_key: str) -> str:
@@ -147,8 +149,11 @@ def _upload_token_for_key(idempotency_key: str) -> str:
         or settings.supabase_service_role_key
     )
     if not secret:
-        raise HTTPException(status_code=503, detail="Public application capability is not configured.")
-    digest = hmac.new(secret.encode(), f"agentzy-partnership-upload:{idempotency_key}".encode(), hashlib.sha256).digest()
+        raise HTTPException(
+            status_code=503, detail="Public application capability is not configured."
+        )
+    message = f"agentzy-partnership-upload:{idempotency_key}".encode()
+    digest = hmac.new(secret.encode(), message, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")
 
 
@@ -191,7 +196,11 @@ async def public_catalogue():
     }
 
 
-@router.post("/public/partnership-applications", status_code=status.HTTP_201_CREATED, tags=["Public Partnership"])
+@router.post(
+    "/public/partnership-applications",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Public Partnership"],
+)
 async def create_partnership_application(
     payload: PartnershipApplicationCreate,
     request: Request,
@@ -214,7 +223,8 @@ async def create_partnership_application(
     async with engine.begin() as connection:
         existing = await connection.execute(
             text("""
-                select id,reference_code,status,request_fingerprint from public.public_partnership_applications
+                select id, reference_code, status, request_fingerprint
+                from public.public_partnership_applications
                 where submission_idempotency_key=:key
             """),
             {"key": idempotency_key},
@@ -222,7 +232,10 @@ async def create_partnership_application(
         prior = existing.mappings().first()
         if prior:
             if prior["request_fingerprint"] != request_fingerprint:
-                raise HTTPException(status_code=409, detail="Idempotency-Key telah digunakan untuk payload yang berbeda.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Idempotency-Key telah digunakan untuk payload yang berbeda.",
+                )
             return {
                 "data": {
                     "id": str(prior["id"]),
@@ -245,7 +258,10 @@ async def create_partnership_application(
             {"email": payload.business_email, "company": payload.company_name.lower()},
         )
         if duplicate.first():
-            raise HTTPException(status_code=409, detail="Pengajuan dengan data perusahaan dan email tersebut baru saja diterima.")
+            raise HTTPException(
+                status_code=409,
+                detail="Pengajuan dengan data perusahaan dan email tersebut baru saja diterima.",
+            )
 
         application_id = uuid4()
         reference_code = f"AGZ-{application_id.hex[:10].upper()}"
@@ -255,11 +271,13 @@ async def create_partnership_application(
                   id,reference_code,company_name,company_type,contact_name,contact_title,
                   business_email,business_phone,website,operating_locations,estimated_workforce,
                   human_needs,ai_needs,provider_products,needs_summary,status,source,
-                  request_id,correlation_id,trace_id,upload_token_hash,submission_idempotency_key,request_fingerprint
+                  request_id,correlation_id,trace_id,upload_token_hash,
+                  submission_idempotency_key,request_fingerprint
                 ) values (
                   :id,:reference,:company,:company_type,:contact,:title,:email,:phone,
                   :website,:locations,:workforce,:human,:ai,:products,:summary,'submitted',
-                  'public_landing',:request_id,:correlation_id,:trace_id,:upload_hash,:idempotency,:fingerprint
+                  'public_landing',:request_id,:correlation_id,:trace_id,
+                  :upload_hash,:idempotency,:fingerprint
                 ) returning id,reference_code,status,created_at
             """),
             {
@@ -305,25 +323,36 @@ async def create_partnership_application(
         )
         await connection.execute(
             text("""
-                insert into public.public_partnership_consents(application_id,consent_type,granted,policy_version)
+                insert into public.public_partnership_consents(
+                  application_id,consent_type,granted,policy_version
+                )
                 values(:id,'privacy',true,:version),(:id,'communication',true,:version)
             """),
             {"id": application_id, "version": payload.policy_version},
         )
         await connection.execute(
             text("""
-                insert into public.crm_prospect_activities(prospect_id,activity_type,to_status,metadata)
+                insert into public.crm_prospect_activities(
+                  prospect_id,activity_type,to_status,metadata
+                )
                 values(:prospect,'submitted','submitted',cast(:metadata as jsonb))
             """),
             {
                 "prospect": prospect_id,
-                "metadata": json.dumps({"source": "public_landing", "reference_code": reference_code}),
+                "metadata": json.dumps(
+                    {"source": "public_landing", "reference_code": reference_code}
+                ),
             },
         )
         await connection.execute(
             text("""
-                insert into public.notification_outbox(event_type,aggregate_type,aggregate_id,recipient_email,payload)
-                values('partnership.application_received','partnership_application',:id,:email,cast(:payload as jsonb))
+                insert into public.notification_outbox(
+                  event_type,aggregate_type,aggregate_id,recipient_email,payload
+                )
+                values(
+                  'partnership.application_received','partnership_application',
+                  :id,:email,cast(:payload as jsonb)
+                )
             """),
             {
                 "id": application_id,
@@ -370,7 +399,11 @@ async def create_partnership_application(
     }
 
 
-@router.post("/public/partnership-applications/{application_id}/attachments", status_code=status.HTTP_201_CREATED, tags=["Public Partnership"])
+@router.post(
+    "/public/partnership-applications/{application_id}/attachments",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Public Partnership"],
+)
 async def upload_partnership_attachment(
     application_id: UUID,
     request: Request,
@@ -385,19 +418,25 @@ async def upload_partnership_attachment(
         app_result = await connection.execute(
             text("""
                 select id from public.public_partnership_applications
-                where id=:id and upload_token_hash=:token_hash and status not in ('closed','disqualified')
+                where id=:id and upload_token_hash=:token_hash
+                  and status not in ('closed','disqualified')
             """),
             {"id": application_id, "token_hash": token_hash},
         )
         if not app_result.first():
-            raise HTTPException(status_code=404, detail="Pengajuan atau akses upload tidak tersedia.")
+            raise HTTPException(
+                status_code=404, detail="Pengajuan atau akses upload tidak tersedia."
+            )
 
     safe_filename = unquote((filename or "").strip()).replace("\\", "/").rsplit("/", 1)[-1]
     extension = "." + safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     allowed = ALLOWED_UPLOADS.get(extension)
     if not allowed or content_type != allowed[0]:
-        raise HTTPException(status_code=415, detail="Format lampiran tidak didukung. Gunakan PDF, JPG, atau PNG.")
+        raise HTTPException(
+            status_code=415,
+            detail="Format lampiran tidak didukung. Gunakan PDF, JPG, atau PNG.",
+        )
     chunks = bytearray()
     async for chunk in request.stream():
         chunks.extend(chunk)
@@ -405,12 +444,19 @@ async def upload_partnership_attachment(
             raise HTTPException(status_code=413, detail="File melebihi batas 10 MB.")
     content = bytes(chunks)
     if not content or not content.startswith(allowed[1]):
-        raise HTTPException(status_code=413 if len(content) > MAX_UPLOAD_BYTES else 400, detail="File tidak valid atau melebihi 10 MB.")
+        raise HTTPException(
+            status_code=400, detail="File tidak valid atau melebihi 10 MB."
+        )
     if not settings.supabase_service_role_key:
-        raise HTTPException(status_code=503, detail="Private attachment storage belum dikonfigurasi.")
+        raise HTTPException(
+            status_code=503, detail="Private attachment storage belum dikonfigurasi."
+        )
 
     object_path = f"{application_id}/{uuid4().hex}{extension}"
-    storage_url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/partnership-quarantine/{object_path}"
+    storage_url = (
+        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
+        f"partnership-quarantine/{object_path}"
+    )
     headers = {
         "Authorization": f"Bearer {settings.supabase_service_role_key}",
         "apikey": settings.supabase_service_role_key,
@@ -420,7 +466,10 @@ async def upload_partnership_attachment(
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(storage_url, content=content, headers=headers)
     if response.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail="Lampiran tidak dapat disimpan ke private quarantine storage.")
+        raise HTTPException(
+            status_code=502,
+            detail="Lampiran tidak dapat disimpan ke private quarantine storage.",
+        )
 
     attachment_id = uuid4()
     try:
@@ -428,8 +477,12 @@ async def upload_partnership_attachment(
             await connection.execute(
                 text("""
                     insert into public.public_partnership_attachments(
-                      id,application_id,object_path,original_filename,content_type,file_size,sha256,scan_status
-                    ) values(:id,:application_id,:path,:filename,:content_type,:size,:sha256,'pending_scan')
+                      id,application_id,object_path,original_filename,
+                      content_type,file_size,sha256,scan_status
+                    ) values(
+                      :id,:application_id,:path,:filename,:content_type,
+                      :size,:sha256,'pending_scan'
+                    )
                 """),
                 {
                     "id": attachment_id,
@@ -586,21 +639,29 @@ async def update_partnership_prospect(
         next_status = payload.status or current["status"]
         if payload.status and payload.status != current["status"]:
             if payload.status not in ALLOWED_TRANSITIONS[current["status"]]:
-                raise HTTPException(status_code=409, detail="Transisi status prospek tidak diizinkan.")
+                raise HTTPException(
+                    status_code=409, detail="Transisi status prospek tidak diizinkan."
+                )
         assigned_to = current["assigned_to"]
         if "assigned_to" in payload.model_fields_set:
             assigned_to = payload.assigned_to
             if assigned_to is not None and not await has_platform_permission(
                 session, assigned_to, "platform.partnership.manage"
             ):
-                raise HTTPException(status_code=422, detail="Petugas tujuan tidak memiliki akses partnership.")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Petugas tujuan tidak memiliki akses partnership.",
+                )
             if assigned_to is not None and next_status == "submitted":
                 next_status = "assigned"
         await connection.execute(
             text("""
                 update public.crm_prospects
                 set status=:status,assigned_to=:assigned_to,
-                    assigned_at=case when :assigned_to is distinct from assigned_to and :assigned_to is not null then now() else assigned_at end,
+                    assigned_at=case
+                      when :assigned_to is distinct from assigned_to
+                        and :assigned_to is not null then now()
+                      else assigned_at end,
                     last_activity_at=now(),updated_at=now()
                 where id=:id
             """),
@@ -643,14 +704,19 @@ async def update_partnership_prospect(
                 """),
                 {
                     "id": prospect_id, "actor": actor,
-                    "metadata": json.dumps({"assigned_to": str(assigned_to) if assigned_to else None}),
+                    "metadata": json.dumps(
+                        {"assigned_to": str(assigned_to) if assigned_to else None}
+                    ),
                 },
             )
         await connection.execute(
             text("""
                 insert into public.audit_logs(
                   actor_user_id,action,resource_type,resource_id,request_id,metadata
-                ) values(:actor,'partnership.prospect.updated','crm_prospect',:id,:request_id,cast(:metadata as jsonb))
+                ) values(
+                  :actor,'partnership.prospect.updated','crm_prospect',
+                  :id,:request_id,cast(:metadata as jsonb)
+                )
             """),
             {
                 "actor": actor, "id": str(prospect_id),
@@ -667,7 +733,10 @@ async def update_partnership_prospect(
                 text("""
                     insert into public.notification_outbox(
                       event_type,aggregate_type,aggregate_id,recipient_email,payload
-                    ) values('partnership.prospect.updated','crm_prospect',:id,:email,cast(:payload as jsonb))
+                    ) values(
+                      'partnership.prospect.updated','crm_prospect',:id,
+                      :email,cast(:payload as jsonb)
+                    )
                 """),
                 {
                     "id": prospect_id, "email": current["business_email"],
