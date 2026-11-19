@@ -40,11 +40,11 @@ This is a source inspection inventory, not a penetration test or proof that ever
 | management | GET `/tenants/{tenant_id}/memberships` | Membership directory | Central tenant + ABAC helper | COVERED (route-level) |
 | management | GET `/permissions` | Permission registry | AAL2 + platform role/permission gate + global ABAC resource check | COVERED (platform scope) |
 | management | GET `/roles` | Role catalogue | AAL2 + global ABAC for platform readers; tenant permission path for tenant readers | COVERED (route-level) |
-| management | PUT `/roles/{role_id}/permissions` | Replace role permissions | Platform role/permission gate + MFA; idempotency | PARTIAL (object/scope ABAC parity not proven) |
+| management | PUT `/roles/{role_id}/permissions` | Replace role permissions | Platform role/permission gate + MFA + resource-aware global ABAC; idempotency | COVERED (route-level) |
 | management | GET `/tenants/directory` | Platform tenant directory | AAL2 + platform role/permission gate + global ABAC resource check | COVERED (platform scope) |
-| management | PATCH `/tenants/{tenant_id}` | Tenant update | Platform role/permission gate | PARTIAL (object-level ABAC parity not proven) |
-| management | DELETE `/tenants/{tenant_id}` | Tenant archive | Platform role/permission gate | PARTIAL (object-level ABAC parity not proven) |
-| management | POST/PATCH/DELETE `/roles`, `/roles/{role_id}` | Role lifecycle | Platform role/permission gate | PARTIAL (object/scope ABAC parity not proven) |
+| management | PATCH `/tenants/{tenant_id}` | Tenant update | Platform role/permission gate + resource-aware global ABAC on locked target tenant | COVERED (route-level) |
+| management | DELETE `/tenants/{tenant_id}` | Tenant archive | Platform role/permission gate + resource-aware global ABAC on locked target tenant | COVERED (route-level) |
+| management | POST/PATCH/DELETE `/roles`, `/roles/{role_id}` | Role lifecycle | Platform role/permission gate + resource-aware global ABAC on role key/scope/target | COVERED (route-level) |
 | access_policies | GET/POST `/security/access-policies` | ABAC policy list/create | AAL2 + platform security permission via central platform ABAC | COVERED (admin scope) |
 | access_policies | PATCH `/security/access-policies/{policy_id}` | Policy update/version | AAL2 + platform security permission; version snapshot and audit | COVERED (admin scope) |
 | access_policies | POST `/security/access-policies/{policy_id}/activate` | Policy activation | AAL2 + platform security permission; version snapshot and audit | COVERED (admin scope) |
@@ -109,3 +109,13 @@ This is a source inspection inventory, not a penetration test or proof that ever
 - Code commit: `990d40d5b428c13792b0c7c4e7e730e88eb3967c`. Minimum engineering workflow for the final combined commit is pending and must be checked before acceptance.
 
 **Disposition remains PARTIAL / IN PROGRESS.**
+## 8. Membership invitation recovery — 2026-11-19
+
+- The invite command now reserves idempotency only after tenant authorization, hierarchy checks, role eligibility and duplicate membership checks.
+- Existing Auth identities are reconciled by normalized email and reused; the flow does not create a duplicate user or synthetic identity.
+- A provider response loss can be recovered by retry: the next request resolves the already-created Auth identity and proceeds with the membership transaction.
+- Failed external invite or membership transaction releases the durable idempotency record into `failed`; stale `processing` reservations are recoverable after ten minutes when the same fingerprint is supplied.
+- Invitee email is recursively redacted from audit JSON metadata.
+- Final implementation code head `899a981026fa04331e7dbc0e39d921d945774e70` passed engineering run [44495060635](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44495060635).
+
+**Remaining:** complete nested repository authorization inventory and all-portal hierarchy/membership action parity are still open. The route-level classifications above are not a penetration test or runtime proof.
