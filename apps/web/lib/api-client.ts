@@ -1219,3 +1219,36 @@ export const updateContractSignatureStatus = (
   { method: 'PATCH', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() },
     body: JSON.stringify({tenant_id:tenantId,...payload}) },
 );
+
+export type CorporateProviderProfile = {
+  id: string; provider_code: string; provider_name: string;
+  provider_type: 'isp'|'telecom'|'managed_service'|'technology'|'other';
+  registration_number: string | null; contact_email: string | null; contact_phone: string | null;
+  service_regions: string[]; status: 'draft'|'active'|'suspended'|'archived';
+  created_at: string; updated_at: string;
+};
+export const listCorporateProviderProfiles = (accessToken: string, tenantId: string) =>
+  apiRequest<{data:CorporateProviderProfile[]}>(
+    `/corporate/provider-profiles?tenant_id=${encodeURIComponent(tenantId)}`,
+    {method:'GET',accessToken},
+  );
+export const createCorporateProviderProfile = (accessToken: string, payload: {
+  tenant_id:string;provider_code:string;provider_name:string;provider_type:CorporateProviderProfile['provider_type'];
+  registration_number?:string|null;contact_email?:string|null;contact_phone?:string|null;
+  service_regions?:string[];service_metadata?:Record<string,unknown>;
+}) => apiRequest<{data:{id:string;status:string}}>('/corporate/provider-profiles',{
+  method:'POST',accessToken,headers:{'Idempotency-Key':createIdempotencyKey()},body:JSON.stringify(payload),
+});
+export const updateCorporateProviderProfile = (accessToken:string,providerId:string,payload:{
+  tenant_id:string;provider_name?:string;provider_type?:CorporateProviderProfile['provider_type'];
+  registration_number?:string|null;contact_email?:string|null;contact_phone?:string|null;
+  service_regions?:string[];service_metadata?:Record<string,unknown>;
+}) => apiRequest<{data:{id:string;status:string}}>(
+  `/corporate/provider-profiles/${encodeURIComponent(providerId)}`,
+  {method:'PATCH',accessToken,headers:{'Idempotency-Key':createIdempotencyKey()},body:JSON.stringify(payload)},
+);
+export const updateCorporateProviderProfileStatus = (accessToken:string,tenantId:string,providerId:string,status:'active'|'suspended'|'archived',reason:string) =>
+  apiRequest<{data:{id:string;status:string}}>(
+    `/corporate/provider-profiles/${encodeURIComponent(providerId)}/status?${new URLSearchParams({tenant_id:tenantId,status,reason}).toString()}`,
+    {method:'PATCH',accessToken,headers:{'Idempotency-Key':createIdempotencyKey()}},
+  );
