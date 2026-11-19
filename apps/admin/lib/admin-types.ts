@@ -130,7 +130,7 @@ export interface OrgUnitRecord {
   parentName: string | null;
   headName: string | null;
   memberCount: number | null;
-  status: 'Aktif' | 'Nonaktif';
+  status: 'Aktif' | 'Nonaktif' | 'Diarsipkan';
   code?: string;
   organizationId?: string;
   organizationUnitId?: string | null;
