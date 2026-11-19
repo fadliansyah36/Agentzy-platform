@@ -1724,3 +1724,177 @@ async def get_effective_entitlements(tenant_id: UUID, claims: dict = claims_depe
         "effective_start": row["effective_start"].isoformat() if row["effective_start"] else None,
         "effective_end": row["effective_end"].isoformat() if row["effective_end"] else None,
     } for row in rows]}
+
+
+class PaymentSubmissionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: UUID
+    external_reference: str = Field(min_length=3, max_length=160)
+
+
+@router.get("/contracts/{contract_id}/versions")
+async def list_contract_versions(contract_id: UUID, tenant_id: UUID, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.contracts.read")
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select id,version_number,version_status,scope_summary,content_hash,
+                       parent_version_id,change_summary,effective_from,created_by,created_at,approved_at
+                from public.contract_versions
+                where tenant_id=:tenant and contract_id=:contract
+                order by version_number desc
+            """),
+            {"tenant": tenant_id, "contract": contract_id},
+        )
+    return {"data": [{
+        **dict(row), "id": str(row["id"]),
+        "parent_version_id": str(row["parent_version_id"]) if row["parent_version_id"] else None,
+        "created_by": str(row["created_by"]),
+        "created_at": row["created_at"].isoformat(),
+        "approved_at": row["approved_at"].isoformat() if row["approved_at"] else None,
+        "effective_from": row["effective_from"].isoformat() if row["effective_from"] else None,
+    } for row in result.mappings().all()]}
+
+
+@router.get("/contracts/{contract_id}/renewals")
+async def list_contract_renewals(contract_id: UUID, tenant_id: UUID, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.contracts.read")
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("""
+                select id,renewal_type,requested_start,requested_end,requested_terms,
+                       status,requested_by,created_at,decided_by,decided_at
+                from public.contract_renewals
+                where tenant_id=:tenant and contract_id=:contract
+                order by created_at desc
+            """),
+            {"tenant": tenant_id, "contract": contract_id},
+        )
+    return {"data": [{
+        **dict(row), "id": str(row["id"]),
+        "requested_by": str(row["requested_by"]),
+        "decided_by": str(row["decided_by"]) if row["decided_by"] else None,
+        "requested_start": row["requested_start"].isoformat() if row["requested_start"] else None,
+        "requested_end": row["requested_end"].isoformat(),
+        "created_at": row["created_at"].isoformat(),
+        "decided_at": row["decided_at"].isoformat() if row["decided_at"] else None,
+    } for row in result.mappings().all()]}
+
+
+@router.post("/approval-delegations/{delegation_id}/revoke")
+async def revoke_approval_delegation(
+    delegation_id: UUID, tenant_id: UUID, request: Request, claims: dict = claims_dependency
+):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.contracts.approve")
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                update public.contract_approval_delegations
+                set status='revoked',revoked_by=:actor,revoked_at=now()
+                where id=:id and tenant_id=:tenant and delegator_user_id=:actor
+                  and status='active'
+                returning id
+            """),
+            {"id": delegation_id, "tenant": tenant_id, "actor": actor},
+        )
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Delegasi aktif tidak ditemukan atau bukan milik pengguna.")
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(:tenant,:actor,'contract.approval.delegation_revoked',
+                  'approval_delegation',:id,:request_id,'{}'::jsonb)
+            """),
+            {"tenant": tenant_id, "actor": actor, "id": str(delegation_id),
+             "request_id": _request_id(request)},
+        )
+    return {"data": {"id": str(delegation_id), "status": "revoked"}}
+
+
+@router.post("/payment-references/{reference_id}/submit")
+async def submit_payment_reference(
+    reference_id: UUID,
+    payload: PaymentSubmissionInput,
+    request: Request,
+    claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, payload.tenant_id, "corporate.finance.invoice.manage")
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text("""
+                update public.contract_payment_references
+                set status='submitted',external_reference=:external_reference,submitted_at=now()
+                where id=:id and tenant_id=:tenant and status='reference_created'
+                returning invoice_id,amount,status
+            """),
+            {
+                "id": reference_id, "tenant": payload.tenant_id,
+                "external_reference": payload.external_reference,
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=409, detail="Payment reference tidak tersedia untuk submission.")
+        await connection.execute(
+            text("""
+                insert into public.audit_logs(
+                  tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata
+                ) values(:tenant,:actor,'contract.payment_reference.submitted',
+                  'contract_payment_reference',:id,:request_id,cast(:metadata as jsonb))
+            """),
+            {
+                "tenant": payload.tenant_id, "actor": actor, "id": str(reference_id),
+                "request_id": _request_id(request),
+                "metadata": json.dumps({"invoice_id": str(row["invoice_id"]),
+                                        "external_reference": payload.external_reference,
+                                        "amount": str(row["amount"])}),
+            },
+        )
+    return {"data": {"id": str(reference_id), "status": "submitted", "payment_confirmed": False}}
+
+
+@router.get("/invoices/{invoice_id}")
+async def get_contract_invoice(invoice_id: UUID, tenant_id: UUID, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await require_tenant_permission(actor, tenant_id, "corporate.finance.invoice.read")
+    async with engine.connect() as connection:
+        invoice_result = await connection.execute(
+            text("""
+                select id,contract_id,invoice_number,title,currency,subtotal,tax_amount,
+                       total_amount,status,issued_at,due_at,created_at
+                from public.contract_invoices where id=:id and tenant_id=:tenant
+            """),
+            {"id": invoice_id, "tenant": tenant_id},
+        )
+        invoice = invoice_result.mappings().first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice tidak ditemukan.")
+        lines_result = await connection.execute(
+            text("""
+                select id,contract_service_id,description,quantity,unit_amount,line_amount
+                from public.contract_invoice_lines
+                where invoice_id=:invoice and tenant_id=:tenant order by created_at,id
+            """),
+            {"invoice": invoice_id, "tenant": tenant_id},
+        )
+    data = dict(invoice)
+    data["id"] = str(data["id"])
+    data["contract_id"] = str(data["contract_id"])
+    data["subtotal"] = str(data["subtotal"])
+    data["tax_amount"] = str(data["tax_amount"])
+    data["total_amount"] = str(data["total_amount"])
+    data["issued_at"] = data["issued_at"].isoformat() if data["issued_at"] else None
+    data["due_at"] = data["due_at"].isoformat() if data["due_at"] else None
+    data["created_at"] = data["created_at"].isoformat()
+    data["lines"] = [{
+        **dict(line), "id": str(line["id"]),
+        "contract_service_id": str(line["contract_service_id"]) if line["contract_service_id"] else None,
+        "quantity": str(line["quantity"]), "unit_amount": str(line["unit_amount"]),
+        "line_amount": str(line["line_amount"]),
+    } for line in lines_result.mappings().all()]
+    return {"data": data}
