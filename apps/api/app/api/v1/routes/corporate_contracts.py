@@ -1242,6 +1242,9 @@ async def request_contract_renewal(
     await require_tenant_permission(actor, payload.tenant_id, "corporate.contracts.lifecycle")
     if payload.requested_start and payload.requested_end < payload.requested_start:
         raise HTTPException(status_code=422, detail="Rentang renewal tidak valid.")
+    fingerprint = hashlib.sha256(
+        json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
+    ).hexdigest()
     async with engine.begin() as connection:
         contract = await connection.execute(
             text("""
@@ -1253,27 +1256,34 @@ async def request_contract_renewal(
         row = contract.mappings().first()
         if not row or row["status"] not in ("active", "approved"):
             raise HTTPException(status_code=409, detail="Kontrak tidak dapat diperpanjang pada status ini.")
+        existing = await connection.execute(
+            text("""
+                select id,status,idempotency_fingerprint from public.contract_renewals
+                where tenant_id=:tenant and idempotency_key=:key
+            """),
+            {"tenant": payload.tenant_id, "key": idempotency_key},
+        )
+        previous = existing.mappings().first()
+        if previous:
+            if previous["idempotency_fingerprint"] != fingerprint:
+                raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk renewal berbeda.")
+            return {"data": {"id": str(previous["id"]), "status": previous["status"], "replayed": True}}
         result = await connection.execute(
             text("""
                 insert into public.contract_renewals(
                   tenant_id,contract_id,renewal_type,requested_start,requested_end,
-                  requested_terms,idempotency_key,requested_by
-                ) values(:tenant,:contract,:type,:start,:end,:terms,:key,:actor)
-                on conflict(tenant_id,idempotency_key) do nothing returning id,status
+                  requested_terms,idempotency_key,idempotency_fingerprint,requested_by
+                ) values(:tenant,:contract,:type,:start,:end,:terms,:key,:fingerprint,:actor)
+                returning id,status
             """),
             {
                 "tenant": payload.tenant_id, "contract": contract_id,
                 "type": payload.renewal_type, "start": payload.requested_start,
                 "end": payload.requested_end, "terms": payload.requested_terms,
-                "key": idempotency_key, "actor": actor,
+                "key": idempotency_key, "fingerprint": fingerprint, "actor": actor,
             },
         )
-        renewal = result.mappings().first()
-        if renewal is None:
-            renewal = (await connection.execute(
-                text("select id,status from public.contract_renewals where tenant_id=:tenant and idempotency_key=:key"),
-                {"tenant": payload.tenant_id, "key": idempotency_key},
-            )).mappings().one()
+        renewal = result.mappings().one()
         await audit_contract_event(
             connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
             event_type="contract.renewal.requested", request_id=_request_id(request),
@@ -1475,16 +1485,18 @@ async def create_contract_invoice(
     async with engine.begin() as connection:
         existing = await connection.execute(
             text("""
-                select id,metadata from public.contract_events
+                select id,status,total_amount,idempotency_fingerprint
+                from public.contract_invoices
                 where tenant_id=:tenant and idempotency_key=:key
             """),
             {"tenant": payload.tenant_id, "key": idempotency_key},
         )
         replay = existing.mappings().first()
         if replay:
-            if replay["metadata"].get("fingerprint") != fingerprint:
-                raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk payload berbeda.")
-            return {"data": {"event_id": str(replay["id"]), "replayed": True}}
+            if replay["idempotency_fingerprint"] != fingerprint:
+                raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk invoice berbeda.")
+            return {"data": {"id": str(replay["id"]), "status": replay["status"],
+                             "total_amount": str(replay["total_amount"]), "replayed": True}}
         contract = await connection.execute(
             text("select status from public.contracts where id=:id and tenant_id=:tenant"),
             {"id": contract_id, "tenant": payload.tenant_id},
@@ -1495,10 +1507,10 @@ async def create_contract_invoice(
             text("""
                 insert into public.contract_invoices(
                   tenant_id,contract_id,invoice_number,title,currency,subtotal,tax_amount,
-                  total_amount,status,due_at,idempotency_key,created_by
+                  total_amount,status,due_at,idempotency_key,idempotency_fingerprint,created_by
                 ) values(
                   :tenant,:contract,:number,:title,:currency,:subtotal,:tax,:total,
-                  'draft',:due,:key,:actor
+                  'draft',:due,:key,:fingerprint,:actor
                 ) returning id,status,total_amount
             """),
             {
@@ -1506,7 +1518,7 @@ async def create_contract_invoice(
                 "number": payload.invoice_number, "title": payload.title,
                 "currency": payload.currency.upper(), "subtotal": subtotal,
                 "tax": payload.tax_amount, "total": total, "due": payload.due_at,
-                "key": idempotency_key, "actor": actor,
+                "key": idempotency_key, "fingerprint": fingerprint, "actor": actor,
             },
         )
         invoice_row = invoice.mappings().one()
@@ -1624,29 +1636,38 @@ async def create_payment_reference(
             raise HTTPException(status_code=409, detail="Invoice belum diterbitkan atau tidak dapat dibayar.")
         if payload.amount > row["total_amount"]:
             raise HTTPException(status_code=422, detail="Nominal referensi melebihi total invoice.")
+        fingerprint = hashlib.sha256(
+            f"{invoice_id}:{payload.reference_number}:{payload.payment_method}:{payload.amount}".encode()
+        ).hexdigest()
+        existing = await connection.execute(
+            text("""
+                select id,status,idempotency_fingerprint
+                from public.contract_payment_references
+                where tenant_id=:tenant and idempotency_key=:key
+            """),
+            {"tenant": payload.tenant_id, "key": idempotency_key},
+        )
+        previous = existing.mappings().first()
+        if previous:
+            if previous["idempotency_fingerprint"] != fingerprint:
+                raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk payment reference berbeda.")
+            return {"data": {"id": str(previous["id"]), "status": previous["status"], "payment_confirmed": False, "replayed": True}}
         result = await connection.execute(
             text("""
                 insert into public.contract_payment_references(
                   tenant_id,invoice_id,reference_number,payment_method,amount,
-                  idempotency_key,created_by
-                ) values(:tenant,:invoice,:reference,:method,:amount,:key,:actor)
-                on conflict(tenant_id,idempotency_key) do nothing returning id,status
+                  idempotency_key,idempotency_fingerprint,created_by
+                ) values(:tenant,:invoice,:reference,:method,:amount,:key,:fingerprint,:actor)
+                returning id,status
             """),
             {
                 "tenant": payload.tenant_id, "invoice": invoice_id,
                 "reference": payload.reference_number, "method": payload.payment_method,
-                "amount": payload.amount, "key": idempotency_key, "actor": actor,
+                "amount": payload.amount, "key": idempotency_key,
+                "fingerprint": fingerprint, "actor": actor,
             },
         )
-        reference = result.mappings().first()
-        if not reference:
-            reference = (await connection.execute(
-                text("""
-                    select id,status from public.contract_payment_references
-                    where tenant_id=:tenant and idempotency_key=:key
-                """),
-                {"tenant": payload.tenant_id, "key": idempotency_key},
-            )).mappings().one()
+        reference = result.mappings().one()
         await connection.execute(
             text("""
                 insert into public.audit_logs(
