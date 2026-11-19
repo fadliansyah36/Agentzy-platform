@@ -953,3 +953,12 @@ This section supersedes earlier statements that Phase 02 must not start from the
 - New live-applied migrations: `20261119091102` upload idempotency; `20261119091305` scan retry budget.
 - Phase 01 and Phase 02 remain PARTIAL until remaining core authorization/portal and external runtime dependencies are closed. Hosted Supabase Auth configuration is explicitly deferred by the current user instruction, not a reason to stop backend development.
 - Phase 00 and Phase 09 remain untouched; Phase 03 is not started.
+### Backend-first continuation — final check — 2026-11-19
+
+- Phase 01: membership invitation is now a recoverable idempotent saga. Authorization and validation precede reservation; provider failures and membership commit failures mark commands failed; retries reconcile an Auth identity created before a lost response. Audit JSON redacts invitee email. Shared idempotency reservations recover stale `processing` records after ten minutes for the same fingerprint.
+- Phase 02: production Turnstile is fail-closed; attachment quota is concurrency-safe; upload requests are idempotent and file-fingerprint-bound; Storage upload compensation handles ambiguous outcomes; scanner retries are bounded and dead-lettered with an AAL2/ABAC manual retry path; CRM no longer exposes internal scan metadata; assignment sends an internal outbox event.
+- Applied migrations: `20261119091102_phase_02_attachment_upload_idempotency`, `20261119091305_phase_02_attachment_scan_retry_budget`.
+- Live Supabase confirms 28/28 public tables have RLS enabled and the new upload-idempotency and scan-retry schema exists.
+- Final code head `899a981026fa04331e7dbc0e39d921d945774e70` passed engineering run [44495060635](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/44495060635) SUCCESS.
+- Hosted Supabase Auth provider/redirect/SMTP/MFA/session/webhook settings remain intentionally deferred under the current user instruction; do not count them as backend implementation work. Real Auth identities are still unavailable, so identity-runtime evidence remains deferred.
+- Phase 01 and Phase 02 remain PARTIAL; Phase 03 NOT STARTED. Phase 00 and Phase 09 source paths remain unchanged.
