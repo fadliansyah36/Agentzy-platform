@@ -561,7 +561,7 @@ async def create_contract_amendment(
             )
         await connection.execute(
             text("""
-                update public.contracts set status='draft',current_version=:version,
+                update public.contracts set current_version=:version,
                   row_version=row_version+1,updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant
             """),
@@ -576,7 +576,8 @@ async def create_contract_amendment(
             idempotency_key=idempotency_key,
         )
     return {"data": {"contract_id": str(contract_id), "version_id": str(version_id),
-                     "version": next_version, "status": "draft"}}
+                     "version": next_version, "status": contract["status"],
+                     "version_status": "draft"}}
 
 
 @router.post("/approval-policies", status_code=201)
@@ -677,14 +678,25 @@ async def submit_policy_review(
     async with engine.begin() as connection:
         contract_result = await connection.execute(
             text("""
-                select status,current_version,contract_type,currency from public.contracts
-                where id=:id and tenant_id=:tenant for update
+                select c.status,c.current_version,c.contract_type,c.currency,
+                  v.version_status
+                from public.contracts c
+                join public.contract_versions v
+                  on v.contract_id=c.id and v.version_number=c.current_version
+                where c.id=:id and c.tenant_id=:tenant for update of c,v
             """),
             {"id": contract_id, "tenant": tenant_id},
         )
         contract = contract_result.mappings().first()
-        if not contract or contract["status"] != "draft":
-            raise HTTPException(status_code=409, detail="Hanya draft kontrak yang dapat diajukan.")
+        if (
+            not contract
+            or contract["status"] not in ("draft", "active")
+            or contract["version_status"] != "draft"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Hanya draft kontrak atau amendment draft yang dapat diajukan.",
+            )
         amount_result = await connection.execute(
             text("""
                 select coalesce(sum(coalesce(monthly_fee,0)*quantity),0)
@@ -767,8 +779,9 @@ async def submit_policy_review(
                 assigned += 1
         await connection.execute(
             text("""
-                update public.contracts set status='review_pending',updated_by=:actor,
-                  updated_at=now(),row_version=row_version+1
+                update public.contracts set
+                  status=case when status='draft' then 'review_pending' else status end,
+                  updated_by=:actor,updated_at=now(),row_version=row_version+1
                 where id=:id and tenant_id=:tenant
             """),
             {"actor": actor, "id": contract_id, "tenant": tenant_id},
@@ -792,8 +805,10 @@ async def submit_policy_review(
             event_type="contract.review_requested",
             payload={"contract_id": str(contract_id), "policy_id": str(policy_id)},
         )
-    return {"data": {"id": str(contract_id), "status": "review_pending",
-                     "policy_id": str(policy_id), "approval_count": assigned}}
+    return {"data": {"id": str(contract_id),
+                     "status": "review_pending" if contract["status"] == "draft" else "active",
+                     "version_status": "submitted", "policy_id": str(policy_id),
+                     "approval_count": assigned}}
 
 
 @router.post("/approval-delegations", status_code=201)
@@ -881,7 +896,8 @@ async def decide_policy_approval(
         result = await connection.execute(
             text("""
                 select c.status,c.current_version,a.id,a.status as approval_status,
-                       a.approver_user_id,a.approval_step
+                       a.approver_user_id,a.approval_step,v.id as version_id,
+                       v.version_status
                 from public.contracts c
                 join public.contract_approvals a on a.contract_id=c.id
                 join public.contract_versions v on v.id=a.contract_version_id
@@ -905,8 +921,15 @@ async def decide_policy_approval(
             },
         )
         approval = result.mappings().first()
-        if not approval or approval["status"] != "review_pending":
-            raise HTTPException(status_code=404, detail="Approval tidak ditemukan atau tidak ditugaskan kepada pengguna ini.")
+        if (
+            not approval
+            or approval["status"] not in ("review_pending", "active")
+            or approval["version_status"] != "submitted"
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail="Approval tidak ditemukan atau tidak ditugaskan kepada pengguna ini.",
+            )
         await connection.execute(
             text("""
                 update public.contract_approvals set status=:decision,decision_reason=:reason,
@@ -934,31 +957,77 @@ async def decide_policy_approval(
                 {"contract": contract_id, "version": approval["current_version"]},
             )
             next_status = "approved" if pending.scalar_one() == 0 else "review_pending"
+        contract_next_status = next_status
         if next_status in ("approved", "rejected"):
-            await connection.execute(
-                text("""
-                    update public.contracts set status=:status,updated_by=:actor,
-                      updated_at=now(),row_version=row_version+1
-                    where id=:id and tenant_id=:tenant
-                """),
-                {"status": next_status, "actor": actor, "id": contract_id, "tenant": payload.tenant_id},
-            )
+            if approval["status"] == "active" and next_status == "approved":
+                contract_next_status = "active"
+                await connection.execute(
+                    text("""
+                        update public.contracts set updated_by=:actor,updated_at=now(),
+                          row_version=row_version+1
+                        where id=:id and tenant_id=:tenant
+                    """),
+                    {"actor": actor, "id": contract_id, "tenant": payload.tenant_id},
+                )
+            else:
+                await connection.execute(
+                    text("""
+                        update public.contracts set status=:status,updated_by=:actor,
+                          updated_at=now(),row_version=row_version+1
+                        where id=:id and tenant_id=:tenant
+                    """),
+                    {"status": next_status, "actor": actor, "id": contract_id, "tenant": payload.tenant_id},
+                )
             await connection.execute(
                 text("""
                     update public.contract_versions set version_status=:status,
                       approved_at=case when :status='approved' then now() else approved_at end
-                    where contract_id=:id and version_number=:version
+                    where id=:version_id
                 """),
-                {"status": next_status, "id": contract_id, "version": approval["current_version"]},
+                {"status": next_status, "version_id": approval["version_id"]},
             )
+            if approval["status"] == "active" and next_status == "approved":
+                await connection.execute(
+                    text("""
+                        update public.contract_entitlement_grants set status='revoked',updated_at=now()
+                        where tenant_id=:tenant and contract_id=:contract
+                          and contract_version_id<>:version_id and status='active'
+                    """),
+                    {"tenant": payload.tenant_id, "contract": contract_id,
+                     "version_id": approval["version_id"]},
+                )
+                await connection.execute(
+                    text("""
+                        insert into public.contract_entitlement_grants(
+                          tenant_id,contract_id,contract_version_id,service_key,service_scope,
+                          sla,kpi,human_workforce_limit,ai_worker_limit,ai_credits_limit,
+                          status,effective_start,effective_end
+                        )
+                        select s.tenant_id,s.contract_id,s.contract_version_id,s.service_key,
+                          jsonb_build_object('scope',s.service_scope,'entitlement',s.entitlement),
+                          s.sla,s.kpi,s.human_workforce_limit,s.ai_worker_limit,s.ai_credits_limit,
+                          'active',coalesce(s.effective_start,c.effective_start),
+                          coalesce(s.effective_end,c.effective_end)
+                        from public.contract_services s
+                        join public.contracts c on c.id=s.contract_id and c.tenant_id=s.tenant_id
+                        where s.contract_id=:contract and s.tenant_id=:tenant
+                          and s.contract_version_id=:version_id
+                        on conflict(contract_version_id,service_key) do update set
+                          status='active',updated_at=now()
+                    """),
+                    {"tenant": payload.tenant_id, "contract": contract_id,
+                     "version_id": approval["version_id"]},
+                )
         await audit_contract_event(
             connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
             event_type=f"contract.approval.{payload.decision}", request_id=_request_id(request),
-            from_status="review_pending", to_status=next_status,
+            from_status=approval["status"], to_status=contract_next_status,
             metadata={"approval_id": str(payload.approval_id), "reason": payload.reason},
             idempotency_key=idempotency_key,
         )
-    return {"data": {"approval_id": str(payload.approval_id), "contract_status": next_status}}
+    return {"data": {"approval_id": str(payload.approval_id),
+                     "contract_status": contract_next_status,
+                     "version_status": next_status}}
 
 
 @router.post("/contracts/{contract_id}/documents", status_code=201)
