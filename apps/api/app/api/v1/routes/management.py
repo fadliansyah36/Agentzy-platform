@@ -719,7 +719,9 @@ async def invite_tenant_member(
             # A retry can reconcile a user created by Auth even if the HTTP response was lost.
             async with engine.begin() as connection:
                 await fail_idempotency(
-                    connection, record_id=reservation.record_id, error_code="AUTH_INVITE_UNAVAILABLE"
+                    connection,
+                    record_id=reservation.record_id,
+                    error_code="AUTH_INVITE_UNAVAILABLE",
                 )
             raise HTTPException(
                 status_code=502, detail="Gagal mengirim undangan melalui Supabase Auth."
