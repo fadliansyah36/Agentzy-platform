@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes.access_policies import router as access_policies_router
-from app.api.v1.routes.contracts import router as contracts_router
 from app.api.v1.routes.bootstrap import router as bootstrap_router
+from app.api.v1.routes.contracts import router as contracts_router
 from app.api.v1.routes.identity import router as identity_router
 from app.api.v1.routes.integrations import router as integrations_router
 from app.api.v1.routes.management import router as management_router
