@@ -58,6 +58,7 @@ import {
   listMySessions,
   revokeMySession,
   type AgentzyAuthSession,
+  type AgentzyOrganization,
   exportAuditLogs,
   listSecurityAlerts,
   acknowledgeSecurityAlert as acknowledgeSecurityAlertApi,
@@ -254,6 +255,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     initial.cooperationPolicies
   );
   const [orgUnits, setOrgUnits] = useState<OrgUnitRecord[]>([]);
+  const [organizationsByTenant, setOrganizationsByTenant] = useState<Record<string, AgentzyOrganization[]>>({});
   const [users, setUsers] = useState<PlatformUserRecord[]>([]);
   const [roles, setRoles] = useState<RbacRoleRecord[]>([]);
   const [permissionRegistry, setPermissionRegistry] = useState<AgentzyPermissionDefinition[]>([]);
@@ -462,9 +464,18 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     ) return;
     let active = true;
     const includeArchived = platformPermissions.includes('platform.tenants.manage');
-    void Promise.all(tenants.map((tenant) => loadAdminTenantHierarchy(accessToken, tenant.id, includeArchived)))
-      .then((rows) => {
-      if (active) setOrgUnits(rows.flat());
+    void Promise.all(tenants.map(async (tenant) => {
+      const [hierarchy, organizations] = await Promise.all([
+        loadAdminTenantHierarchy(accessToken, tenant.id, includeArchived),
+        listTenantOrganizations(accessToken, tenant.id).catch(() => []),
+      ]);
+      return { tenantId: tenant.id, hierarchy, organizations };
+    })).then((results) => {
+      if (!active) return;
+      setOrgUnits(results.flatMap((result) => result.hierarchy));
+      setOrganizationsByTenant(Object.fromEntries(
+        results.map((result) => [result.tenantId, result.organizations]),
+      ));
     }).catch((error) => {
       if (active) showToast(error instanceof Error ? error.message : 'Gagal memuat hierarchy tenant dari FastAPI.');
     });
@@ -2388,6 +2399,7 @@ export function useAdminPortal(initialSection: AdminSectionId = 'overview') {
     upsertCooperationPolicy,
     toggleCooperationEntitlement,
     orgUnits,
+    organizationsByTenant,
     upsertOrgUnit,
     deleteOrgUnit,
     restoreOrgUnit,
