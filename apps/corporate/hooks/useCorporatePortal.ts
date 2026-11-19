@@ -19,6 +19,9 @@ import {
   listOrganizationUnits,
   listBranches,
   listDepartments,
+  createPaymentReference,
+  listCorporateInvoices,
+  listPaymentReferences,
   type AgentzyOrganization,
   type AgentzyOrganizationUnit,
   type AgentzyBranch,
@@ -152,6 +155,55 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
     () => tenantOptions.find((tenant) => tenant.id === activeTenantId) ?? tenantOptions[0] ?? null,
     [tenantOptions, activeTenantId]
   );
+
+  useEffect(() => {
+    const accessToken = auth.session?.access_token;
+    if (!accessToken || !activeTenantId) {
+      setInvoices([]);
+      setPayments([]);
+      return;
+    }
+    let active = true;
+    void listCorporateInvoices(accessToken, activeTenantId).then(async (result) => {
+      const mappedInvoices: CorporateInvoice[] = result.data.map((invoice) => ({
+        id: invoice.id,
+        title: invoice.title,
+        periodLabel: invoice.issued_at ? new Date(invoice.issued_at).toLocaleDateString('id-ID') : 'Draft',
+        issueDate: invoice.issued_at ?? '',
+        dueDate: invoice.due_at ?? '',
+        amount: Number(invoice.total_amount),
+        status: invoice.status === 'paid' ? 'Lunas' : invoice.status === 'partially_paid' ? 'Sebagian' : 'Belum Bayar',
+        lineItems: [],
+      }));
+      const paymentPages = await Promise.all(
+        result.data.map((invoice) => listPaymentReferences(accessToken, activeTenantId, invoice.id))
+      );
+      const mappedPayments: CorporatePaymentRecord[] = paymentPages.flatMap((page, index) =>
+        page.data.map((reference) => ({
+          id: reference.id,
+          invoiceId: result.data[index].invoice_number,
+          paidAt: reference.verified_at ?? reference.created_at,
+          method: reference.payment_method,
+          referenceNo: reference.reference_number,
+          amount: Number(reference.amount),
+          reconciliationStatus: reference.status === 'reconciled'
+            ? 'Terekonsiliasi'
+            : 'Menunggu Verifikasi',
+        }))
+      );
+      if (active) {
+        setInvoices(mappedInvoices);
+        setPayments(mappedPayments);
+      }
+    }).catch((error) => {
+      if (active) {
+        setInvoices([]);
+        setPayments([]);
+        showToast(error instanceof Error ? error.message : 'Gagal memuat invoice dan payment references.');
+      }
+    });
+    return () => { active = false; };
+  }, [auth.session?.access_token, activeTenantId, showToast]);
   const activeMembership = auth.identity?.memberships.find(
     (membership) => membership.tenant_id === activeTenantId
   );
@@ -368,27 +420,46 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
   );
 
   const handlePayInvoice = useCallback(
-    (invoiceId: string, method: string) => {
-      const target = invoices.find((inv) => inv.id === invoiceId);
-      if (!target || target.status === 'Lunas') return;
-
-      setInvoices((prev) =>
-        prev.map((inv) => (inv.id === invoiceId ? { ...inv, status: 'Lunas' } : inv))
+    async (invoiceId: string, method: string) => {
+      const accessToken = auth.session?.access_token;
+      const target = invoices.find((invoice) => invoice.id === invoiceId);
+      if (!accessToken || !activeTenantId || !target || target.status === 'Lunas') {
+        throw new Error('Invoice tidak tersedia untuk membuat payment reference.');
+      }
+      const referenceNumber = `AGZ-REQ-${crypto.randomUUID()}`;
+      await createPaymentReference(accessToken, invoiceId, {
+        tenant_id: activeTenantId,
+        reference_number: referenceNumber,
+        payment_method: method,
+        amount: String(target.amount),
+      });
+      const result = await listCorporateInvoices(accessToken, activeTenantId);
+      setInvoices(result.data.map((invoice) => ({
+        id: invoice.id,
+        title: invoice.title,
+        periodLabel: invoice.issued_at ? new Date(invoice.issued_at).toLocaleDateString('id-ID') : 'Draft',
+        issueDate: invoice.issued_at ?? '',
+        dueDate: invoice.due_at ?? '',
+        amount: Number(invoice.total_amount),
+        status: invoice.status === 'paid' ? 'Lunas' : invoice.status === 'partially_paid' ? 'Sebagian' : 'Belum Bayar',
+        lineItems: [],
+      })));
+      const pages = await Promise.all(
+        result.data.map((invoice) => listPaymentReferences(accessToken, activeTenantId, invoice.id))
       );
-      const payment: CorporatePaymentRecord = {
-        id: nextId('PAY-2026'),
-        invoiceId,
-        paidAt: '17 Nov 2026',
-        method,
-        referenceNo: `VA-${Math.floor(10000000 + Math.random() * 89999999)}`,
-        amount: target.amount,
-        reconciliationStatus: 'Terekonsiliasi',
-      };
-      setPayments((prev) => [payment, ...prev]);
+      setPayments(pages.flatMap((page, index) => page.data.map((reference) => ({
+        id: reference.id,
+        invoiceId: result.data[index].invoice_number,
+        paidAt: reference.verified_at ?? reference.created_at,
+        method: reference.payment_method,
+        referenceNo: reference.reference_number,
+        amount: Number(reference.amount),
+        reconciliationStatus: reference.status === 'reconciled' ? 'Terekonsiliasi' as const : 'Menunggu Verifikasi' as const,
+      }))));
       setModal({ type: 'none' });
-      showToast(`Pembayaran ${invoiceId} dikonfirmasi dan terekonsiliasi.`);
+      showToast(`Payment reference ${referenceNumber} dibuat. Invoice belum ditandai lunas.`);
     },
-    [invoices, showToast]
+    [auth.session?.access_token, activeTenantId, invoices, showToast]
   );
 
   const handleInviteUser = useCallback(
