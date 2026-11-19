@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Network, Plus, Pencil, Trash2, Building2, Users } from 'lucide-react';
+import { Network, Plus, Pencil, Trash2, Building2, Users, Layers } from 'lucide-react';
 import {
   AdminPageHeader,
   AdminSegmentedTabs,
@@ -55,6 +55,7 @@ export function OrganizationUsersView({
     [orgUnits, selectedTenantId]
   );
 
+  const organizationUnits = visibleUnits.filter((u) => u.unitType === 'Unit Organisasi');
   const branches = visibleUnits.filter((u) => u.unitType === 'Cabang / Regional');
   const departments = visibleUnits.filter((u) => u.unitType === 'Departemen');
 
@@ -62,9 +63,11 @@ export function OrganizationUsersView({
     ? `department:${user.departmentId}`
     : user.branchId
       ? `branch:${user.branchId}`
-      : user.organizationId
-        ? `organization:${user.organizationId}`
-        : 'tenant';
+      : user.organizationUnitId
+        ? `organization_unit:${user.organizationUnitId}`
+        : user.organizationId
+          ? `organization:${user.organizationId}`
+          : 'tenant';
 
   return (
     <div className="space-y-5">
@@ -117,7 +120,38 @@ export function OrganizationUsersView({
       </div>
 
       {tab === 'organisasi' ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {/* Unit Organisasi */}
+          <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
+            <div className="flex items-center justify-between border-b border-[#EAF2F6] pb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-[#0284C7]" />
+                <h2 className="text-sm font-bold text-[#17324D]">Unit Organisasi</h2>
+              </div>
+              <span className="font-mono-tabular text-xs text-[#526675]">{organizationUnits.length} unit</span>
+            </div>
+            <div className="mt-3 space-y-2.5">
+              {organizationUnits.length === 0 ? (
+                <p className="py-6 text-center text-xs text-[#718391]">Belum ada unit organisasi terdaftar untuk tenant ini.</p>
+              ) : organizationUnits.map((unit) => (
+                <div key={unit.id} className="flex items-center justify-between gap-3 rounded-[10px] border border-[#EAF2F6] bg-[#F5F8FA] px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-[#17324D]">{unit.name}</p>
+                    <p className="text-[11px] text-[#526675]">{unit.code ?? '—'} · Induk: {unit.parentName ?? '—'}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button type="button" onClick={() => onOpenOrgUnitModal(unit)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#0284C7]" aria-label={`Edit ${unit.name}`}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => onDeleteOrgUnit(unit.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8E3E9] bg-white text-[#B23A48]" aria-label={`Arsipkan ${unit.name}`}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Cabang / Regional */}
           <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
             <div className="flex items-center justify-between border-b border-[#EAF2F6] pb-3">
@@ -284,9 +318,9 @@ export function OrganizationUsersView({
                     {orgUnits.filter((unit) => unit.tenantId === u.tenantId).map((unit) => (
                       <option
                         key={`${unit.unitType}:${unit.id}`}
-                        value={unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
+                        value={unit.unitType === 'Unit Organisasi' ? `organization_unit:${unit.id}` : unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
                       >
-                        {unit.unitType === 'Departemen' ? 'Departemen' : 'Cabang'} · {unit.name}
+                        {unit.unitType === 'Unit Organisasi' ? 'Unit Organisasi' : unit.unitType === 'Departemen' ? 'Departemen' : 'Cabang'} · {unit.name}
                       </option>
                     ))}
                   </select>
@@ -367,9 +401,9 @@ export function OrganizationUsersView({
                             {orgUnits.filter((unit) => unit.tenantId === u.tenantId).map((unit) => (
                               <option
                                 key={`${unit.unitType}:${unit.id}`}
-                                value={unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
+                                value={unit.unitType === 'Unit Organisasi' ? `organization_unit:${unit.id}` : unit.unitType === 'Departemen' ? `department:${unit.id}` : `branch:${unit.id}`}
                               >
-                                {unit.unitType === 'Departemen' ? 'Departemen' : 'Cabang'} · {unit.name}
+                                {unit.unitType === 'Unit Organisasi' ? 'Unit Organisasi' : unit.unitType === 'Departemen' ? 'Departemen' : 'Cabang'} · {unit.name}
                               </option>
                             ))}
                           </select>
