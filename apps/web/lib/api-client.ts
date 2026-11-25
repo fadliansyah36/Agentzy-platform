@@ -1463,7 +1463,7 @@ export type SalesEnvelope<T> = { data: T; meta?: Record<string, unknown> };
 export type SalesLead = {
   id:string; tenant_id:string; customer_id:string; customer_name:string; contact_name:string;
   email:string|null; phone:string|null; service_address:string|null; region_code:string|null;
-  source:string; stage:string; assigned_user_id:string|null; assigned_workforce_profile_id:string|null;
+  source:string; stage:string; qualification?:Record<string,unknown>; assigned_user_id:string|null; assigned_workforce_profile_id:string|null;
   follow_up_at:string|null; last_activity_at:string; created_at:string;
 };
 export type SalesProvider = {
@@ -1499,9 +1499,9 @@ export const createSalesProduct=(accessToken:string,providerId:string,payload:Re
 export const setSalesProductStatus=(accessToken:string,productId:string,payload:{tenant_id:string;status:"active"|"suspended"|"archived";reason:string})=>
   apiRequest<SalesEnvelope<{id:string;status:string}>>(`/sales/products/${encodeURIComponent(productId)}/status`,{method:"PATCH",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
 export const configureSalesProvider=(accessToken:string,providerId:string,payload:Record<string,unknown>)=>
-  apiRequest<SalesEnvelope<Record<string,unknown>>>(`/sales/providers/${encodeURIComponent(providerId)}/integration`,{method:"PUT",accessToken,body:JSON.stringify(payload)});
+  apiRequest<SalesEnvelope<Record<string,unknown>>>(`/sales/providers/${encodeURIComponent(providerId)}/integration`,{method:"PUT",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
 export const captureSalesConsent=(accessToken:string,leadId:string,payload:Record<string,unknown>)=>
-  apiRequest<SalesEnvelope<{id:string;captured_at:string;granted:boolean}>>(`/sales/leads/${encodeURIComponent(leadId)}/consents`,{method:"POST",accessToken,body:JSON.stringify(payload)});
+  apiRequest<SalesEnvelope<{id:string;captured_at:string;granted:boolean}>>(`/sales/leads/${encodeURIComponent(leadId)}/consents`,{method:"POST",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
 export const checkSalesCoverage=(accessToken:string,leadId:string,payload:Record<string,unknown>)=>
   apiRequest<SalesEnvelope<{id:string;result_status:string;source:string;checked_at:string;error_code:string|null}>>(`/sales/leads/${encodeURIComponent(leadId)}/coverage-checks`,{method:"POST",accessToken,body:JSON.stringify(payload)});
 export const createSalesOffer=(accessToken:string,leadId:string,payload:Record<string,unknown>)=>
@@ -1515,7 +1515,7 @@ export const transitionSalesOrder=(accessToken:string,orderId:string,payload:Rec
 export const listSalesOrderEvents=(accessToken:string,tenantId:string,orderId:string)=>
   apiRequest<SalesEnvelope<Record<string,unknown>[]>>(`/sales/orders/${encodeURIComponent(orderId)}/events?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
 export const retrySalesProviderSubmissions=(accessToken:string,tenantId:string,providerId:string)=>
-  apiRequest<SalesEnvelope<{requeued:number}>>(`/sales/providers/${encodeURIComponent(providerId)}/retry-blocked?tenant_id=${encodeURIComponent(tenantId)}`,{method:"POST",accessToken});
+  apiRequest<SalesEnvelope<{requeued:number}>>(`/sales/providers/${encodeURIComponent(providerId)}/retry-blocked?tenant_id=${encodeURIComponent(tenantId)}`,{method:"POST",accessToken,headers:salesIdempotencyHeaders()});
 export const getSalesReconciliation=(accessToken:string,tenantId:string)=>
   apiRequest<SalesEnvelope<Record<string,unknown>[]>>(`/sales/reconciliation?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
 
@@ -1531,7 +1531,7 @@ export const assignSalesLead=(accessToken:string,leadId:string,payload:{tenant_i
 export const listSalesCustomers=(accessToken:string,tenantId:string)=>
   apiRequest<SalesEnvelope<Record<string,unknown>[]>>(`/sales/customers?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
 export const revokeSalesConsent=(accessToken:string,tenantId:string,consentId:string,reason:string)=>
-  apiRequest<SalesEnvelope<{id:string;revoked:boolean}>>(`/sales/consents/${encodeURIComponent(consentId)}/revoke?${new URLSearchParams({tenant_id:tenantId,reason})}`,{method:"POST",accessToken});
+  apiRequest<SalesEnvelope<{id:string;revoked:boolean}>>(`/sales/consents/${encodeURIComponent(consentId)}/revoke?${new URLSearchParams({tenant_id:tenantId,reason})}`,{method:"POST",accessToken,headers:salesIdempotencyHeaders()});
 export const getSalesProviderHealth=(accessToken:string,tenantId:string,providerId:string)=>
   apiRequest<SalesEnvelope<{provider_id:string;status:string;checked_at:string|null}>>(`/sales/providers/${encodeURIComponent(providerId)}/health?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
 
@@ -1539,3 +1539,28 @@ export const createSalesProvider=(accessToken:string,payload:Record<string,unkno
   apiRequest<SalesEnvelope<{id:string;status:string}>>("/sales/providers",{method:"POST",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
 export const setSalesProviderStatus=(accessToken:string,providerId:string,payload:{tenant_id:string;status:"active"|"suspended"|"archived";reason:string})=>
   apiRequest<SalesEnvelope<{id:string;status:string}>>(`/sales/providers/${encodeURIComponent(providerId)}/status`,{method:"PATCH",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
+
+export const listSalesLeadActivities=(accessToken:string,tenantId:string,leadId:string)=>
+  apiRequest<SalesEnvelope<Array<{id:string;activity_type:string;from_stage:string|null;to_stage:string|null;note:string|null;source:string;created_at:string}>>>(`/sales/leads/${encodeURIComponent(leadId)}/activities?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const updateSalesLead=(accessToken:string,leadId:string,payload:Record<string,unknown>)=>
+  apiRequest<SalesEnvelope<{id:string;updated:boolean}>>(`/sales/leads/${encodeURIComponent(leadId)}`,{method:"PATCH",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
+export const updateSalesCustomer=(accessToken:string,customerId:string,payload:Record<string,unknown>)=>
+  apiRequest<SalesEnvelope<{id:string;updated:boolean}>>(`/sales/customers/${encodeURIComponent(customerId)}`,{method:"PATCH",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
+
+export const listSalesOrderAttempts=(accessToken:string,tenantId:string,orderId:string)=>
+  apiRequest<SalesEnvelope<Array<{attempt_number:number;status:string;request_hash:string;response_hash:string|null;provider_reference:string|null;error_code:string|null;duration_ms:number|null;created_at:string}>>>(`/sales/orders/${encodeURIComponent(orderId)}/attempts?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const listUnmatchedProviderWebhooks=(accessToken:string,tenantId:string)=>
+  apiRequest<SalesEnvelope<Array<{id:string;external_event_id:string;event_type:string;payload_hash:string;processing_status:string;error_code:string|null;event_timestamp:string;received_at:string;provider_code:string;provider_name:string}>>>(`/sales/webhooks/unmatched?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+
+export const listSalesConsents=(accessToken:string,tenantId:string,leadId:string)=>
+  apiRequest<SalesEnvelope<Array<{id:string;consent_type:string;purpose:string;policy_version:string;granted:boolean;source:string;captured_at:string;revoked_at:string|null;revoked_reason:string|null;evidence:Record<string,unknown>}>>>(`/sales/leads/${encodeURIComponent(leadId)}/consents?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+
+export type SalesOrderAttribution = {
+  id:string; attributed_worker_id:string; worker_code:string; display_name:string; job_title:string|null;
+  attribution_type:string; share_basis:string|number; attribution_status:string; source:string; reason:string|null;
+  locked_at:string|null; created_at:string;
+};
+export const getSalesOrderAttributions=(accessToken:string,tenantId:string,orderId:string)=>
+  apiRequest<SalesEnvelope<SalesOrderAttribution[]>>(`/sales/orders/${encodeURIComponent(orderId)}/attributions?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const correctSalesOrderAttribution=(accessToken:string,orderId:string,payload:{tenant_id:string;attributed_worker_id:string;reason:string})=>
+  apiRequest<SalesEnvelope<{order_id:string;attributed_worker_id:string;corrected:boolean}>>(`/sales/orders/${encodeURIComponent(orderId)}/attributions/correct`,{method:"POST",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});

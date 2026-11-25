@@ -11,11 +11,11 @@ from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import text
 
 from app.core.authorization import authorize_action
-from app.core.idempotency import request_fingerprint
+from app.core.idempotency import complete_idempotency, request_fingerprint, reserve_idempotency
 from app.core.pagination import decode_time_id_cursor, encode_time_id_cursor
 from app.core.security import current_claims
 from app.db.session import engine
@@ -46,8 +46,8 @@ class StrictModel(BaseModel):
 
 class LeadCreate(StrictModel):
     tenant_id: UUID
-    customer_name: str = Field(min_length=2, max_length=180)
-    contact_name: str = Field(min_length=2, max_length=160)
+    customer_name: str | None = Field(default=None, min_length=2, max_length=180)
+    contact_name: str | None = Field(default=None, min_length=2, max_length=160)
     email: str | None = Field(default=None, max_length=254)
     phone: str | None = Field(default=None, max_length=40)
     service_address: str | None = Field(default=None, max_length=800)
@@ -56,6 +56,12 @@ class LeadCreate(StrictModel):
     source_prospect_id: UUID | None = None
     follow_up_at: datetime | None = None
     note: str | None = Field(default=None, max_length=4000)
+
+    @model_validator(mode="after")
+    def validate_customer_source(self):
+        if self.source_prospect_id is None and (not self.customer_name or not self.contact_name):
+            raise ValueError("Nama pelanggan dan kontak wajib untuk lead manual.")
+        return self
 
 
 class LeadPatch(StrictModel):
@@ -149,9 +155,15 @@ class OrderCreate(StrictModel):
 
 class OrderTransition(StrictModel):
     tenant_id: UUID
-    to_status: str = Field(pattern="^(submitted|installation_scheduled|installation_in_progress|cancelled)$")
+    to_status: str = Field(pattern="^(submitted|cancelled)$")
     reason: str = Field(min_length=3, max_length=2000)
     evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrderAttributionCorrection(StrictModel):
+    tenant_id: UUID
+    attributed_worker_id: UUID
+    reason: str = Field(min_length=3,max_length=1000)
 
 
 async def _authorize(claims: dict, tenant_id: UUID, permission_name: str, request: Request, resource_id: UUID | None = None):
@@ -271,11 +283,13 @@ async def create_sales_lead(payload: LeadCreate,request: Request,claims: dict = 
     fingerprint=request_fingerprint(payload.model_dump(mode="json"))
     async with engine.begin() as connection:
         prior=await connection.execute(text("""
-          select id,request_fingerprint from public.sales_leads
+          select id,created_by,request_fingerprint from public.sales_leads
           where tenant_id=:tenant and idempotency_key=:key
         """),{"tenant":payload.tenant_id,"key":idempotency_key})
         prior_row=prior.mappings().first()
         if prior_row:
+            if prior_row["created_by"]!=actor:
+                raise HTTPException(status_code=409,detail="Idempotency-Key sudah digunakan oleh identity lain.")
             if prior_row["request_fingerprint"]!=fingerprint:
                 raise HTTPException(status_code=409,detail="Idempotency-Key digunakan dengan payload berbeda.")
             return {"data":{"id":str(prior_row["id"]),"replayed":True}}
@@ -287,6 +301,8 @@ async def create_sales_lead(payload: LeadCreate,request: Request,claims: dict = 
             if existing_prospect:
                 return {"data":{"id":str(existing_prospect),"replayed":True}}
         if payload.source_prospect_id:
+            if context is not None:
+                raise HTTPException(status_code=403,detail="Import prospect Phase 02 hanya dapat dilakukan oleh operator platform yang berwenang.")
             source=await connection.execute(text("""
               select p.id,p.company_name,p.contact_name,p.business_email,p.business_phone
               from public.crm_prospects p where p.id=:id
@@ -332,6 +348,11 @@ async def update_sales_lead(lead_id: UUID,payload: LeadPatch,request: Request,cl
     context=await _authorize(claims,payload.tenant_id,"leads.manage",request,lead_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.lead.update:"+str(lead_id),idempotency_key=idempotency_key,
+            payload={"lead_id":str(lead_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         await _lead_scope(connection,payload.tenant_id,lead_id,actor,context)
         await connection.execute(text("""
           update public.sales_leads set follow_up_at=coalesce(:followup,follow_up_at),
@@ -347,7 +368,9 @@ async def update_sales_lead(lead_id: UUID,payload: LeadPatch,request: Request,cl
             """),{"tenant":payload.tenant_id,"lead":lead_id,"actor":actor,"note":payload.note,
                   "key":idempotency_key or str(uuid4())})
         await _audit(connection,payload.tenant_id,actor,"sales.lead.updated","sales_lead",lead_id,request,{})
-    return {"data":{"id":str(lead_id),"updated":True}}
+        response_body={"data":{"id":str(lead_id),"updated":True}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.post("/leads/{lead_id}/assign")
@@ -358,6 +381,11 @@ async def assign_sales_lead(lead_id: UUID,payload: LeadAssign,request: Request,c
     if context and "sales_official" in context.role_keys:
         raise HTTPException(status_code=403,detail="Sales official tidak memiliki kewenangan mengubah assignment.")
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.lead.assign",idempotency_key=idempotency_key,
+            payload={"lead_id":str(lead_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         lead=await _lead_scope(connection,payload.tenant_id,lead_id,actor,context)
         worker=await connection.execute(text("""
           select id,user_id,lifecycle_status from public.workforce_profiles
@@ -385,26 +413,26 @@ async def assign_sales_lead(lead_id: UUID,payload: LeadAssign,request: Request,c
         """),{"lead":lead_id,"customer":lead["customer_name"],"reason":payload.reason,"assignee":profile["user_id"]})
         await _audit(connection,payload.tenant_id,actor,"sales.lead.assigned","sales_lead",lead_id,request,
                      {"workforce_profile_id":str(payload.workforce_profile_id)})
-    return {"data":{"id":str(lead_id),"assigned_workforce_profile_id":str(payload.workforce_profile_id)}}
+        response_body={"data":{"id":str(lead_id),"assigned_workforce_profile_id":str(payload.workforce_profile_id)}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.post("/leads/{lead_id}/transition")
 async def transition_sales_lead(lead_id: UUID,request: Request,tenant_id: UUID,
-                                to_stage: str = Query(pattern="^(assigned|contacted|qualified|coverage_checked|offer_presented|order_submitted|disqualified|closed)$"),
+                                to_stage: str = Query(pattern="^(contacted|qualified|disqualified|closed)$"),
                                 reason: str = Query(min_length=3,max_length=2000),
                                 claims: dict = claims_dependency,idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     context=await _authorize(claims,tenant_id,"leads.manage",request,lead_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=tenant_id,
+            command_key="sales.lead.transition",idempotency_key=idempotency_key,
+            payload={"lead_id":str(lead_id),"to_stage":to_stage,"reason":reason})
+        if reservation.replay:
+            return reservation.replay_body
         lead=await _lead_scope(connection,tenant_id,lead_id,actor,context)
-        key=idempotency_key or str(uuid4())
-        prior=await connection.execute(text("""
-          select to_stage from public.sales_lead_activities
-          where tenant_id=:tenant and lead_id=:lead and idempotency_key=:key and activity_type='status_changed'
-        """),{"tenant":tenant_id,"lead":lead_id,"key":key})
-        prior_stage=prior.scalar_one_or_none()
-        if prior_stage:
-            return {"data":{"id":str(lead_id),"stage":prior_stage,"replayed":True}}
+        key=idempotency_key
         SalesService.assert_lead_transition(lead["stage"],to_stage)
         await connection.execute(text("""
           update public.sales_leads set stage=:stage,last_activity_at=now(),updated_at=now()
@@ -417,7 +445,9 @@ async def transition_sales_lead(lead_id: UUID,request: Request,tenant_id: UUID,
         """),{"tenant":tenant_id,"lead":lead_id,"actor":actor,"old":lead["stage"],"new":to_stage,"reason":reason,"key":key})
         await _audit(connection,tenant_id,actor,"sales.lead.stage_changed","sales_lead",lead_id,request,
                      {"from":lead["stage"],"to":to_stage,"reason":reason})
-    return {"data":{"id":str(lead_id),"stage":to_stage}}
+        response_body={"data":{"id":str(lead_id),"stage":to_stage}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.get("/leads/{lead_id}/activities")
@@ -474,8 +504,13 @@ async def create_provider_product(provider_id: UUID,payload: ProductCreate,reque
     await _authorize(claims,payload.tenant_id,"catalogue.manage",request,provider_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.catalogue.product.create:"+str(provider_id),idempotency_key=idempotency_key,
+            payload={"provider_id":str(provider_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         provider=await connection.execute(text("""
-          select id,status from public.provider_profiles where tenant_id=:tenant and id=:id
+          select id,status from public.provider_profiles where tenant_id=:tenant and id=:id for update
         """),{"tenant":payload.tenant_id,"id":provider_id})
         if provider.mappings().first() is None:
             raise HTTPException(status_code=404,detail="Provider tidak ditemukan pada tenant ini.")
@@ -500,16 +535,26 @@ async def create_provider_product(provider_id: UUID,payload: ProductCreate,reque
         row=result.mappings().one()
         await _audit(connection,payload.tenant_id,actor,"sales.catalogue.product_version_created","sales_provider_product",row["id"],request,
                      {"provider_id":str(provider_id),"product_code":payload.product_code,"version":version})
-        return {"data":{"id":str(row["id"]),"status":row["status"],"version":row["version"]}}
+        response_body={"data":{"id":str(row["id"]),"status":row["status"],"version":row["version"]}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=201,response_body=response_body)
+    return response_body
 
 
 @router.put("/providers/{provider_id}/integration")
-async def configure_provider_integration(provider_id: UUID,payload: ProviderIntegrationInput,request: Request,claims: dict = claims_dependency):
+async def configure_provider_integration(provider_id: UUID,payload: ProviderIntegrationInput,request: Request,claims: dict = claims_dependency,
+                                         idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     await _authorize(claims,payload.tenant_id,"catalogue.manage",request,provider_id)
     actor=UUID(claims["sub"])
     if payload.enabled and payload.adapter_key=="http_json" and (not payload.endpoint_url or not payload.auth_env_key):
         raise HTTPException(status_code=422,detail="Endpoint HTTPS dan auth environment reference wajib sebelum adapter diaktifkan.")
+    if payload.enabled and not payload.webhook_secret_env_key:
+        raise HTTPException(status_code=422,detail="Webhook secret environment reference wajib agar status order dapat diverifikasi.")
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.provider.integration:"+str(provider_id),idempotency_key=idempotency_key,
+            payload={"provider_id":str(provider_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         exists=await connection.execute(text("select id from public.provider_profiles where tenant_id=:tenant and id=:id"),{"tenant":payload.tenant_id,"id":provider_id})
         if not exists.scalar_one_or_none():
             raise HTTPException(status_code=404,detail="Provider tidak ditemukan.")
@@ -530,7 +575,9 @@ async def configure_provider_integration(provider_id: UUID,payload: ProviderInte
               "status":json.dumps(payload.status_mapping),"enabled":payload.enabled,"actor":actor})
         await _audit(connection,payload.tenant_id,actor,"sales.provider.integration_configured","provider_profile",provider_id,request,
                      {"adapter_key":payload.adapter_key,"enabled":payload.enabled,"credentials_stored":False})
-    return {"data":{"provider_id":str(provider_id),"enabled":payload.enabled,"credentials_stored":False}}
+        response_body={"data":{"provider_id":str(provider_id),"enabled":payload.enabled,"credentials_stored":False}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.post("/leads/{lead_id}/consents",status_code=201)
@@ -539,6 +586,11 @@ async def capture_sales_consent(lead_id: UUID,payload: ConsentInput,request: Req
     context=await _authorize(claims,payload.tenant_id,"consent.manage",request,lead_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.consent.capture",idempotency_key=idempotency_key,
+            payload={"lead_id":str(lead_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         await _lead_scope(connection,payload.tenant_id,lead_id,actor,context)
         lead=await connection.execute(text("select customer_id from public.sales_leads where tenant_id=:tenant and id=:id"),
                                       {"tenant":payload.tenant_id,"id":lead_id})
@@ -556,15 +608,36 @@ async def capture_sales_consent(lead_id: UUID,payload: ConsentInput,request: Req
         row=result.mappings().one()
         await _audit(connection,payload.tenant_id,actor,"sales.customer.consent_captured","sales_customer_consent",row["id"],request,
                      {"purpose":payload.purpose,"policy_version":payload.policy_version,"granted":payload.granted})
-        return {"data":{"id":str(row["id"]),"captured_at":row["captured_at"],"granted":row["granted"]}}
+        response_body={"data":{"id":str(row["id"]),"captured_at":row["captured_at"],"granted":row["granted"]}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=201,response_body=response_body)
+    return response_body
+
+
+@router.get("/leads/{lead_id}/consents")
+async def list_sales_lead_consents(lead_id: UUID,tenant_id: UUID,request: Request,claims: dict = claims_dependency):
+    context=await _authorize(claims,tenant_id,"leads.read",request,lead_id)
+    async with engine.connect() as connection:
+        await _lead_scope(connection,tenant_id,lead_id,UUID(claims["sub"]),context)
+        rows=await connection.execute(text("""
+          select id,consent_type,purpose,policy_version,granted,source,captured_at,revoked_at,revoked_reason,evidence
+          from public.sales_customer_consents where tenant_id=:tenant and lead_id=:lead
+          order by captured_at desc,id desc
+        """),{"tenant":tenant_id,"lead":lead_id})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
 
 
 @router.post("/consents/{consent_id}/revoke")
 async def revoke_sales_consent(consent_id: UUID,tenant_id: UUID,request: Request,
-                               reason: str = Query(min_length=3,max_length=1000),claims: dict = claims_dependency):
+                               reason: str = Query(min_length=3,max_length=1000),claims: dict = claims_dependency,
+                               idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     context=await _authorize(claims,tenant_id,"consent.manage",request,consent_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=tenant_id,
+            command_key="sales.consent.revoke",idempotency_key=idempotency_key,
+            payload={"consent_id":str(consent_id),"reason":reason})
+        if reservation.replay:
+            return reservation.replay_body
         consent_row=await connection.execute(text("select lead_id from public.sales_customer_consents where tenant_id=:tenant and id=:id"),{"tenant":tenant_id,"id":consent_id})
         consent_lead=consent_row.scalar_one_or_none()
         if context and "sales_official" in context.role_keys:
@@ -578,7 +651,9 @@ async def revoke_sales_consent(consent_id: UUID,tenant_id: UUID,request: Request
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=404,detail="Consent tidak ditemukan atau sudah dicabut.")
         await _audit(connection,tenant_id,actor,"sales.customer.consent_revoked","sales_customer_consent",consent_id,request,{"reason":reason})
-    return {"data":{"id":str(consent_id),"revoked":True}}
+        response_body={"data":{"id":str(consent_id),"revoked":True}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.post("/leads/{lead_id}/coverage-checks",status_code=201)
@@ -619,40 +694,22 @@ async def check_sales_coverage(lead_id: UUID,payload: CoverageInput,request: Req
           where tenant_id=:tenant and provider_profile_id=:provider
         """),{"tenant":payload.tenant_id,"provider":product_row["provider_profile_id"]})
         config=config_result.mappings().first()
-    result_status="unknown"
-    source="provider_unconfigured"
-    provider_reference=None
-    response_meta={}
-    error_code="PROVIDER_NOT_CONFIGURED"
-    if config and config["enabled"] and config["adapter_key"]=="http_json" and config["endpoint_url"] and config["auth_env_key"]:
-        try:
-            from app.adapters.provider_adapter import _assert_authorized_endpoint
-            _assert_authorized_endpoint(str(config["endpoint_url"]))
-            token=os.getenv(str(config["auth_env_key"]))
-            if token:
-                async with httpx.AsyncClient(timeout=config["timeout_seconds"],trust_env=False) as client:
-                    response=await client.post(str(config["endpoint_url"]).rstrip("/")+"/coverage-check",
-                        json={"product_code":product_row["product_code"],"service_address":lead["service_address"],"region_code":lead["region_code"]},
-                        headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"})
-                    response.raise_for_status()
-                    body=response.json()
-                value=str(body.get("coverage_status","")).lower()
-                if value in ("available","unavailable"):
-                    result_status=value
-                    source="authorized_provider_api"
-                    error_code=None
-                    provider_reference=str(body.get("reference") or "")[:160] or None
-                    response_meta={"response_hash":hashlib.sha256(json.dumps(body,sort_keys=True,default=str).encode()).hexdigest()}
-                else:
-                    result_status="unknown"
-                    source="authorized_provider_api"
-                    error_code="PROVIDER_RESPONSE_UNMAPPED"
-            else:
-                error_code="PROVIDER_CREDENTIAL_NOT_CONFIGURED"
-        except (httpx.HTTPError,ValueError):
-            result_status="failed"
-            source="authorized_provider_api"
-            error_code="PROVIDER_REQUEST_FAILED"
+    adapter_config=dict(config) if config else {"enabled":False,"adapter_key":"unknown"}
+    from app.adapters.provider_adapter import ContractOnlyProviderAdapter, HttpJsonProviderAdapter
+    provider_adapter=HttpJsonProviderAdapter() if adapter_config.get("adapter_key")=="http_json" else ContractOnlyProviderAdapter()
+    normalized_result=await provider_adapter.check_coverage(adapter_config,{
+        "product_code":product_row["product_code"],
+        "service_address":lead["service_address"],
+        "region_code":lead["region_code"],
+        "request_reference":payload.request_reference,
+    })
+    result_status=normalized_result["result_status"]
+    source=("authorized_provider_api" if config and config["enabled"] and config["adapter_key"]=="http_json"
+            else "authorized_partner_channel" if config and config["enabled"]
+            else "provider_unconfigured")
+    provider_reference=normalized_result.get("provider_reference")
+    response_meta={"response_hash":normalized_result["response_hash"]} if normalized_result.get("response_hash") else {}
+    error_code=normalized_result.get("error_code")
     async with engine.begin() as connection:
         saved=await connection.execute(text("""
           insert into public.sales_coverage_checks(tenant_id,lead_id,provider_profile_id,product_id,
@@ -745,10 +802,16 @@ async def create_sales_order(payload: OrderCreate,request: Request,claims: dict 
           join public.sales_provider_products p on p.id=o.product_id and p.tenant_id=o.tenant_id
           join public.provider_profiles c on c.id=p.provider_profile_id and c.tenant_id=p.tenant_id
           where o.tenant_id=:tenant and o.id=:offer and o.lead_id=:lead
+          for update of o
         """),{"tenant":payload.tenant_id,"offer":payload.offer_id,"lead":payload.lead_id})
         offer=offer_result.mappings().first()
         if not offer or offer["status"]!="presented" or offer["product_status"]!="active" or offer["provider_status"]!="active":
             raise HTTPException(status_code=409,detail="Offer/provider/product tidak valid atau tidak aktif.")
+        existing_offer_order=await connection.execute(text("select id,order_number,status from public.sales_orders where tenant_id=:tenant and offer_id=:offer"),
+            {"tenant":payload.tenant_id,"offer":payload.offer_id})
+        prior_order=existing_offer_order.mappings().first()
+        if prior_order:
+            return {"data":{"id":str(prior_order["id"]),"order_number":prior_order["order_number"],"status":prior_order["status"],"replayed":True}}
         consent=await connection.execute(text("""
           select id from public.sales_customer_consents
           where tenant_id=:tenant and id=:consent and customer_id=:customer and lead_id=:lead
@@ -757,13 +820,23 @@ async def create_sales_order(payload: OrderCreate,request: Request,claims: dict 
         """),{"tenant":payload.tenant_id,"consent":payload.consent_id,"customer":lead["customer_id"],"lead":payload.lead_id})
         if not consent.scalar_one_or_none():
             raise HTTPException(status_code=409,detail="Consent aktif untuk submit_provider_order wajib.")
-        if payload.assigned_workforce_profile_id:
-            worker=await connection.execute(text("""
-              select id from public.workforce_profiles where tenant_id=:tenant and id=:profile
-                and lifecycle_status in ('eligible','active')
-            """),{"tenant":payload.tenant_id,"profile":payload.assigned_workforce_profile_id})
-            if not worker.scalar_one_or_none():
-                raise HTTPException(status_code=409,detail="Workforce assignment tidak eligible pada tenant ini.")
+        workforce_profile_id=lead["assigned_workforce_profile_id"]
+        if not workforce_profile_id and lead["assigned_user_id"]:
+            assigned_profile=await connection.execute(text("""
+              select id from public.workforce_profiles where tenant_id=:tenant and user_id=:user
+                and lifecycle_status in ('eligible','active') and engagement_status='active'
+            """),{"tenant":payload.tenant_id,"user":lead["assigned_user_id"]})
+            workforce_profile_id=assigned_profile.scalar_one_or_none()
+        if not workforce_profile_id:
+            raise HTTPException(status_code=409,detail="Lead harus memiliki assignment Workforce Phase 04 yang aktif sebelum order.")
+        if payload.assigned_workforce_profile_id and payload.assigned_workforce_profile_id!=workforce_profile_id:
+            raise HTTPException(status_code=409,detail="Order attribution diturunkan dari assignment lead; client tidak dapat mengganti owner.")
+        worker=await connection.execute(text("""
+          select id from public.workforce_profiles where tenant_id=:tenant and id=:profile
+            and lifecycle_status in ('eligible','active') and engagement_status='active'
+        """),{"tenant":payload.tenant_id,"profile":workforce_profile_id})
+        if not worker.scalar_one_or_none():
+            raise HTTPException(status_code=409,detail="Workforce assignment tidak eligible pada tenant ini.")
         coverage=await connection.execute(text("""
           select result_status from public.sales_coverage_checks
           where tenant_id=:tenant and id=:coverage and lead_id=:lead
@@ -783,7 +856,7 @@ async def create_sales_order(payload: OrderCreate,request: Request,claims: dict 
             cast(:customer_snapshot as jsonb),cast(:product_snapshot as jsonb),:actor) returning id,status
         """),{"tenant":payload.tenant_id,"number":order_number,"lead":payload.lead_id,"customer":lead["customer_id"],
           "consent":payload.consent_id,"offer":payload.offer_id,"provider":offer["provider_profile_id"],
-          "product":offer["product_id"],"worker":payload.assigned_workforce_profile_id,"key":idempotency_key,
+          "product":offer["product_id"],"worker":workforce_profile_id,"key":idempotency_key,
           "fingerprint":fingerprint,"customer_snapshot":json.dumps(customer_snapshot),
           "product_snapshot":json.dumps(product_snapshot),"actor":actor})
         row=result.mappings().one()
@@ -791,13 +864,25 @@ async def create_sales_order(payload: OrderCreate,request: Request,claims: dict 
           update public.sales_offers set status='accepted' where tenant_id=:tenant and id=:offer
         """),{"tenant":payload.tenant_id,"offer":payload.offer_id})
         await connection.execute(text("""
+          insert into public.order_attributions(tenant_id,sales_order_id,attributed_worker_id,attribution_type,
+            share_basis,attribution_status,source,evidence,idempotency_key,created_by)
+          values(:tenant,:order,:worker,'sales_personal',1.000000,'provisional','lead_assignment',
+            cast(:evidence as jsonb),:key,:actor)
+        """),{"tenant":payload.tenant_id,"order":row["id"],"worker":workforce_profile_id,
+              "evidence":json.dumps({"lead_id":str(payload.lead_id),"assigned_user_id":str(lead["assigned_user_id"]),
+                                     "assigned_workforce_profile_id":str(workforce_profile_id)}),
+              "key":"order-attribution-"+str(row["id"])+"-sales-personal","actor":actor})
+        await connection.execute(text("""
           insert into public.sales_order_events(tenant_id,order_id,event_type,from_status,to_status,actor_user_id,
             source,reason,evidence,idempotency_key,trace_id)
           values(:tenant,:order,'order.created',null,'draft',:actor,'portal','Order created from validated offer.',
             cast(:evidence as jsonb),:key,:trace)
         """),{"tenant":payload.tenant_id,"order":row["id"],"actor":actor,
-          "evidence":json.dumps({"lead_id":str(payload.lead_id),"offer_id":str(payload.offer_id),"consent_id":str(payload.consent_id)}),
+          "evidence":json.dumps({"lead_id":str(payload.lead_id),"offer_id":str(payload.offer_id),"consent_id":str(payload.consent_id),
+                                 "attributed_worker_id":str(workforce_profile_id),"attribution_type":"sales_personal"}),
           "key":"order-created-"+idempotency_key,"trace":getattr(request.state,"trace_id",None)})
+        await _audit(connection,payload.tenant_id,actor,"sales.order.attribution_created","order_attribution",row["id"],request,
+                     {"attributed_worker_id":str(workforce_profile_id),"attribution_type":"sales_personal","share_basis":"1.000000"})
         await _audit(connection,payload.tenant_id,actor,"sales.order.created","sales_order",row["id"],request,{"order_number":order_number})
         return {"data":{"id":str(row["id"]),"order_number":order_number,"status":row["status"]}}
 
@@ -864,6 +949,11 @@ async def transition_sales_order(order_id: UUID,payload: OrderTransition,request
     if not idempotency_key or not 8<=len(idempotency_key)<=128:
         raise HTTPException(status_code=428,detail="Idempotency-Key wajib dikirim.")
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.order.transition:"+str(order_id),idempotency_key=idempotency_key,
+            payload={"order_id":str(order_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         await _order_scope(connection,payload.tenant_id,order_id,actor,context)
         result=await connection.execute(text("""
           select status,provider_profile_id,customer_id,order_number from public.sales_orders
@@ -872,15 +962,46 @@ async def transition_sales_order(order_id: UUID,payload: OrderTransition,request
         order=result.mappings().first()
         if not order:
             raise HTTPException(status_code=404,detail="Order tidak ditemukan.")
-        if payload.to_status not in ("submitted","installation_scheduled","installation_in_progress","cancelled"):
-            raise HTTPException(status_code=422,detail="Status provider hanya dapat diperbarui melalui webhook terverifikasi.")
+        if payload.to_status not in ("submitted","cancelled"):
+            raise HTTPException(status_code=422,detail="Status provider dan instalasi hanya dapat diperbarui melalui webhook terverifikasi.")
+        if payload.to_status=="submitted" and order["status"] in ("submitted","provider_pending"):
+            response_body={"data":{"id":str(order_id),"status":order["status"],"replayed":True}}
+            await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+            return response_body
+        if payload.to_status=="cancelled" and order["status"]=="cancelled":
+            response_body={"data":{"id":str(order_id),"status":"cancelled","replayed":True}}
+            await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+            return response_body
         SalesService.assert_order_transition(order["status"],payload.to_status)
+        if payload.to_status=="cancelled" and order["status"] not in ("draft","submitted"):
+            raise HTTPException(status_code=409,detail="Pembatalan setelah provider menerima order memerlukan cancellation contract resmi dari provider.")
+        if payload.to_status=="cancelled" and order["status"]=="submitted":
+            submission=await connection.execute(text("""
+              select status from public.sales_outbox where tenant_id=:tenant and aggregate_id=:order
+                and event_type='provider.order.submit' order by created_at desc limit 1
+            """),{"tenant":payload.tenant_id,"order":order_id})
+            outbox_status=submission.scalar_one_or_none()
+            if outbox_status in ("processing","done"):
+                raise HTTPException(status_code=409,detail="Provider submission sedang diproses atau sudah diterima. Cancellation eksternal membutuhkan contract resmi.")
         if payload.to_status=="submitted":
+            consent_check=await connection.execute(text("""
+              select 1 from public.sales_customer_consents
+              where tenant_id=:tenant and id=(select consent_id from public.sales_orders where tenant_id=:tenant and id=:order)
+                and granted=true and revoked_at is null and consent_type='order_submission'
+                and purpose='submit_provider_order'
+            """),{"tenant":payload.tenant_id,"order":order_id})
+            if not consent_check.scalar_one_or_none():
+                raise HTTPException(status_code=409,detail="Consent order submission sudah tidak aktif.")
             await connection.execute(text("""
               update public.sales_orders set status='submitted',submitted_at=now(),updated_at=now()
               where tenant_id=:tenant and id=:id
             """),{"tenant":payload.tenant_id,"id":order_id})
-            await enqueue_provider_submission(connection,payload.tenant_id,order_id,order["provider_profile_id"])
+            await enqueue_provider_submission(connection,payload.tenant_id,order_id,order["provider_profile_id"],idempotency_key) 
+            await connection.execute(text("""
+              update public.sales_leads set stage='order_submitted',last_activity_at=now(),updated_at=now()
+              where tenant_id=:tenant and id=(select lead_id from public.sales_orders where tenant_id=:tenant and id=:order)
+                and stage='offer_presented'
+            """),{"tenant":payload.tenant_id,"order":order_id})
             await connection.execute(text("""
               insert into public.notification_outbox(event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at)
               select 'sales.order.submitted','sales_order',:order,c.email,
@@ -903,7 +1024,121 @@ async def transition_sales_order(order_id: UUID,payload: OrderTransition,request
           "trace":getattr(request.state,"trace_id",None)})
         await _audit(connection,payload.tenant_id,actor,"sales.order.status_changed","sales_order",order_id,request,
                      {"from":order["status"],"to":payload.to_status,"reason":payload.reason})
-    return {"data":{"id":str(order_id),"status":payload.to_status}}
+        response_body={"data":{"id":str(order_id),"status":payload.to_status}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
+
+
+
+
+@router.get("/orders/{order_id}/attributions")
+async def list_sales_order_attributions(order_id: UUID,tenant_id: UUID,request: Request,claims: dict = claims_dependency):
+    context=await _authorize(claims,tenant_id,"orders.read",request,order_id)
+    actor=UUID(claims["sub"])
+    async with engine.connect() as connection:
+        await _order_scope(connection,tenant_id,order_id,actor,context)
+        rows=await connection.execute(text("""
+          select a.id,a.attributed_worker_id,w.worker_code,w.display_name,w.job_title,
+            a.attribution_type,a.share_basis,a.attribution_status,a.source,a.reason,a.locked_at,a.created_at
+          from public.order_attributions a
+          join public.workforce_profiles w on w.id=a.attributed_worker_id and w.tenant_id=a.tenant_id
+          where a.tenant_id=:tenant and a.sales_order_id=:order
+          order by a.created_at,a.id
+        """),{"tenant":tenant_id,"order":order_id})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
+
+
+@router.post("/orders/{order_id}/attributions/correct")
+async def correct_sales_order_attribution(order_id: UUID,payload: OrderAttributionCorrection,request: Request,
+                                          claims: dict = claims_dependency,
+                                          idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
+    context=await _authorize(claims,payload.tenant_id,"orders.manage",request,order_id)
+    actor=UUID(claims["sub"])
+    async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.order.attribution.correct:"+str(order_id),idempotency_key=idempotency_key,
+            payload={"order_id":str(order_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
+        await _order_scope(connection,payload.tenant_id,order_id,actor,context)
+        order_result=await connection.execute(text("""
+          select status,assigned_workforce_profile_id from public.sales_orders
+          where tenant_id=:tenant and id=:order for update
+        """),{"tenant":payload.tenant_id,"order":order_id})
+        order=order_result.mappings().first()
+        if not order:
+            raise HTTPException(status_code=404,detail="Order tidak ditemukan.")
+        if order["status"]!="draft":
+            raise HTTPException(status_code=409,detail="Attribution hanya dapat dikoreksi sebelum order disubmit ke provider.")
+        worker=await connection.execute(text("""
+          select id from public.workforce_profiles where tenant_id=:tenant and id=:worker
+            and lifecycle_status in ('eligible','active') and engagement_status='active'
+        """),{"tenant":payload.tenant_id,"worker":payload.attributed_worker_id})
+        if not worker.scalar_one_or_none():
+            raise HTTPException(status_code=409,detail="Worker attribution tidak eligible pada tenant ini.")
+        current=await connection.execute(text("""
+          select id,attributed_worker_id from public.order_attributions
+          where tenant_id=:tenant and sales_order_id=:order and attribution_type='sales_personal'
+            and attribution_status='provisional' for update
+        """),{"tenant":payload.tenant_id,"order":order_id})
+        current_row=current.mappings().first()
+        if current_row and current_row["attributed_worker_id"]==payload.attributed_worker_id:
+            response_body={"data":{"order_id":str(order_id),"attributed_worker_id":str(payload.attributed_worker_id),"replayed":True}}
+            await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+            return response_body
+        previous_id=str(current_row["id"]) if current_row else None
+        if current_row:
+            await connection.execute(text("""
+              update public.order_attributions set attribution_status='reversed',reason=:reason
+              where tenant_id=:tenant and id=:id
+            """),{"tenant":payload.tenant_id,"id":current_row["id"],"reason":payload.reason})
+        await connection.execute(text("""
+          insert into public.order_attributions(tenant_id,sales_order_id,attributed_worker_id,attribution_type,
+            share_basis,attribution_status,source,reason,evidence,idempotency_key,created_by)
+          values(:tenant,:order,:worker,'sales_personal',1.000000,'provisional','authorized_correction',:reason,
+            cast(:evidence as jsonb),:key,:actor)
+        """),{"tenant":payload.tenant_id,"order":order_id,"worker":payload.attributed_worker_id,"reason":payload.reason,
+              "evidence":json.dumps({"previous_attribution_id":previous_id,"corrected_by":str(actor)}),
+              "key":"order-attribution-correction-"+str(order_id)+"-"+str(reservation.record_id),"actor":actor})
+        await connection.execute(text("""
+          update public.sales_orders set assigned_workforce_profile_id=:worker,updated_at=now()
+          where tenant_id=:tenant and id=:order
+        """),{"tenant":payload.tenant_id,"order":order_id,"worker":payload.attributed_worker_id})
+        await _audit(connection,payload.tenant_id,actor,"sales.order.attribution_corrected","order_attribution",order_id,request,
+                     {"previous_attribution_id":previous_id,"attributed_worker_id":str(payload.attributed_worker_id),"reason":payload.reason})
+        response_body={"data":{"order_id":str(order_id),"attributed_worker_id":str(payload.attributed_worker_id),"corrected":True}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
+
+
+@router.get("/orders/{order_id}/attempts")
+async def list_sales_order_attempts(order_id: UUID,tenant_id: UUID,request: Request,claims: dict = claims_dependency):
+    context=await _authorize(claims,tenant_id,"orders.read",request,order_id)
+    actor=UUID(claims["sub"])
+    async with engine.connect() as connection:
+        await _order_scope(connection,tenant_id,order_id,actor,context)
+        rows=await connection.execute(text("""
+          select attempt_number,status,request_hash,response_hash,provider_reference,error_code,duration_ms,created_at
+          from public.provider_submission_attempts where tenant_id=:tenant and order_id=:order
+          order by attempt_number
+        """),{"tenant":tenant_id,"order":order_id})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
+
+
+@router.get("/webhooks/unmatched")
+async def list_unmatched_provider_webhooks(tenant_id: UUID,request: Request,claims: dict = claims_dependency):
+    await _authorize(claims,tenant_id,"orders.read",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("""
+          select e.id,e.external_event_id,e.event_type,e.payload_hash,e.processing_status,e.error_code,
+            e.event_timestamp,e.received_at,p.provider_code,p.provider_name
+          from public.provider_webhook_events e
+          join public.provider_profiles p on p.id=e.provider_profile_id and p.tenant_id=e.tenant_id
+          where e.tenant_id=:tenant and e.mapped_order_id is null
+            and e.processing_status in ('ignored','failed','dead_letter','received')
+          order by e.received_at desc limit 200
+        """),{"tenant":tenant_id})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
 
 
 @router.post("/webhooks/providers/{provider_code}")
@@ -935,7 +1170,10 @@ async def ingest_provider_webhook(provider_code: str,tenant_id: UUID,request: Re
         config=provider.mappings().first()
     if not config or not config["webhook_secret_env_key"]:
         raise HTTPException(status_code=404,detail="Provider webhook belum dikonfigurasi.")
-    secret=os.getenv(config["webhook_secret_env_key"])
+    webhook_secret_key=str(config["webhook_secret_env_key"] or "")
+    if not webhook_secret_key.startswith("AGENTZY_PROVIDER_WEBHOOK__"):
+        raise HTTPException(status_code=503,detail="Webhook secret environment reference tidak valid.")
+    secret=os.getenv(webhook_secret_key)
     if not secret:
         raise HTTPException(status_code=503,detail="Webhook secret provider belum tersedia pada deployment.")
     expected=hmac.new(secret.encode(),timestamp.encode()+b"."+raw,hashlib.sha256).hexdigest()
@@ -993,24 +1231,49 @@ async def ingest_provider_webhook(provider_code: str,tenant_id: UUID,request: Re
           update public.provider_webhook_events set processing_status='processed',mapped_order_id=:order,processed_at=now()
           where id=:id
         """),{"order":order["id"],"id":webhook_id})
+        if mapped in ("provider_approved","activated"):
+            await connection.execute(text("""
+              update public.order_attributions set attribution_status='locked',locked_at=coalesce(locked_at,now())
+              where tenant_id=:tenant and sales_order_id=:order and attribution_status='provisional'
+            """),{"tenant":tenant_id,"order":order["id"]})
+        elif mapped=="provider_rejected":
+            await connection.execute(text("""
+              update public.order_attributions set attribution_status='reversed',reason='Provider rejected order'
+              where tenant_id=:tenant and sales_order_id=:order and attribution_status='provisional'
+            """),{"tenant":tenant_id,"order":order["id"]})
+        if mapped=="activated":
+            await connection.execute(text("""
+              update public.sales_leads set stage='closed',last_activity_at=now(),updated_at=now()
+              where tenant_id=:tenant and id=(select lead_id from public.sales_orders where tenant_id=:tenant and id=:order)
+                and stage='order_submitted'
+            """),{"tenant":tenant_id,"order":order["id"]})
         await _audit(connection,tenant_id,None,"sales.provider.webhook_processed","sales_order",order["id"],request,
                      {"webhook_id":str(webhook_id),"provider_profile_id":str(config["id"]),"status":mapped})
     return {"data":{"duplicate":False,"processed":True,"order_id":str(order["id"]),"status":mapped}}
 
 
 @router.post("/providers/{provider_id}/retry-blocked")
-async def retry_blocked_provider_submissions(provider_id: UUID,tenant_id: UUID,request: Request,claims: dict = claims_dependency):
+async def retry_blocked_provider_submissions(provider_id: UUID,tenant_id: UUID,request: Request,claims: dict = claims_dependency,
+                                             idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     await _authorize(claims,tenant_id,"catalogue.manage",request,provider_id)
+    actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=tenant_id,
+            command_key="sales.provider.retry:"+str(provider_id),idempotency_key=idempotency_key,
+            payload={"provider_id":str(provider_id),"tenant_id":str(tenant_id)})
+        if reservation.replay:
+            return reservation.replay_body
         result=await connection.execute(text("""
-          update public.sales_outbox o set status='pending',available_at=now(),last_error_code=null,updated_at=now()
+          update public.sales_outbox o set status='pending',attempts=0,available_at=now(),last_error_code=null,locked_at=null,processed_at=null,updated_at=now()
           from public.sales_orders s
           where o.tenant_id=:tenant and s.tenant_id=o.tenant_id and s.id=o.aggregate_id
-            and s.provider_profile_id=:provider and o.status='blocked_configuration'
+            and s.provider_profile_id=:provider and o.status in ('blocked_configuration','dead_letter')
           returning o.id
         """),{"tenant":tenant_id,"provider":provider_id})
         count=len(result.fetchall())
-    return {"data":{"requeued":count}}
+        response_body={"data":{"requeued":count}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.get("/reconciliation")
@@ -1020,18 +1283,16 @@ async def sales_reconciliation(tenant_id: UUID,request: Request,claims: dict = c
     async with engine.connect() as connection:
         rows=await connection.execute(text("""
           select s.id,s.order_number,s.status,p.provider_name,
-            count(a.id) as submission_attempts,
-            max(a.created_at) as last_provider_attempt,
-            max(a.error_code) filter(where a.error_code is not null) as last_error_code,
-            count(w.id) filter(where w.processing_status in ('received','failed','dead_letter')) as unresolved_webhooks
+            (select count(*) from public.provider_submission_attempts a where a.order_id=s.id and a.tenant_id=s.tenant_id) as submission_attempts,
+            (select max(a.created_at) from public.provider_submission_attempts a where a.order_id=s.id and a.tenant_id=s.tenant_id) as last_provider_attempt,
+            (select a.error_code from public.provider_submission_attempts a where a.order_id=s.id and a.tenant_id=s.tenant_id and a.error_code is not null order by a.created_at desc limit 1) as last_error_code,
+            (select count(*) from public.provider_webhook_events w where w.mapped_order_id=s.id and w.tenant_id=s.tenant_id
+              and w.processing_status in ('received','failed','dead_letter')) as unresolved_webhooks
           from public.sales_orders s
           join public.provider_profiles p on p.id=s.provider_profile_id and p.tenant_id=s.tenant_id
-          left join public.provider_submission_attempts a on a.order_id=s.id and a.tenant_id=s.tenant_id
-          left join public.provider_webhook_events w on w.mapped_order_id=s.id and w.tenant_id=s.tenant_id
           join public.sales_leads l on l.id=s.lead_id and l.tenant_id=s.tenant_id
           where s.tenant_id=:tenant and s.status not in ('activated','cancelled')
             and (:sales_official=false or l.assigned_user_id=:actor)
-          group by s.id,s.order_number,s.status,p.provider_name
           order by s.updated_at desc limit 200
         """),{"tenant":tenant_id,"sales_official":bool(context and "sales_official" in context.role_keys),"actor":actor})
         return {"data":[dict(row) for row in rows.mappings().all()]}
@@ -1059,21 +1320,44 @@ async def list_sales_products(tenant_id: UUID,request: Request,provider_id: UUID
 
 
 @router.patch("/products/{product_id}/status")
-async def update_sales_product_status(product_id: UUID,payload: ProductStatusInput,request: Request,claims: dict = claims_dependency):
+async def update_sales_product_status(product_id: UUID,payload: ProductStatusInput,request: Request,claims: dict = claims_dependency,
+                                      idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     await _authorize(claims,payload.tenant_id,"catalogue.manage",request,product_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
-        row=await connection.execute(text("""
-          update public.sales_provider_products set status=:status,updated_by=:actor,updated_at=now()
-          where tenant_id=:tenant and id=:id and status<>'archived'
-          returning id,status,version
-        """),{"status":payload.status,"actor":actor,"tenant":payload.tenant_id,"id":product_id})
-        product=row.mappings().first()
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.catalogue.product.status:"+str(product_id),idempotency_key=idempotency_key,
+            payload={"product_id":str(product_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
+        current=await connection.execute(text("""
+          select pr.id,pr.provider_profile_id,pr.product_code,pr.version,p.status as provider_status
+          from public.sales_provider_products pr
+          join public.provider_profiles p on p.id=pr.provider_profile_id and p.tenant_id=pr.tenant_id
+          where pr.tenant_id=:tenant and pr.id=:id and pr.status<>'archived'
+          for update of pr,p
+        """),{"tenant":payload.tenant_id,"id":product_id})
+        product=current.mappings().first()
         if not product:
             raise HTTPException(status_code=404,detail="Product tidak ditemukan atau sudah diarsipkan.")
+        if payload.status=="active" and product["provider_status"]!="active":
+            raise HTTPException(status_code=409,detail="Provider harus aktif sebelum product dapat dipublikasikan.")
+        if payload.status=="active":
+            await connection.execute(text("""
+              update public.sales_provider_products set status='suspended',updated_by=:actor,updated_at=now()
+              where tenant_id=:tenant and provider_profile_id=:provider and product_code=:code
+                and status='active' and id<>:id
+            """),{"actor":actor,"tenant":payload.tenant_id,"provider":product["provider_profile_id"],
+                  "code":product["product_code"],"id":product_id})
+        await connection.execute(text("""
+          update public.sales_provider_products set status=:status,updated_by=:actor,updated_at=now()
+          where tenant_id=:tenant and id=:id
+        """),{"status":payload.status,"actor":actor,"tenant":payload.tenant_id,"id":product_id})
         await _audit(connection,payload.tenant_id,actor,"sales.catalogue.product_status_changed","sales_provider_product",product_id,request,
                      {"status":payload.status,"reason":payload.reason,"version":product["version"]})
-    return {"data":{"id":str(product_id),"status":payload.status}}
+        response_body={"data":{"id":str(product_id),"status":payload.status}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 class CustomerPatch(StrictModel):
@@ -1102,10 +1386,22 @@ async def list_sales_customers(tenant_id: UUID,request: Request,claims: dict = c
 
 
 @router.patch("/customers/{customer_id}")
-async def update_sales_customer(customer_id: UUID,payload: CustomerPatch,request: Request,claims: dict = claims_dependency):
-    await _authorize(claims,payload.tenant_id,"leads.manage",request,customer_id)
+async def update_sales_customer(customer_id: UUID,payload: CustomerPatch,request: Request,claims: dict = claims_dependency,
+                                idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
+    context=await _authorize(claims,payload.tenant_id,"leads.manage",request,customer_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.customer.update:"+str(customer_id),idempotency_key=idempotency_key,
+            payload={"customer_id":str(customer_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
+        if context and "sales_official" in context.role_keys:
+            scoped=await connection.execute(text("""
+              select 1 from public.sales_leads where tenant_id=:tenant and customer_id=:customer and assigned_user_id=:actor
+            """),{"tenant":payload.tenant_id,"customer":customer_id,"actor":actor})
+            if not scoped.scalar_one_or_none():
+                raise HTTPException(status_code=404,detail="Customer tidak ditemukan.")
         result=await connection.execute(text("""
           update public.sales_customers set
             customer_name=coalesce(:name,customer_name),contact_name=coalesce(:contact,contact_name),
@@ -1119,7 +1415,9 @@ async def update_sales_customer(customer_id: UUID,payload: CustomerPatch,request
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=404,detail="Customer tidak ditemukan.")
         await _audit(connection,payload.tenant_id,actor,"sales.customer.updated","sales_customer",customer_id,request,{})
-    return {"data":{"id":str(customer_id),"updated":True}}
+        response_body={"data":{"id":str(customer_id),"updated":True}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body
 
 
 @router.get("/workforce-options")
@@ -1149,17 +1447,8 @@ async def get_sales_provider_health(provider_id: UUID,tenant_id: UUID,request: R
         raise HTTPException(status_code=404,detail="Provider tidak ditemukan.")
     if not config["enabled"] or not config["health_url"] or not config["auth_env_key"]:
         return {"data":{"provider_id":str(provider_id),"status":"pending_external_configuration","checked_at":None}}
-    from app.adapters.provider_adapter import _assert_authorized_endpoint
-    token=os.getenv(config["auth_env_key"])
-    if not token:
-        return {"data":{"provider_id":str(provider_id),"status":"pending_external_configuration","checked_at":None}}
-    try:
-        _assert_authorized_endpoint(config["health_url"])
-        async with httpx.AsyncClient(timeout=config["timeout_seconds"],trust_env=False) as client:
-            response=await client.get(config["health_url"],headers={"Authorization":f"Bearer {token}"})
-        state="healthy" if 200<=response.status_code<300 else "unavailable"
-    except (httpx.HTTPError,ValueError):
-        state="unavailable"
+    from app.adapters.provider_adapter import HttpJsonProviderAdapter
+    state=await HttpJsonProviderAdapter().check_health(dict(config))
     return {"data":{"provider_id":str(provider_id),"status":state,"checked_at":datetime.now(UTC).isoformat()}}
 
 async def _order_scope(connection, tenant_id: UUID, order_id: UUID, actor: UUID, context):
@@ -1193,6 +1482,10 @@ async def create_sales_provider(payload: ProviderCreate,request: Request,claims:
     await _authorize(claims,payload.tenant_id,"providers.manage",request)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.provider.create",idempotency_key=idempotency_key,payload=payload.model_dump(mode="json"))
+        if reservation.replay:
+            return reservation.replay_body
         result=await connection.execute(text("""
           insert into public.provider_profiles(tenant_id,provider_code,provider_name,provider_type,
             registration_number,contact_email,contact_phone,service_regions,service_metadata,status,created_by,updated_by)
@@ -1205,14 +1498,22 @@ async def create_sales_provider(payload: ProviderCreate,request: Request,claims:
         row=result.mappings().one()
         await _audit(connection,payload.tenant_id,actor,"sales.provider.created","provider_profile",row["id"],request,
                      {"provider_code":payload.provider_code,"status":"draft"})
-    return {"data":{"id":str(row["id"]),"status":row["status"]}}
+        response_body={"data":{"id":str(row["id"]),"status":row["status"]}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=201,response_body=response_body)
+    return response_body
 
 
 @router.patch("/providers/{provider_id}/status")
-async def update_sales_provider_status(provider_id: UUID,payload: ProviderStatusInput,request: Request,claims: dict = claims_dependency):
+async def update_sales_provider_status(provider_id: UUID,payload: ProviderStatusInput,request: Request,claims: dict = claims_dependency,
+                                       idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     await _authorize(claims,payload.tenant_id,"providers.manage",request,provider_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
+        reservation=await reserve_idempotency(connection,actor_user_id=actor,tenant_id=payload.tenant_id,
+            command_key="sales.provider.status:"+str(provider_id),idempotency_key=idempotency_key,
+            payload={"provider_id":str(provider_id),**payload.model_dump(mode="json")})
+        if reservation.replay:
+            return reservation.replay_body
         result=await connection.execute(text("""
           update public.provider_profiles set status=:status,updated_by=:actor,updated_at=now()
           where tenant_id=:tenant and id=:id and status<>'archived' returning id,status
@@ -1222,4 +1523,6 @@ async def update_sales_provider_status(provider_id: UUID,payload: ProviderStatus
             raise HTTPException(status_code=404,detail="Provider tidak ditemukan atau sudah diarsipkan.")
         await _audit(connection,payload.tenant_id,actor,"sales.provider.status_changed","provider_profile",provider_id,request,
                      {"status":payload.status,"reason":payload.reason})
-    return {"data":{"id":str(provider_id),"status":payload.status}}
+        response_body={"data":{"id":str(provider_id),"status":payload.status}}
+        await complete_idempotency(connection,record_id=reservation.record_id,response_status=200,response_body=response_body)
+    return response_body

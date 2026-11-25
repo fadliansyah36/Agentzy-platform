@@ -13,6 +13,7 @@ Base prefix: `/api/v1/sales`. All authenticated operations require a verified te
 | POST | `/leads/{lead_id}/assign` | Assign eligible Phase 04 workforce profile |
 | POST | `/leads/{lead_id}/transition` | Transition lead stage with reason |
 | GET | `/leads/{lead_id}/activities` | Read immutable lead activity timeline |
+| GET | `/leads/{lead_id}/consents` | Read consent history, policy versions and revocation state |
 | GET/PATCH | `/customers`, `/customers/{customer_id}` | Read/update customer profile |
 | GET | `/workforce-options` | List tenant-eligible workforce profiles |
 
@@ -42,10 +43,14 @@ Base prefix: `/api/v1/sales`. All authenticated operations require a verified te
 | GET | `/orders` | Tenant/owner-scoped order list |
 | GET | `/orders/{order_id}` | Order snapshot |
 | GET | `/orders/{order_id}/events` | Immutable order transition history |
-| POST | `/orders/{order_id}/transition` | Submit, schedule, begin installation or cancel; provider decisions are webhook-only |
+| POST | `/orders/{order_id}/transition` | Submit or cancel before provider acceptance; provider and installation decisions are webhook-only |
+| GET | `/orders/{order_id}/attempts` | Read provider submission attempt hashes, references and error codes |
+| GET | `/orders/{order_id}/attributions` | Read immutable sales/affiliate attribution snapshots and lock state |
+| POST | `/orders/{order_id}/attributions/correct` | Correct provisional attribution while order is still draft; requires reason and idempotency key |
 | POST | `/webhooks/providers/{provider_code}?tenant_id=` | HMAC-verified, replay-protected provider event ingestion |
 | POST | `/providers/{provider_id}/retry-blocked` | Requeue blocked provider submissions after deployment configuration |
-| GET | `/reconciliation` | Submission attempts and unresolved provider events |
+| GET | `/reconciliation` | Per-order submission attempts and unresolved provider events |
+| GET | `/webhooks/unmatched` | Read unmatched/ignored provider event metadata for reconciliation |
 
 ## Lifecycle and invariants
 
@@ -53,11 +58,11 @@ Base prefix: `/api/v1/sales`. All authenticated operations require a verified te
 
 `draft → submitted → provider_pending → provider_approved/provider_rejected → installation_scheduled → installation_in_progress → activated`
 
-The server resolves customer/provider/product/price snapshots from database records. The client cannot set provider coverage or approval results. Order transitions store actor, timestamp, source, reason, evidence, trace ID and idempotency key. Provider webhooks require a unique external event ID and a timestamp within five minutes.
+The server resolves customer/provider/product/price snapshots from database records. The client cannot set provider coverage or approval results. Manual lead transitions are restricted to contacted/qualified/disqualified/closed; assignment, coverage, offer and order endpoints advance their own lifecycle states. Consent capture/revocation and all mutation commands require idempotency keys. Order transitions store actor, timestamp, source, reason, evidence, trace ID and idempotency key. Order creation derives the sales attribution from the assigned Phase 04 workforce profile; the client cannot choose a different owner. Attribution is provisional in draft, locked on provider approval/activation, reversed on provider rejection or pre-acceptance cancellation, and correction is permitted only before provider submission. Affiliate attribution is reserved for Phase 06. Provider webhooks require HMAC-SHA256, a unique external event ID and a timestamp within five minutes. The provider HTTP adapter sends a stable idempotency key on every retry.
 
 ## Provider configuration
 
-Supported adapter keys are `http_json`, `webhook_only`, and `secure_file_exchange`. HTTP JSON adapters require an HTTPS host in `AGENTZY_PROVIDER_ALLOWED_HOSTS` and deployment-only secret references. Partner portal and secure file exchange remain blocked until the partner supplies an authorized contract and channel. The platform never scrapes partner systems.
+Supported adapter keys are `http_json`, `webhook_only`, and `secure_file_exchange`. HTTP JSON adapters require an HTTPS host in `AGENTZY_PROVIDER_ALLOWED_HOSTS`, deployment-only secret references with the `AGENTZY_PROVIDER_AUTH__*` / `AGENTZY_PROVIDER_WEBHOOK__*` prefixes, per-provider request/response/status mappings, and may configure `response_mapping.coverage_path` (default `/coverage-check`). Partner portal and secure file exchange remain contract-only until the partner supplies an authorized contract and channel. The platform never scrapes partner systems. Manual order cancellation is blocked after provider acceptance until a provider-specific cancellation endpoint/contract is authorized.
 
 ## Errors
 

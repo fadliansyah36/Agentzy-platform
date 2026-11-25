@@ -101,6 +101,15 @@ jobs:
           assert "/api/v1/sales/orders" in paths
           assert "/api/v1/sales/webhooks/providers/{provider_code}" in paths
           assert "/api/v1/sales/reconciliation" in paths
+          assert "/api/v1/sales/leads/{lead_id}/consents" in paths
+          assert "/api/v1/sales/orders/{order_id}/attempts" in paths
+          assert "/api/v1/sales/orders/{order_id}/attributions" in paths
+          assert "/api/v1/sales/orders/{order_id}/attributions/correct" in paths
+          assert "/api/v1/sales/webhooks/unmatched" in paths
+          assert "/api/v1/sales/leads/{lead_id}/activities" in paths
+          assert "/api/v1/sales/customers/{customer_id}" in paths
+          assert "/api/v1/sales/providers/{provider_id}/integration" in paths
+          assert "/api/v1/sales/providers/{provider_id}/health" in paths
           print(f"OpenAPI paths: {len(paths)}")
           PY
 

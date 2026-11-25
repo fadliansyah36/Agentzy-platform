@@ -12,7 +12,7 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
   const [providerId,setProviderId]=useState('');
   const [providerForm,setProviderForm]=useState({provider_code:'',provider_name:'',provider_type:'isp',registration_number:'',contact_email:'',contact_phone:'',regions:''});
   const [form,setForm]=useState({product_code:'',name:'',category:'internet_access',coverage_source:'authorized_provider_api',region:'',pricingReference:'provider_quote_required'});
-  const [integration,setIntegration]=useState({endpoint_url:'',auth_env_key:'',webhook_secret_env_key:'',enabled:false});
+  const [integration,setIntegration]=useState({endpoint_url:'',health_url:'',auth_env_key:'',webhook_secret_env_key:'',enabled:false,requestMappingJson:'{}',responseMappingJson:'{}',statusMappingJson:'{"accepted":"provider_pending","approved":"provider_approved","rejected":"provider_rejected","scheduled":"installation_scheduled","installing":"installation_in_progress","activated":"activated"}'});
   const [loading,setLoading]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string|null>(null);
@@ -58,10 +58,10 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
     setBusy(true);setError(null);
     try {
       await configureSalesProvider(accessToken,providerId,{
-        tenant_id:tenantId,adapter_key:'http_json',endpoint_url:integration.endpoint_url||null,
+        tenant_id:tenantId,adapter_key:'http_json',endpoint_url:integration.endpoint_url||null,health_url:integration.health_url||null,
         auth_env_key:integration.auth_env_key||null,webhook_secret_env_key:integration.webhook_secret_env_key||null,
-        enabled:integration.enabled,timeout_seconds:15,request_mapping:{},response_mapping:{},
-        status_mapping:{accepted:'provider_pending',approved:'provider_approved',rejected:'provider_rejected',scheduled:'installation_scheduled',installing:'installation_in_progress',activated:'activated'},
+        enabled:integration.enabled,timeout_seconds:15,request_mapping:JSON.parse(integration.requestMappingJson),
+        response_mapping:JSON.parse(integration.responseMappingJson),status_mapping:JSON.parse(integration.statusMappingJson),
       });
       setNotice('Contract adapter tersimpan. Secret tetap berada di deployment environment, tidak disimpan di database.');
       await load();
@@ -101,8 +101,10 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
         <h3 className="flex items-center gap-2 font-semibold text-[#17324D]"><ShieldCheck className="h-4 w-4"/>Authorized Provider Adapter</h3>
         <p className="text-xs text-[#526675]">Gunakan endpoint resmi HTTPS dan environment reference. Secret/token tidak boleh dimasukkan ke form atau database.</p>
         <label className="block text-xs font-semibold text-[#526675]">Official API base endpoint<input value={integration.endpoint_url} onChange={e=>setIntegration(v=>({...v,endpoint_url:e.target.value}))} placeholder="https://api.provider.example/v1" className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-sm font-normal"/></label>
+        <label className="block text-xs font-semibold text-[#526675]">Health check URL<input value={integration.health_url} onChange={e=>setIntegration(v=>({...v,health_url:e.target.value}))} placeholder="https://api.provider.example/v1/health" className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-sm font-normal"/></label>
         <label className="block text-xs font-semibold text-[#526675]">Auth environment key<input value={integration.auth_env_key} onChange={e=>setIntegration(v=>({...v,auth_env_key:e.target.value}))} placeholder="AGENTZY_PROVIDER_AUTH__PROVIDER_CODE" className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-sm font-normal"/></label>
         <label className="block text-xs font-semibold text-[#526675]">Webhook secret environment key<input value={integration.webhook_secret_env_key} onChange={e=>setIntegration(v=>({...v,webhook_secret_env_key:e.target.value}))} placeholder="AGENTZY_PROVIDER_WEBHOOK__PROVIDER_CODE" className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-sm font-normal"/></label>
+        {([['requestMappingJson','Request mapping JSON'],['responseMappingJson','Response mapping JSON'],['statusMappingJson','Webhook status mapping JSON']] as const).map(([key,label])=><label key={key} className="block text-xs font-semibold text-[#526675]">{label}<textarea value={integration[key]} onChange={e=>setIntegration(v=>({...v,[key]:e.target.value}))} rows={3} className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 font-mono text-xs font-normal"/></label>)}
         <label className="flex items-center gap-2 text-xs text-[#526675]"><input type="checkbox" checked={integration.enabled} onChange={e=>setIntegration(v=>({...v,enabled:e.target.checked}))}/>Enable adapter (requires official access, allowlisted host and deployment secret)</label>
         <button disabled={busy||!providerId} onClick={()=>void saveIntegration()} className="w-full rounded-lg border border-[#B9DCEB] px-3 py-2 text-sm font-semibold text-[#245477] disabled:opacity-50">Simpan Adapter Contract</button>
         <button disabled={busy||!providerId} onClick={()=>void retry()} className="w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-xs font-semibold text-[#526675] disabled:opacity-50">Retry blocked submissions</button>

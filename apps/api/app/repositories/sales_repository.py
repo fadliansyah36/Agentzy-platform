@@ -31,11 +31,14 @@ async def get_order_for_tenant(connection: AsyncConnection, tenant_id: UUID, ord
 
 
 async def enqueue_provider_submission(connection: AsyncConnection, tenant_id: UUID, order_id: UUID,
-                                      provider_profile_id: UUID) -> None:
+                                      provider_profile_id: UUID, submission_key: str) -> None:
     import json
     await connection.execute(text("""
       insert into public.sales_outbox(tenant_id,aggregate_type,aggregate_id,event_type,dedupe_key,payload)
       values(:tenant,'sales_order',:order,'provider.order.submit',:key,cast(:payload as jsonb))
-      on conflict(dedupe_key) do nothing
-    """),{"tenant":tenant_id,"order":order_id,"key":"provider-submit:"+str(order_id),
-          "payload":json.dumps({"order_id":str(order_id),"provider_profile_id":str(provider_profile_id)})})
+      on conflict(dedupe_key) do update set status='pending',attempts=0,available_at=now(),
+        locked_at=null,processed_at=null,last_error_code=null,updated_at=now()
+      where sales_outbox.status in ('dead_letter','blocked_configuration')
+    """),{"tenant":tenant_id,"order":order_id,"key":"provider-submit:"+str(order_id)+":"+submission_key,
+          "payload":json.dumps({"order_id":str(order_id),"provider_profile_id":str(provider_profile_id),
+              "submission_key":submission_key})})

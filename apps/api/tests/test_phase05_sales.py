@@ -1,11 +1,15 @@
+import asyncio
+from datetime import UTC, datetime
+
 import pytest
 from fastapi import HTTPException
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.domain.sales import LEAD_TRANSITIONS, ORDER_TRANSITIONS, normalize_provider_status, transition_allowed
 from app.core.pagination import decode_time_id_cursor, encode_time_id_cursor
 from app.services.sales_service import SalesService
+from app.adapters.provider_adapter import HttpJsonProviderAdapter, _assert_authorized_endpoint, _mapped_request
+from app.api.v1.routes.sales import OrderAttributionCorrection, OrderCreate, ProviderIntegrationInput
 
 
 def test_lead_lifecycle_is_ordered_and_terminal():
@@ -66,3 +70,98 @@ def test_sales_cursor_round_trip():
     created_at=datetime(2026,11,25,11,0,tzinfo=UTC)
     row_id=uuid4()
     assert decode_time_id_cursor(encode_time_id_cursor(created_at,row_id))==(created_at,row_id)
+
+
+def test_provider_request_mapping_uses_normalized_nested_values():
+    payload = {
+        "order_reference": "AGZ-ORDER-01",
+        "customer": {"name": "Example", "address": {"service": "Bogor"}},
+    }
+    mapped = _mapped_request(payload, {
+        "external_order_id": "order_reference",
+        "subscriber_name": "customer.name",
+        "installation_address": "customer.address.service",
+    })
+    assert mapped == {
+        "external_order_id": "AGZ-ORDER-01",
+        "subscriber_name": "Example",
+        "installation_address": "Bogor",
+    }
+
+
+def test_provider_endpoint_requires_explicit_allowlisted_https_host(monkeypatch):
+    monkeypatch.setenv("AGENTZY_PROVIDER_ALLOWED_HOSTS", "api.authorized-provider.example")
+    with pytest.raises(ValueError, match="PROVIDER_HOST_NOT_ALLOWLISTED"):
+        _assert_authorized_endpoint("https://unapproved.example/v1/orders")
+    with pytest.raises(ValueError, match="PROVIDER_ENDPOINT_INVALID"):
+        _assert_authorized_endpoint("http://api.authorized-provider.example/v1/orders")
+
+
+def test_provider_integration_accepts_only_environment_secret_references():
+    valid = ProviderIntegrationInput(
+        tenant_id=uuid4(),
+        adapter_key="http_json",
+        endpoint_url="https://api.authorized-provider.example/v1/orders",
+        auth_env_key="AGENTZY_PROVIDER_AUTH__EXAMPLE",
+        webhook_secret_env_key="AGENTZY_PROVIDER_WEBHOOK__EXAMPLE",
+        enabled=True,
+    )
+    assert valid.enabled is True
+    with pytest.raises(ValueError):
+        ProviderIntegrationInput(
+            tenant_id=uuid4(),
+            adapter_key="http_json",
+            endpoint_url="https://api.authorized-provider.example/v1/orders",
+            auth_env_key="DATABASE_URL",
+            webhook_secret_env_key="AGENTZY_PROVIDER_WEBHOOK__EXAMPLE",
+            enabled=True,
+        )
+
+
+def test_unconfigured_coverage_never_returns_available():
+    result = asyncio.run(HttpJsonProviderAdapter().check_coverage(
+        {"enabled": False, "adapter_key": "http_json"}, {}
+    ))
+    assert result["result_status"] == "unknown"
+    assert result["error_code"] == "PROVIDER_ADAPTER_NOT_ENABLED"
+
+
+def test_unconfigured_order_submission_never_returns_accepted():
+    result = asyncio.run(HttpJsonProviderAdapter().submit_order(
+        {"enabled": False, "adapter_key": "http_json"}, {}, idempotency_key="agentzy-order-01"
+    ))
+    assert result.accepted is False
+    assert result.error_code == "PROVIDER_ADAPTER_NOT_ENABLED"
+
+
+def test_order_attribution_correction_requires_a_reason_and_tenant_scoped_worker():
+    correction = OrderAttributionCorrection(
+        tenant_id=uuid4(),
+        attributed_worker_id=uuid4(),
+        reason="Corrected before provider submission.",
+    )
+    assert correction.reason.startswith("Corrected")
+    with pytest.raises(ValueError):
+        OrderAttributionCorrection(
+            tenant_id=uuid4(),
+            attributed_worker_id=uuid4(),
+            reason="x",
+        )
+
+
+def test_order_create_does_not_trust_client_status_or_pricing():
+    order = OrderCreate(
+        tenant_id=uuid4(),
+        lead_id=uuid4(),
+        consent_id=uuid4(),
+        offer_id=uuid4(),
+    )
+    assert order.assigned_workforce_profile_id is None
+    with pytest.raises(ValueError):
+        OrderCreate(
+            tenant_id=uuid4(),
+            lead_id=uuid4(),
+            consent_id=uuid4(),
+            offer_id=uuid4(),
+            status="activated",
+        )

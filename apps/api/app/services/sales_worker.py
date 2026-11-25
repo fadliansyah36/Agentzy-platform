@@ -42,7 +42,7 @@ async def process_sales_outbox_batch(batch_size: int = 20) -> int:
                 order_result = await connection.execute(text("""
                   select o.*,p.provider_code,p.provider_name,c.customer_name,c.contact_name,
                          c.email,c.phone,c.service_address,pr.product_code,pr.name as product_name,
-                         cfg.adapter_key,cfg.endpoint_url,cfg.auth_env_key,cfg.timeout_seconds,cfg.enabled
+                         cfg.adapter_key,cfg.endpoint_url,cfg.auth_env_key,cfg.timeout_seconds,cfg.enabled,cfg.request_mapping,cfg.response_mapping
                   from public.sales_orders o
                   join public.provider_profiles p on p.id=o.provider_profile_id and p.tenant_id=o.tenant_id
                   join public.sales_customers c on c.id=o.customer_id and c.tenant_id=o.tenant_id
@@ -61,8 +61,17 @@ async def process_sales_outbox_batch(batch_size: int = 20) -> int:
             config = dict(order)
             payload = SalesService.provider_submission_payload(dict(order))
             request_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
-            result = await (adapter if config.get("adapter_key")=="http_json" else contract_only_adapter).submit_order(config, payload)
-            attempt_number = int(event["attempts"]) + 1
+            submission_key=str((event.get("payload") or {}).get("submission_key") or event["id"])
+            result = await (adapter if config.get("adapter_key")=="http_json" else contract_only_adapter).submit_order(
+                config, payload, idempotency_key="agentzy-order-"+str(event["aggregate_id"])+"-"+submission_key
+            )
+            outbox_attempt=int(event["attempts"])+1
+            async with engine.connect() as connection:
+                attempt_result=await connection.execute(text("""
+                  select coalesce(max(attempt_number),0)+1 from public.provider_submission_attempts
+                  where tenant_id=:tenant and order_id=:order
+                """),{"tenant":event["tenant_id"],"order":event["aggregate_id"]})
+                attempt_number=int(attempt_result.scalar_one())
             async with engine.begin() as connection:
                 await connection.execute(text("""
                   insert into public.provider_submission_attempts(
@@ -94,19 +103,19 @@ async def process_sales_outbox_batch(batch_size: int = 20) -> int:
                       "evidence":json.dumps({"provider_reference":result.provider_reference,"response_hash":result.response_hash}),
                       "key":"provider-submit-"+str(event["id"])})
                     await connection.execute(text("""
-                      update public.sales_outbox set status='done',processed_at=now(),updated_at=now()
+                      update public.sales_outbox set status='done',attempts=:attempts,processed_at=now(),locked_at=null,updated_at=now()
                       where id=:id
-                    """), {"id": event["id"]})
+                    """), {"id": event["id"],"attempts":outbox_attempt})
                 else:
                     blocked = result.error_code and ("CONFIG" in result.error_code or "ALLOWLIST" in result.error_code or "REFERENCE" in result.error_code or "ENABLED" in result.error_code)
-                    next_attempt = attempt_number >= 6
+                    next_attempt = outbox_attempt >= 6
                     await connection.execute(text("""
                       update public.sales_outbox set status=:status,attempts=:attempts,
                         available_at=:available,last_error_code=:error,locked_at=null,updated_at=now()
                       where id=:id
                     """), {
                       "status":"blocked_configuration" if blocked else ("dead_letter" if next_attempt else "retry"),
-                      "attempts":attempt_number,"available":datetime.now(UTC)+timedelta(seconds=min(3600,30*(2**min(attempt_number,7)))),
+                      "attempts":outbox_attempt,"available":datetime.now(UTC)+timedelta(seconds=min(3600,30*(2**min(outbox_attempt,7)))),
                       "error":result.error_code,"id":event["id"],
                     })
             processed += 1
@@ -119,9 +128,12 @@ async def process_sales_outbox_batch(batch_size: int = 20) -> int:
 async def _finish(event_id: UUID, status: str, error_code: str) -> None:
     async with engine.begin() as connection:
         await connection.execute(text("""
-          update public.sales_outbox set status=:status,attempts=attempts+1,
-            available_at=now()+interval '5 minutes',last_error_code=:error,
-            locked_at=null,updated_at=now() where id=:id
+          update public.sales_outbox set status=case
+              when :status='retry' and attempts+1>=6 then 'dead_letter'
+              else :status end,
+            attempts=attempts+1,
+            available_at=now()+make_interval(secs=>least(3600,30*power(2,least(attempts,7))::integer)),
+            last_error_code=:error,locked_at=null,updated_at=now() where id=:id
         """), {"status":status,"error":error_code[:80],"id":event_id})
 
 
