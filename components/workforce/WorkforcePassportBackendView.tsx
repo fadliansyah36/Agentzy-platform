@@ -6,6 +6,7 @@ import {
   submitWorkforceIdentity, uploadWorkforceIdentityDocument, enrollWorkforceTraining, updateWorkforceTrainingProgress,
   createWorkforceAvailability, updateWorkforceOnboardingTask,
   listWorkforceSkills, addWorkforceSkill, addWorkforceCertification, renewWorkforceCertification,
+  getWorkforceDocumentDownload,
   type AgentzyWorkforceTenantContext, type WorkforcePassport,
 } from '@/apps/web/lib/api-client';
 
@@ -113,6 +114,16 @@ export function WorkforcePassportBackendView({
     finally{setBusy(false);}
   };
 
+  const downloadDocument=async(documentId:string)=>{
+    if(!accessToken)return;
+    setBusy(true);setError(null);
+    try{
+      const result=await getWorkforceDocumentDownload(accessToken,tenantId,documentId);
+      window.open(result.data.signed_url,'_blank','noopener,noreferrer');
+    }catch(cause){setError(cause instanceof Error?cause.message:'Dokumen tidak dapat diakses.');}
+    finally{setBusy(false);}
+  };
+
   const enroll=(courseId:string)=>passport&&run(()=>enrollWorkforceTraining(accessToken!,passport.id,{tenant_id:tenantId,course_id:courseId}));
 
   const saveProgress=(enrollmentId:string)=>run(()=>updateWorkforceTrainingProgress(accessToken!,enrollmentId,{
@@ -176,6 +187,10 @@ export function WorkforcePassportBackendView({
             <button type="button" disabled={busy||!identityFile||(!pendingVerificationId&&passport.lifecycle_status!=='registered')} onClick={()=>void submitIdentity()} className="h-10 rounded-lg border border-[#0284C7] px-4 text-xs font-semibold text-[#0284C7] disabled:opacity-40">{busy?'Mengunggah…':pendingVerificationId?'Unggah Dokumen':'Ajukan Verifikasi'}</button>
           </div></section>
           <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Passport Summary</h3><div className="mt-3 grid grid-cols-2 gap-3 text-xs">{[['Skills',passport.skills.length],['Certifications',passport.certifications.length],['Training',passport.training.length],['Assignments',passport.assignments.length],['Onboarding Tasks',passport.onboarding.length],['Lifecycle Events',passport.history.length]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-[#F5F8FA] p-3"><p className="text-[#718391]">{label}</p><p className="mt-1 text-lg font-bold text-[#17324D]">{value}</p></div>)}</div></section>
+          <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-2"><h3 className="text-sm font-bold text-[#17324D]">Identity Verification & Documents</h3>
+            {passport.identity_verifications.length===0?<p className="mt-2 text-xs text-[#718391]">Belum ada riwayat verifikasi identitas.</p>:passport.identity_verifications.map((item,index)=><div key={String(item.id??index)} className="mt-2 border-b border-[#EAF2F6] pb-2"><p className="text-xs font-semibold text-[#17324D]">{String(item.verification_type)} · {String(item.status)}</p><p className="mt-1 text-[11px] text-[#718391]">Submitted {String(item.submitted_at??'—')} · Reviewed {String(item.reviewed_at??'—')}{item.rejection_reason?' · Rejection: '+String(item.rejection_reason):''}</p></div>)}
+            {passport.identity_documents.length===0?<p className="mt-3 text-xs text-[#718391]">Belum ada metadata dokumen identitas.</p>:passport.identity_documents.map((doc,index)=><div key={String(doc.id??index)} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#EAF2F6] pt-2"><div><p className="text-xs font-semibold text-[#17324D]">{String(doc.original_filename)}</p><p className="text-[10px] text-[#718391]">{String(doc.document_type)} · {String(doc.content_type)} · {String(doc.scan_status)} · Retention {String(doc.retention_until??'—')}{doc.redacted_at?' · Redacted':''}</p></div><button type="button" disabled={busy||!!doc.redacted_at||doc.scan_status!=='clean'} onClick={()=>void downloadDocument(String(doc.id))} className="rounded-md border border-[#0284C7] px-3 py-2 text-[10px] font-semibold text-[#0284C7] disabled:opacity-40">Secure Download</button></div>)}
+          </section>
           <div className="grid gap-4 lg:col-span-2 lg:grid-cols-2">
             <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Skills & Proficiency</h3>
               {passport.skills.map((item,index)=><p key={String(item.id??index)} className="mt-2 text-xs text-[#526675]">{String(item.skill_name??item.skill_id)} · {String(item.proficiency)} · {String(item.experience_months)} months{item.verified?' · Verified':''}</p>)}
