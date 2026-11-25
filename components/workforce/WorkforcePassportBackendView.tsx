@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ApiError, getMyWorkforcePassport, listWorkforceCourses, registerMyWorkforceProfile,
-  submitWorkforceIdentity, enrollWorkforceTraining, updateWorkforceTrainingProgress,
+  submitWorkforceIdentity, uploadWorkforceIdentityDocument, enrollWorkforceTraining, updateWorkforceTrainingProgress,
   createWorkforceAvailability, updateWorkforceOnboardingTask,
   type AgentzyWorkforceTenantContext, type WorkforcePassport,
 } from '@/apps/web/lib/api-client';
@@ -32,6 +32,8 @@ export function WorkforcePassportBackendView({
   const [notRegistered,setNotRegistered]=useState(false);
   const [registration,setRegistration]=useState({worker_code:'',display_name:userName,job_family:'',job_title:'',experience_years:'0'});
   const [assessmentScore,setAssessmentScore]=useState('80');
+  const [identityFile,setIdentityFile]=useState<File|null>(null);
+  const [pendingVerificationId,setPendingVerificationId]=useState<string|null>(null);
   const [availability,setAvailability]=useState({type:'leave',starts_at:'',ends_at:'',reason:''});
 
   const load=useCallback(async()=>{
@@ -134,7 +136,12 @@ export function WorkforcePassportBackendView({
       </div>:
       passport&&<>
         {tab==='passport'&&<div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><p className="text-xs text-[#718391]">Passport Identity</p><h3 className="mt-1 text-lg font-bold text-[#17324D]">{passport.display_name}</h3><p className="mt-1 font-mono text-xs text-[#526675]">{passport.worker_code}</p><div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-[#718391]">Job Family</p><p className="mt-1 font-semibold text-[#17324D]">{passport.job_family||'—'}</p></div><div><p className="text-[#718391]">Jabatan</p><p className="mt-1 font-semibold text-[#17324D]">{passport.job_title||'—'}</p></div><div><p className="text-[#718391]">Lifecycle</p><p className="mt-1 font-semibold text-[#0284C7]">{passport.lifecycle_status}</p></div><div><p className="text-[#718391]">Engagement</p><p className="mt-1 font-semibold text-[#17324D]">{passport.engagement_status}</p></div></div><button type="button" disabled={busy||passport.lifecycle_status!=='registered'} onClick={()=>void submitIdentity()} className="mt-4 h-10 rounded-lg border border-[#0284C7] px-4 text-xs font-semibold text-[#0284C7] disabled:opacity-40">Ajukan Verifikasi Identitas</button></section>
+          <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><p className="text-xs text-[#718391]">Passport Identity</p><h3 className="mt-1 text-lg font-bold text-[#17324D]">{passport.display_name}</h3><p className="mt-1 font-mono text-xs text-[#526675]">{passport.worker_code}</p><div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-[#718391]">Job Family</p><p className="mt-1 font-semibold text-[#17324D]">{passport.job_family||'—'}</p></div><div><p className="text-[#718391]">Jabatan</p><p className="mt-1 font-semibold text-[#17324D]">{passport.job_title||'—'}</p></div><div><p className="text-[#718391]">Lifecycle</p><p className="mt-1 font-semibold text-[#0284C7]">{passport.lifecycle_status}</p></div><div><p className="text-[#718391]">Engagement</p><p className="mt-1 font-semibold text-[#17324D]">{passport.engagement_status}</p></div></div><div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="min-w-0 flex-1 text-xs text-[#526675]">Dokumen identitas (PDF/JPG/PNG, maks. 10 MB)
+              <input type="file" accept="application/pdf,image/jpeg,image/png" onChange={e=>setIdentityFile(e.target.files?.[0]??null)} className="mt-1 block w-full text-xs"/>
+            </label>
+            <button type="button" disabled={busy||!identityFile||(!pendingVerificationId&&passport.lifecycle_status!=='registered')} onClick={()=>void submitIdentity()} className="h-10 rounded-lg border border-[#0284C7] px-4 text-xs font-semibold text-[#0284C7] disabled:opacity-40">{busy?'Mengunggah…':pendingVerificationId?'Unggah Dokumen':'Ajukan Verifikasi'}</button>
+          </div></section>
           <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Passport Summary</h3><div className="mt-3 grid grid-cols-2 gap-3 text-xs">{[['Skills',passport.skills.length],['Certifications',passport.certifications.length],['Training',passport.training.length],['Assignments',passport.assignments.length],['Onboarding Tasks',passport.onboarding.length],['Lifecycle Events',passport.history.length]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-[#F5F8FA] p-3"><p className="text-[#718391]">{label}</p><p className="mt-1 text-lg font-bold text-[#17324D]">{value}</p></div>)}</div></section>
           <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-2"><h3 className="text-sm font-bold text-[#17324D]">Engagement Classification</h3>{passport.engagements.length===0?<p className="mt-2 text-xs text-[#718391]">Belum ada agreement classification yang ditetapkan Corporate.</p>:<div className="mt-3 space-y-2">{passport.engagements.map((item,index)=><div key={String(item.id??index)} className="flex flex-wrap justify-between gap-2 border-b border-[#EAF2F6] pb-2 text-xs"><span className="font-semibold text-[#17324D]">{String(item.classification)}</span><span className="text-[#526675]">{String(item.agreement_reference)} · {String(item.status)}</span></div>)}</div>}</section>
         </div>}
