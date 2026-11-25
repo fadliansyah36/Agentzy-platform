@@ -53,6 +53,41 @@ def _message_for(event_type: str, payload: dict) -> tuple[str, str]:
             f"Kontrak {contract_number} — {title} memiliki tanggal akhir {effective_end}. "
             "Silakan ajukan renewal melalui Corporate Portal.",
         )
+    if event_type == "contract.activated":
+        contract_id = str(payload.get("contract_id") or "—")
+        return (
+            "Kontrak Agentzy Diaktifkan",
+            f"Kontrak Agentzy {contract_id} telah diaktifkan dan entitlement sesuai SOW mulai berlaku.",
+        )
+    if event_type == "contract.suspended":
+        contract_id = str(payload.get("contract_id") or "—")
+        reason = str(payload.get("reason") or "Tidak dicantumkan")
+        return (
+            "Kontrak Agentzy Ditangguhkan",
+            f"Kontrak Agentzy {contract_id} ditangguhkan. Alasan: {reason}.",
+        )
+    if event_type == "contract.terminated":
+        contract_id = str(payload.get("contract_id") or "—")
+        reason = str(payload.get("reason") or "Tidak dicantumkan")
+        return (
+            "Kontrak Agentzy Dihentikan",
+            f"Kontrak Agentzy {contract_id} dihentikan. Alasan: {reason}.",
+        )
+    if event_type == "contract.renewal.requested":
+        contract_id = str(payload.get("contract_id") or "—")
+        requested_end = str(payload.get("requested_end") or "—")
+        return (
+            "Permintaan Renewal Kontrak Agentzy",
+            f"Permintaan renewal untuk kontrak {contract_id} tercatat dengan tanggal akhir yang diajukan {requested_end}.",
+        )
+    if event_type in {"contract.renewal.approved", "contract.renewal.rejected"}:
+        contract_id = str(payload.get("contract_id") or "—")
+        outcome = "disetujui" if event_type.endswith("approved") else "ditolak"
+        reason = str(payload.get("reason") or "Tidak dicantumkan")
+        return (
+            "Keputusan Renewal Kontrak Agentzy",
+            f"Permintaan renewal kontrak {contract_id} {outcome}. Alasan: {reason}.",
+        )
     raise ValueError("Unsupported notification event type")
 
 
