@@ -15,6 +15,7 @@ import {
   decideWorkforceIdentity,
   verifyWorkforceCertification,
   verifyWorkforceSkill,
+  purgeExpiredWorkforceDocuments,
   type WorkforceProfile,
 } from '@/apps/web/lib/api-client';
 
@@ -35,7 +36,7 @@ export function HumanWorkforceAdminView({
   tenants: TenantOption[];
   onBack: () => void;
 }) {
-  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'skills'|'training'|'assignment'>('staff');
+  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'skills'|'training'|'privacy'|'assignment'>('staff');
   const [tenantId,setTenantId]=useState(tenants[0]?.id ?? '');
   const [profiles,setProfiles]=useState<WorkforceProfile[]>([]);
   const [verifications,setVerifications]=useState<VerificationRow[]>([]);
@@ -45,6 +46,8 @@ export function HumanWorkforceAdminView({
   const [courses,setCourses]=useState<Record<string,unknown>[]>([]);
   const [courseForm,setCourseForm]=useState({course_key:'',title:'',description:'',material_title:'',material_url:'',pass_score:'70',validity_days:'365'});
   const [requiredForActivation,setRequiredForActivation]=useState(false);
+  const [retentionReason,setRetentionReason]=useState('');
+  const [purgedCount,setPurgedCount]=useState<number|null>(null);
   const [newSkill,setNewSkill]=useState({skill_key:'',name:'',category:'technical',description:''});
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
@@ -141,6 +144,17 @@ export function HumanWorkforceAdminView({
     finally{setBusyId(null);}
   };
 
+  const purgeExpiredDocuments=async()=>{
+    if(!accessToken||!tenantId||retentionReason.trim().length<3)return;
+    setBusyId('retention-purge');setError(null);
+    try{
+      const result=await purgeExpiredWorkforceDocuments(accessToken,tenantId,retentionReason.trim());
+      setPurgedCount(result.data.purged_count);
+      setRetentionReason('');
+    }catch(cause){setError(cause instanceof Error?cause.message:'Document retention purge gagal.');}
+    finally{setBusyId(null);}
+  };
+
   const addCourse=async()=>{
     if(!accessToken||!tenantId)return;
     let materials:Record<string,unknown>[]=[];
@@ -165,7 +179,7 @@ export function HumanWorkforceAdminView({
     <AdminPageHeader title="Human Workforce Governance" subtitle="Passport, identity verification, lifecycle dan assignment visibility berbasis data backend." onBack={onBack}
       actions={<button type="button" onClick={()=>void load()} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs font-semibold text-[#17324D] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading?'animate-spin':''}`}/> Refresh</button>}/>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'skills',label:`Skills (${skillQueue.length})`},{id:'training',label:`Training (${courses.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
+      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'skills',label:`Skills (${skillQueue.length})`},{id:'training',label:`Training (${courses.length})`},{id:'privacy',label:'Privacy'},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
       <select value={tenantId} onChange={e=>setTenantId(e.target.value)} className="h-10 min-w-56 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs text-[#17324D]" aria-label="Pilih tenant">
         {tenants.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
@@ -211,6 +225,7 @@ export function HumanWorkforceAdminView({
         <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Training Catalogue</h3><div className="mt-3 grid gap-2 sm:grid-cols-2"><input value={courseForm.course_key} onChange={e=>setCourseForm(v=>({...v,course_key:e.target.value}))} placeholder="Course key" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.title} onChange={e=>setCourseForm(v=>({...v,title:e.target.value}))} placeholder="Course title" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.description} onChange={e=>setCourseForm(v=>({...v,description:e.target.value}))} placeholder="Description" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.pass_score} onChange={e=>setCourseForm(v=>({...v,pass_score:e.target.value}))} type="number" min="0" max="100" placeholder="Pass score" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.validity_days} onChange={e=>setCourseForm(v=>({...v,validity_days:e.target.value}))} type="number" min="1" max="3650" placeholder="Validity days" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.material_title} onChange={e=>setCourseForm(v=>({...v,material_title:e.target.value}))} placeholder="Material title" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.material_url} onChange={e=>setCourseForm(v=>({...v,material_url:e.target.value}))} placeholder="Material URL" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/></div><label className="mt-3 flex items-center gap-2 text-xs text-[#526675]"><input type="checkbox" checked={requiredForActivation} onChange={e=>setRequiredForActivation(e.target.checked)}/> Required for workforce activation</label><button type="button" disabled={busyId!==null||!courseForm.course_key||!courseForm.title||Number(courseForm.pass_score)<0||Number(courseForm.pass_score)>100} onClick={()=>void addCourse()} className="mt-3 h-9 rounded-lg bg-[#0284C7] px-3 text-xs font-semibold text-white disabled:opacity-50">Publish Course</button></section>
         <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Published Courses</h3>{courses.length===0?<p className="mt-2 text-xs text-[#718391]">Belum ada course yang dipublikasikan.</p>:courses.map(course=><div key={String(course.id)} className="mt-2 border-b border-[#EAF2F6] pb-2"><p className="text-xs font-semibold text-[#17324D]">{String(course.title)}</p><p className="text-[11px] text-[#718391]">{String(course.course_key)} · Validity {String(course.validity_days??'—')} days</p></div>)}</section>
       </div>}
+      {tab==='privacy'&&<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Workforce Document Retention</h3><p className="mt-2 text-xs text-[#526675]">Hapus object dan redact metadata dokumen yang telah melewati retention_until. Proses hanya menyentuh dokumen tenant terpilih dan mencatat audit.</p><label className="mt-3 block text-xs text-[#526675]">Reason<input value={retentionReason} onChange={e=>setRetentionReason(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-[#D8E3E9] px-3 text-xs"/></label><button type="button" disabled={busyId!==null||retentionReason.trim().length<3} onClick={()=>void purgeExpiredDocuments()} className="mt-3 h-9 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 disabled:opacity-50">Purge Expired Documents</button>{purgedCount!==null&&<p className="mt-3 text-xs text-[#247A55]">Dokumen yang berhasil di-purge: {purgedCount}</p>}</div>}
       {tab==='assignment'&&<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
         <div className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-[#0284C7]"/><h3 className="text-sm font-bold text-[#17324D]">Lifecycle Workforce</h3></div>
         <p className="mt-2 text-xs text-[#526675]">Ringkasan status berasal dari Workforce Passport yang tersimpan. Riwayat assignment tersedia melalui endpoint per Passport dan tidak ditampilkan sebagai angka simulasi.</p>
