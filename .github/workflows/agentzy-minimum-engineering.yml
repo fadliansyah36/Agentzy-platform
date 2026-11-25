@@ -72,6 +72,9 @@ jobs:
           assert "/api/v1/corporate/provider-profiles" in paths
           assert "/api/v1/corporate/ai-workers" in paths
           assert "/api/v1/corporate/contracts/{contract_id}/versions" in paths
+          assert "/api/v1/corporate/contracts/{contract_id}/activate" in paths
+          assert "/api/v1/corporate/contracts/{contract_id}/suspend" in paths
+          assert "/api/v1/corporate/contracts/{contract_id}/terminate" in paths
           assert "/api/v1/corporate/payment-references/{reference_id}/verify" in paths
           assert "/api/v1/corporate/metrics/contracts" in paths
           print(f"OpenAPI paths: {len(paths)}")
