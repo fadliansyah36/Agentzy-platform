@@ -325,9 +325,20 @@ async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = clai
     await _authorize(claims,tenant_id,"profile.read",request)
     async with engine.connect() as connection:
         result=await connection.execute(text("""
-          select p.* from public.workforce_profiles p
+          select p.*,t.name as tenant_name,o.name as organization_name,ou.name as organization_unit_name,
+                 m.branch_id,m.department_id,
+                 coalesce(array_agg(distinct r.key) filter(where r.key is not null),'{}'::text[]) as role_keys
+          from public.workforce_profiles p
           join public.memberships m on m.id=p.membership_id and m.tenant_id=p.tenant_id
+          join public.tenants t on t.id=p.tenant_id
+          left join public.organizations o on o.id=m.organization_id and o.tenant_id=m.tenant_id
+          left join public.organization_units ou on ou.id=m.organization_unit_id and ou.tenant_id=m.tenant_id
+          left join public.membership_roles mr on mr.membership_id=m.id
+            and (mr.valid_from is null or mr.valid_from<=now())
+            and (mr.valid_until is null or mr.valid_until>now())
+          left join public.roles r on r.id=mr.role_id and (r.tenant_id is null or r.tenant_id=m.tenant_id)
           where p.tenant_id=:tenant and p.user_id=:actor and m.user_id=:actor and m.status='active'
+          group by p.id,t.name,o.name,ou.name,m.branch_id,m.department_id
         """),{"tenant":tenant_id,"actor":actor})
         row=result.mappings().first()
         if not row:
