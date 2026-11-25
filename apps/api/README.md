@@ -57,3 +57,20 @@ Build the API container with `docker build -t agentzy-api apps/api`. Deploy it t
 ## Checks and release policy
 
 Engineering checks (Python compile/import, lint/type checks, migration consistency and API contract checks) are required during implementation. No staging, UAT, load, real-world acceptance or production release test is part of the current work.
+
+
+## Phase 05 — Sales CRM, Provider Catalogue & Order
+
+The Sales bounded context is owned by FastAPI and stored in the primary Supabase PostgreSQL database.
+
+- Domain rules: `app/domain/sales.py`; application invariants: `app/services/sales_service.py`.
+- Persistence: `app/repositories/sales_repository.py`; HTTP contract: `app/api/v1/routes/sales.py`.
+- Provider integration: `app/adapters/provider_adapter.py`; durable outbox worker: `app/services/sales_worker.py`.
+- Typed portal API methods: `apps/web/lib/api-client.ts`; Corporate Portal and Super Admin screens are mounted from their existing portal clients.
+- Migrations: `20261125115219_phase_05_sales_crm_provider_catalogue_orders`, `20261125115634_phase_05_sales_explicit_deny_client_rls`, and `20261125115731_phase_05_sales_idempotency_constraints`.
+
+Provider integrations use HTTPS endpoints and environment-variable references only. Configure `AGENTZY_PROVIDER_ALLOWED_HOSTS`, `AGENTZY_PROVIDER_AUTH__<PROVIDER_CODE>`, and `AGENTZY_PROVIDER_WEBHOOK__<PROVIDER_CODE>` at deployment after written authorization and credential handoff. No provider secret is stored in Supabase or Git.
+
+The outbox worker is controlled by `SALES_WORKER_ENABLED` and `SALES_WORKER_POLL_SECONDS`. A provider without authorized credentials remains `blocked_configuration`; it does not receive a fabricated provider acknowledgement. The webhook contract uses `X-Provider-Timestamp` and `X-Provider-Signature: sha256=<HMAC-SHA256(timestamp + '.' + raw_body)>`, with a five-minute replay window and unique provider event ID.
+
+Direct browser grants are revoked. All 13 Sales tables have RLS enabled and explicit deny policies for `anon` and `authenticated`; FastAPI applies tenant membership, RBAC/ABAC and object ownership checks before database access. The backend database owner connection bypasses RLS by design; it must remain private to the API runtime.

@@ -396,8 +396,15 @@ async def transition_sales_lead(lead_id: UUID,request: Request,tenant_id: UUID,
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
         lead=await _lead_scope(connection,tenant_id,lead_id,actor,context)
-        SalesService.assert_lead_transition(lead["stage"],to_stage)
         key=idempotency_key or str(uuid4())
+        prior=await connection.execute(text("""
+          select to_stage from public.sales_lead_activities
+          where tenant_id=:tenant and lead_id=:lead and idempotency_key=:key and activity_type='status_changed'
+        """),{"tenant":tenant_id,"lead":lead_id,"key":key})
+        prior_stage=prior.scalar_one_or_none()
+        if prior_stage:
+            return {"data":{"id":str(lead_id),"stage":prior_stage,"replayed":True}}
+        SalesService.assert_lead_transition(lead["stage"],to_stage)
         await connection.execute(text("""
           update public.sales_leads set stage=:stage,last_activity_at=now(),updated_at=now()
           where tenant_id=:tenant and id=:id returning stage
@@ -595,6 +602,17 @@ async def check_sales_coverage(lead_id: UUID,payload: CoverageInput,request: Req
         product_row=product.mappings().first()
         if not product_row:
             raise HTTPException(status_code=404,detail="Produk/provider aktif tidak ditemukan.")
+        prior_coverage=await connection.execute(text("""
+          select id,lead_id,product_id,result_status,source,checked_at,error_code
+          from public.sales_coverage_checks where tenant_id=:tenant and request_reference=:reference
+        """),{"tenant":payload.tenant_id,"reference":payload.request_reference})
+        prior_row=prior_coverage.mappings().first()
+        if prior_row:
+            if prior_row["lead_id"]!=lead_id or prior_row["product_id"]!=payload.product_id:
+                raise HTTPException(status_code=409,detail="Coverage request reference telah digunakan untuk request berbeda.")
+            return {"data":{"id":str(prior_row["id"]),"result_status":prior_row["result_status"],
+                "source":prior_row["source"],"checked_at":prior_row["checked_at"],
+                "error_code":prior_row["error_code"],"replayed":True}}
         config_result=await connection.execute(text("""
           select * from public.provider_integration_configs
           where tenant_id=:tenant and provider_profile_id=:provider
@@ -661,6 +679,13 @@ async def present_sales_offer(lead_id: UUID,payload: OfferInput,request: Request
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
         lead=await _lead_scope(connection,payload.tenant_id,lead_id,actor,context)
+        prior_offer=await connection.execute(text("""
+          select id from public.sales_offers where tenant_id=:tenant and lead_id=:lead
+            and product_id=:product and coverage_check_id=:coverage
+        """),{"tenant":payload.tenant_id,"lead":lead_id,"product":payload.product_id,"coverage":payload.coverage_check_id})
+        existing_offer=prior_offer.scalar_one_or_none()
+        if existing_offer:
+            return {"data":{"id":str(existing_offer),"status":"presented","replayed":True}}
         coverage=await connection.execute(text("""
           select id,result_status,product_id from public.sales_coverage_checks
           where tenant_id=:tenant and id=:coverage and lead_id=:lead
