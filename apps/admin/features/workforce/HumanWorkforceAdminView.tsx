@@ -10,6 +10,8 @@ import {
   listWorkforceSkillVerificationQueue,
   listWorkforceSkills,
   createWorkforceSkill,
+  listWorkforceCourses,
+  createWorkforceCourse,
   decideWorkforceIdentity,
   verifyWorkforceCertification,
   verifyWorkforceSkill,
@@ -33,13 +35,16 @@ export function HumanWorkforceAdminView({
   tenants: TenantOption[];
   onBack: () => void;
 }) {
-  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'skills'|'assignment'>('staff');
+  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'skills'|'training'|'assignment'>('staff');
   const [tenantId,setTenantId]=useState(tenants[0]?.id ?? '');
   const [profiles,setProfiles]=useState<WorkforceProfile[]>([]);
   const [verifications,setVerifications]=useState<VerificationRow[]>([]);
   const [certifications,setCertifications]=useState<CertificationRow[]>([]);
   const [skillQueue,setSkillQueue]=useState<SkillQueueRow[]>([]);
   const [skillRegistry,setSkillRegistry]=useState<Record<string,unknown>[]>([]);
+  const [courses,setCourses]=useState<Record<string,unknown>[]>([]);
+  const [courseForm,setCourseForm]=useState({course_key:'',title:'',description:'',material_title:'',material_url:'',pass_score:'70',validity_days:'365'});
+  const [requiredForActivation,setRequiredForActivation]=useState(false);
   const [newSkill,setNewSkill]=useState({skill_key:'',name:'',category:'technical',description:''});
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
@@ -50,18 +55,20 @@ export function HumanWorkforceAdminView({
     if(!accessToken||!tenantId){setLoading(false);setError('Pilih tenant yang dapat dikelola.');return;}
     setLoading(true);setError(null);
     try{
-      const [profileResult,verificationResult,certificationResult,skillQueueResult,skillRegistryResult]=await Promise.all([
+      const [profileResult,verificationResult,certificationResult,skillQueueResult,skillRegistryResult,courseResult]=await Promise.all([
         listWorkforceProfiles(accessToken,tenantId),
         listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
         listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
         listWorkforceSkillVerificationQueue(accessToken,tenantId),
         listWorkforceSkills(accessToken,tenantId),
+        listWorkforceCourses(accessToken,tenantId),
       ]);
       setProfiles(profileResult.data);
       setVerifications(verificationResult.data as VerificationRow[]);
       setCertifications(certificationResult.data as CertificationRow[]);
       setSkillQueue(skillQueueResult.data as SkillQueueRow[]);
       setSkillRegistry(skillRegistryResult.data);
+      setCourses(courseResult.data);
     }catch(cause){setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');}
     finally{setLoading(false);}
   };
@@ -74,13 +81,15 @@ export function HumanWorkforceAdminView({
       listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
       listWorkforceSkillVerificationQueue(accessToken,tenantId),
       listWorkforceSkills(accessToken,tenantId),
-    ]).then(([profileResult,verificationResult,certificationResult,skillQueueResult,skillRegistryResult])=>{
+      listWorkforceCourses(accessToken,tenantId),
+    ]).then(([profileResult,verificationResult,certificationResult,skillQueueResult,skillRegistryResult,courseResult])=>{
       if(!active)return;
       setProfiles(profileResult.data);
       setVerifications(verificationResult.data as VerificationRow[]);
       setCertifications(certificationResult.data as CertificationRow[]);
       setSkillQueue(skillQueueResult.data as SkillQueueRow[]);
       setSkillRegistry(skillRegistryResult.data);
+      setCourses(courseResult.data);
       setError(null);
     }).catch(cause=>{
       if(active)setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');
@@ -132,11 +141,31 @@ export function HumanWorkforceAdminView({
     finally{setBusyId(null);}
   };
 
+  const addCourse=async()=>{
+    if(!accessToken||!tenantId)return;
+    let materials:Record<string,unknown>[]=[];
+    if(courseForm.material_title.trim()&&courseForm.material_url.trim()){
+      materials=[{title:courseForm.material_title.trim(),url:courseForm.material_url.trim()}];
+    }
+    setBusyId('new-course');setError(null);
+    try{
+      await createWorkforceCourse(accessToken,{
+        tenant_id:tenantId,course_key:courseForm.course_key,title:courseForm.title,
+        description:courseForm.description,materials,assessment:{pass_score:Number(courseForm.pass_score)},
+        eligibility_rules:{required_for_activation:requiredForActivation},
+        validity_days:courseForm.validity_days?Number(courseForm.validity_days):undefined,status:'published',
+      });
+      setCourseForm({course_key:'',title:'',description:'',material_title:'',material_url:'',pass_score:'70',validity_days:'365'});
+      await load();
+    }catch(cause){setError(cause instanceof Error?cause.message:'Training course gagal dibuat.');}
+    finally{setBusyId(null);}
+  };
+
   return <div className="space-y-5">
     <AdminPageHeader title="Human Workforce Governance" subtitle="Passport, identity verification, lifecycle dan assignment visibility berbasis data backend." onBack={onBack}
       actions={<button type="button" onClick={()=>void load()} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs font-semibold text-[#17324D] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading?'animate-spin':''}`}/> Refresh</button>}/>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'skills',label:`Skills (${skillQueue.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
+      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'skills',label:`Skills (${skillQueue.length})`},{id:'training',label:`Training (${courses.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
       <select value={tenantId} onChange={e=>setTenantId(e.target.value)} className="h-10 min-w-56 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs text-[#17324D]" aria-label="Pilih tenant">
         {tenants.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
@@ -177,6 +206,10 @@ export function HumanWorkforceAdminView({
       {tab==='skills'&&<div className="space-y-3">
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Skill Registry</h3><div className="mt-3 grid gap-2 sm:grid-cols-2"><input value={newSkill.skill_key} onChange={e=>setNewSkill(v=>({...v,skill_key:e.target.value}))} placeholder="Skill key" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={newSkill.name} onChange={e=>setNewSkill(v=>({...v,name:e.target.value}))} placeholder="Skill name" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={newSkill.category} onChange={e=>setNewSkill(v=>({...v,category:e.target.value}))} placeholder="Category" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={newSkill.description} onChange={e=>setNewSkill(v=>({...v,description:e.target.value}))} placeholder="Description" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/></div><button type="button" disabled={busyId!==null||!newSkill.skill_key||!newSkill.name} onClick={()=>void addSkill()} className="mt-3 h-9 rounded-lg bg-[#0284C7] px-3 text-xs font-semibold text-white disabled:opacity-50">Create Skill</button><div className="mt-3 flex flex-wrap gap-2">{skillRegistry.map(skill=><span key={String(skill.id)} className="rounded-md bg-[#F5F8FA] px-2 py-1 text-[10px] text-[#526675]">{String(skill.name)} · {String(skill.category)}</span>)}</div></div>
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Skill Verification Queue</h3><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" placeholder="Verification reason"/>{skillQueue.length===0?<p className="mt-3 text-xs text-[#718391]">Tidak ada skill yang menunggu verifikasi.</p>:skillQueue.map(row=><div key={row.id} className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[#EAF2F6] pt-3"><div><p className="text-xs font-semibold text-[#17324D]">{row.skill_name} · {row.proficiency}</p><p className="text-[11px] text-[#718391]">{row.display_name} · {row.worker_code} · {row.experience_months} months</p></div><button type="button" disabled={busyId!==null||reason.trim().length<3} onClick={()=>void verifySkill(row)} className="rounded-lg border border-[#0284C7] px-3 py-2 text-xs font-semibold text-[#0284C7] disabled:opacity-50">Verify Skill</button></div>)}</div>
+      </div>}
+      {tab==='training'&&<div className="space-y-3">
+        <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Training Catalogue</h3><div className="mt-3 grid gap-2 sm:grid-cols-2"><input value={courseForm.course_key} onChange={e=>setCourseForm(v=>({...v,course_key:e.target.value}))} placeholder="Course key" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.title} onChange={e=>setCourseForm(v=>({...v,title:e.target.value}))} placeholder="Course title" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.description} onChange={e=>setCourseForm(v=>({...v,description:e.target.value}))} placeholder="Description" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.pass_score} onChange={e=>setCourseForm(v=>({...v,pass_score:e.target.value}))} type="number" min="0" max="100" placeholder="Pass score" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.validity_days} onChange={e=>setCourseForm(v=>({...v,validity_days:e.target.value}))} type="number" min="1" max="3650" placeholder="Validity days" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.material_title} onChange={e=>setCourseForm(v=>({...v,material_title:e.target.value}))} placeholder="Material title" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={courseForm.material_url} onChange={e=>setCourseForm(v=>({...v,material_url:e.target.value}))} placeholder="Material URL" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/></div><label className="mt-3 flex items-center gap-2 text-xs text-[#526675]"><input type="checkbox" checked={requiredForActivation} onChange={e=>setRequiredForActivation(e.target.checked)}/> Required for workforce activation</label><button type="button" disabled={busyId!==null||!courseForm.course_key||!courseForm.title||Number(courseForm.pass_score)<0||Number(courseForm.pass_score)>100} onClick={()=>void addCourse()} className="mt-3 h-9 rounded-lg bg-[#0284C7] px-3 text-xs font-semibold text-white disabled:opacity-50">Publish Course</button></section>
+        <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Published Courses</h3>{courses.length===0?<p className="mt-2 text-xs text-[#718391]">Belum ada course yang dipublikasikan.</p>:courses.map(course=><div key={String(course.id)} className="mt-2 border-b border-[#EAF2F6] pb-2"><p className="text-xs font-semibold text-[#17324D]">{String(course.title)}</p><p className="text-[11px] text-[#718391]">{String(course.course_key)} · Validity {String(course.validity_days??'—')} days</p></div>)}</section>
       </div>}
       {tab==='assignment'&&<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
         <div className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-[#0284C7]"/><h3 className="text-sm font-bold text-[#17324D]">Lifecycle Workforce</h3></div>
