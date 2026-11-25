@@ -411,7 +411,8 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"engagement.manage",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         await connection.execute(text("update public.workforce_engagements set status='superseded',updated_at=now() where tenant_id=:tenant and workforce_profile_id=:profile and status in ('pending','active')"),{"tenant":payload.tenant_id,"profile":profile_id})
         row=await connection.execute(text("""
           insert into public.workforce_engagements(tenant_id,workforce_profile_id,classification,agreement_reference,effective_from,effective_until,legal_review_reference,facts_acknowledged,change_reason,created_by)
@@ -443,7 +444,8 @@ async def add_worker_skill(profile_id: UUID,payload: WorkerSkillInput,request: R
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"skills.manage",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         valid=await connection.execute(text("select exists(select 1 from public.workforce_skill_registry where id=:skill and (tenant_id is null or tenant_id=:tenant) and status='active')"),{"skill":payload.skill_id,"tenant":payload.tenant_id})
         if not valid.scalar_one(): raise HTTPException(status_code=422,detail="Skill registry tidak valid.")
         row=await connection.execute(text("""
@@ -459,7 +461,8 @@ async def add_certification(profile_id: UUID,payload: CertificationInput,request
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"skills.manage",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         row=await connection.execute(text("""
           insert into public.workforce_certifications(tenant_id,workforce_profile_id,skill_id,name,issuer,certificate_reference,issued_at,valid_from,expires_at,evidence_metadata)
           values(:tenant,:profile,:skill,:name,:issuer,:reference,:issued,:valid,:expires,cast(:evidence as jsonb)) returning *
@@ -486,7 +489,8 @@ async def verify_certification(certification_id: UUID,tenant_id: UUID,decision: 
 async def list_availability(profile_id: UUID,tenant_id: UUID,starts_at: datetime | None=None,ends_at: datetime | None=None,request: Request=None,claims: dict=claims_dependency):
     await _authorize(claims,tenant_id,"availability.read",request,profile_id)
     async with engine.connect() as connection:
-        await _profile(connection,tenant_id,profile_id)
+        profile=await _profile(connection,tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,tenant_id,profile,request)
         rows=await connection.execute(text("""
           select * from public.workforce_availability where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
           and (:start is null or ends_at>:start) and (:end is null or starts_at<:end) order by starts_at
@@ -498,7 +502,8 @@ async def create_availability(profile_id: UUID,payload: AvailabilityInput,reques
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"availability.manage",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         conflict=await connection.execute(text("""
           select exists(select 1 from public.workforce_availability where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
             and availability_type in ('unavailable','leave') and :start < ends_at and :end > starts_at)
@@ -535,7 +540,8 @@ async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Req
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"training.manage",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         course=await connection.execute(text("select id,eligibility_rules from public.workforce_training_courses where id=:id and status='published' and (tenant_id is null or tenant_id=:tenant)"),{"id":payload.course_id,"tenant":payload.tenant_id})
         if not course.mappings().first(): raise HTTPException(status_code=404,detail="Training course tidak tersedia.")
         row=await connection.execute(text("""
@@ -573,7 +579,8 @@ async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,re
 async def list_onboarding(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
     await _authorize(claims,tenant_id,"onboarding.read",request,profile_id)
     async with engine.connect() as connection:
-        await _profile(connection,tenant_id,profile_id)
+        profile=await _profile(connection,tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,tenant_id,profile,request)
         rows=await connection.execute(text("select * from public.workforce_onboarding_tasks where tenant_id=:tenant and workforce_profile_id=:profile order by created_at"),{"tenant":tenant_id,"profile":profile_id})
         return {"data":[dict(r) for r in rows.mappings().all()]}
 
@@ -582,7 +589,8 @@ async def add_onboarding_task(profile_id: UUID,payload: OnboardingTaskInput,requ
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"onboarding.manage",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         row=await connection.execute(text("""
           insert into public.workforce_onboarding_tasks(tenant_id,workforce_profile_id,task_key,title,description,required,task_type,assigned_to,due_at)
           values(:tenant,:profile,:key,:title,:description,:required,:type,:assignee,:due) returning *
@@ -614,6 +622,7 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
         current=await connection.execute(text("select * from public.workforce_profiles where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":profile_id})
         profile=current.mappings().first()
         if not profile: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
+        await _assert_profile_scope(connection,claims,payload.tenant_id,dict(profile),request)
         old=profile["lifecycle_status"]; target=payload.to_status
         if target not in TRANSITIONS[old]: raise HTTPException(status_code=409,detail=f"Transisi {old} ke {target} tidak diizinkan.")
         if target=="verified":
@@ -637,7 +646,8 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
 async def list_assignments(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
     await _authorize(claims,tenant_id,"assignments.read",request,profile_id)
     async with engine.connect() as connection:
-        await _profile(connection,tenant_id,profile_id)
+        profile=await _profile(connection,tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,tenant_id,profile,request)
         rows=await connection.execute(text("select * from public.workforce_assignments where tenant_id=:tenant and workforce_profile_id=:profile order by starts_at desc limit 100"),{"tenant":tenant_id,"profile":profile_id})
         return {"data":[dict(r) for r in rows.mappings().all()]}
 
@@ -647,7 +657,8 @@ async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: R
     await _authorize(claims,payload.tenant_id,"assignments.manage",request,profile_id)
     if payload.starts_at.tzinfo is None or (payload.ends_at and payload.ends_at.tzinfo is None): raise HTTPException(status_code=422,detail="Assignment timestamps must include timezone offsets.")
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if payload.ends_at:
             conflicts=await connection.execute(text("""
               select exists(select 1 from public.workforce_assignments where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
@@ -664,7 +675,8 @@ async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: R
 async def get_workforce_history(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
     await _authorize(claims,tenant_id,"profile.read",request,profile_id)
     async with engine.connect() as connection:
-        await _profile(connection,tenant_id,profile_id)
+        profile=await _profile(connection,tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,tenant_id,profile,request)
         rows=await connection.execute(text("select * from public.workforce_lifecycle_events where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 200"),{"tenant":tenant_id,"profile":profile_id})
         return {"data":[dict(r) for r in rows.mappings().all()]}
 
