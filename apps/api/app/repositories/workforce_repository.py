@@ -1,11 +1,14 @@
 """Persistence adapters for the Human Workforce bounded context."""
 
 import json
+import logging
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
+
+logger = logging.getLogger('agentzy.workforce')
 
 
 async def get_workforce_profile(
@@ -53,6 +56,15 @@ async def append_workforce_audit(
             "metadata": json.dumps(metadata or {}, default=str),
         },
     )
+    logger.info(json.dumps({
+        "event": "workforce.audit_event",
+        "tenant_id": str(tenant_id),
+        "actor_user_id": str(actor_user_id),
+        "action": action,
+        "resource_type": resource_type,
+        "resource_id": str(resource_id),
+        "request_id": request_id,
+    }))
 
 
 async def enqueue_workforce_notification(
