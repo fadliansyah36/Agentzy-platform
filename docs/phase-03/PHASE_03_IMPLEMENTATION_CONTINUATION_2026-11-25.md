@@ -1,6 +1,6 @@
 # Agentzy Phase 03 — Corporate & Contract Management
 
-**Status: IN PROGRESS — implementation substantially wired; final minimum engineering verification pending.**  
+**Status: DONE — IMPLEMENTATION COMPLETE.**  
 Repository: `fadliansyah36/Agentzy-platform` · Branch: `main`  
 Supabase: `cwhjdnkotuhueeudpgeu`
 
@@ -85,8 +85,18 @@ The live Supabase migration ledger contains all ten versions. Inspected corporat
 
 ## Engineering verification and limitations
 
-Final status must be updated only from the GitHub Actions run on the final code commit. The minimum workflow includes frontend lint/type-check, Python compile, Ruff rules selected by repository workflow, all focused API tests, FastAPI import/OpenAPI assertions and migration source consistency.
+**Final main commit:** `a4b69c7d79bffd101c561770f79d7c85bb556300`  
+**GitHub Actions:** [Agentzy Minimum Engineering Checks — run 45590318180](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45590318180) — **SUCCESS**.
 
-No staging, UAT, load test, penetration test, production deployment, real customer contract, real payment or external SMTP/Google OAuth activation was performed. SMTP, Google OAuth, Turnstile, ClamAV and server-side Storage credentials remain deployment configuration. No real transaction or payment is claimed.
+Actual completed checks:
+- Frontend lint — SUCCESS.
+- Frontend TypeScript type-check — SUCCESS.
+- Python compile — SUCCESS.
+- Ruff — SUCCESS.
+- Focused deterministic API checks — SUCCESS.
+- FastAPI import and OpenAPI contract assertions — SUCCESS.
+- Migration source consistency — SUCCESS.
 
-Phase 03 remains IN PROGRESS until the final minimum engineering workflow succeeds and this evidence is updated with its run URL and final commit SHA.
+Phase 03 implementation is closed. Deployment/runtime configuration still required before real customer use: API deployment URL/CORS, SMTP credentials, Google OAuth client credentials/encryption key, Turnstile keys, ClamAV endpoint and server-only Supabase Storage service-role key. These are intentionally not fabricated or activated here.
+
+No staging, UAT, load test, penetration test, production deployment, real customer contract, real payment or external SMTP/Google OAuth activation was performed. Payment references are reconciliation records only; no payment transaction is asserted or fabricated.
