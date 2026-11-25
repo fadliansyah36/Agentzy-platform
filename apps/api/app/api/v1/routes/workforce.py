@@ -365,13 +365,21 @@ async def submit_identity(profile_id: UUID,payload: VerificationInput,request: R
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"identity.submit",request,profile_id)
     async with engine.begin() as connection:
-        await _profile(connection,payload.tenant_id,profile_id)
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        old_status=profile["lifecycle_status"]
+        if old_status not in ("registered","identity_pending"):
+            raise HTTPException(status_code=409,detail="Status lifecycle tidak mengizinkan pengajuan verifikasi identitas.")
         row=await connection.execute(text("""
           insert into public.workforce_identity_verifications(tenant_id,workforce_profile_id,verification_type,document_metadata)
           values(:tenant,:profile,:type,cast(:metadata as jsonb)) returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"type":payload.verification_type,"metadata":json.dumps(payload.document_metadata)})
         verification=dict(row.mappings().one())
-        await connection.execute(text("update public.workforce_profiles set lifecycle_status='identity_pending',updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant and lifecycle_status in ('registered','identity_pending')"),{"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
+        if old_status != "identity_pending":
+            await connection.execute(text("update public.workforce_profiles set lifecycle_status='identity_pending',updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant"),{"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
+            await connection.execute(text("""
+              insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id)
+              values(:tenant,:profile,:from_status,'identity_pending',:actor,'Identity verification submitted','workforce.identity.submit',:request)
+            """),{"tenant":payload.tenant_id,"profile":profile_id,"from_status":old_status,"actor":actor,"request":getattr(request.state,"request_id",None)})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.identity.submitted","workforce_identity_verification",verification["id"],request)
         await _enqueue_workforce_notification(connection,payload.tenant_id,profile_id,"workforce.identity.submitted",{"verification_id":str(verification["id"])})
         return {"data":verification}
@@ -384,8 +392,6 @@ async def decide_identity(verification_id: UUID,payload: VerificationDecision,re
         existing=await connection.execute(text("select * from public.workforce_identity_verifications where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":verification_id})
         verification=existing.mappings().first()
         if not verification: raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
-        profile=await _profile(connection,payload.tenant_id,verification["workforce_profile_id"])
-        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if verification["status"] in ("verified","rejected"): raise HTTPException(status_code=409,detail="Keputusan verifikasi sudah final.")
         if payload.decision == "verified":
             evidence = await connection.execute(text("""
@@ -400,8 +406,15 @@ async def decide_identity(verification_id: UUID,payload: VerificationDecision,re
           rejection_reason=:reason,reviewer_notes=:notes,expires_at=:expires,updated_at=now()
           where id=:id and tenant_id=:tenant returning *
         """),{"status":payload.decision,"actor":actor,"reason":reason,"notes":payload.reviewer_notes,"expires":payload.expires_at,"id":verification_id,"tenant":payload.tenant_id})
-        profile_status="verified" if payload.decision=="verified" else "registered" if payload.decision=="rejected" else "identity_pending"
-        await connection.execute(text("update public.workforce_profiles set lifecycle_status=:status,updated_by=:actor,updated_at=now() where id=:profile and tenant_id=:tenant"),{"status":profile_status,"actor":actor,"profile":verification["workforce_profile_id"],"tenant":payload.tenant_id})
+        if payload.decision == "verified":
+            profile=await _profile(connection,payload.tenant_id,verification["workforce_profile_id"])
+            if profile["lifecycle_status"] != "identity_pending":
+                raise HTTPException(status_code=409,detail="Profile tidak berada pada identity_pending.")
+            await connection.execute(text("update public.workforce_profiles set lifecycle_status='verified',updated_by=:actor,updated_at=now() where id=:profile and tenant_id=:tenant"),{"actor":actor,"profile":verification["workforce_profile_id"],"tenant":payload.tenant_id})
+            await connection.execute(text("""
+              insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id)
+              values(:tenant,:profile,'identity_pending','verified',:actor,:reason,'workforce.identity.review',:request)
+            """),{"tenant":payload.tenant_id,"profile":verification["workforce_profile_id"],"actor":actor,"reason":payload.reason,"request":getattr(request.state,"request_id",None)})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.identity."+payload.decision,"workforce_identity_verification",verification_id,request,{"reason":payload.reason})
         await _enqueue_workforce_notification(connection,payload.tenant_id,verification["workforce_profile_id"],"workforce.identity."+payload.decision,{"reason":payload.reason})
         return {"data":dict(result.mappings().one())}
