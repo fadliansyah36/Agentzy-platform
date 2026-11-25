@@ -1400,3 +1400,6 @@ export const redactWorkforceDocument=(accessToken:string,tenantId:string,documen
 
 export const listWorkforceCertificationQueue=(accessToken:string,tenantId:string,status:"pending"|"verified"|"rejected"|"expired"|"all"="pending")=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/certifications/queue?tenant_id=${encodeURIComponent(tenantId)}&status=${status}`,{method:"GET",accessToken});
+
+export const listWorkforceSkillVerificationQueue=(accessToken:string,tenantId:string)=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/skills/verification-queue?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
