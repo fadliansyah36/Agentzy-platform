@@ -229,6 +229,10 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
 
   const updateDraftContract = () => {
     if(!detail || detail.status!=='draft') return;
+    if(typeof detail.row_version!=='number') {
+      setError('Versi kontrak tidak tersedia. Refresh detail sebelum mengubah draft.');
+      return;
+    }
     return action(async () => {
       await patchCorporateContract(token,detail.id,{
         tenant_id:tenant.id,
