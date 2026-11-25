@@ -1,0 +1,653 @@
+"""Human Workforce Passport, verification, engagement, skills, training and onboarding APIs."""
+import json
+from datetime import date, datetime, timezone
+from typing import Any
+from uuid import UUID, uuid4
+from urllib.parse import quote
+
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import text
+
+from app.core.authorization import authorize_action
+from app.core.config import get_settings
+from app.core.security import current_claims
+from app.db.session import engine
+
+router = APIRouter(prefix="/workforce", tags=["Human Workforce"])
+claims_dependency = Depends(current_claims)
+settings = get_settings()
+
+PERMISSIONS = {
+    "profile.read": ("workforce.profile.read", "workforce.profile", "read"),
+    "profile.manage": ("workforce.profile.manage", "workforce.profile", "manage"),
+    "identity.submit": ("workforce.identity.submit", "workforce.identity", "submit"),
+    "identity.review": ("workforce.identity.review", "workforce.identity", "review"),
+    "engagement.read": ("workforce.engagement.read", "workforce.engagement", "read"),
+    "engagement.manage": ("workforce.engagement.manage", "workforce.engagement", "manage"),
+    "skills.read": ("workforce.skills.read", "workforce.skills", "read"),
+    "skills.manage": ("workforce.skills.manage", "workforce.skills", "manage"),
+    "certifications.verify": ("workforce.certifications.verify", "workforce.certifications", "verify"),
+    "availability.read": ("workforce.availability.read", "workforce.availability", "read"),
+    "availability.manage": ("workforce.availability.manage", "workforce.availability", "manage"),
+    "training.read": ("workforce.training.read", "workforce.training", "read"),
+    "training.manage": ("workforce.training.manage", "workforce.training", "manage"),
+    "onboarding.read": ("workforce.onboarding.read", "workforce.onboarding", "read"),
+    "onboarding.manage": ("workforce.onboarding.manage", "workforce.onboarding", "manage"),
+    "lifecycle.transition": ("workforce.lifecycle.transition", "workforce.lifecycle", "transition"),
+    "assignments.read": ("workforce.assignments.read", "workforce.assignments", "read"),
+    "assignments.manage": ("workforce.assignments.manage", "workforce.assignments", "manage"),
+}
+LIFECYCLE = {"invited", "registered", "identity_pending", "verified", "onboarding", "eligible", "active", "inactive", "suspended", "offboarded"}
+TRANSITIONS = {
+    "invited": {"registered", "inactive"},
+    "registered": {"identity_pending", "inactive"},
+    "identity_pending": {"verified", "inactive"},
+    "verified": {"onboarding", "inactive"},
+    "onboarding": {"eligible", "inactive"},
+    "eligible": {"active", "inactive"},
+    "active": {"inactive", "suspended", "offboarded"},
+    "inactive": {"onboarding", "active", "offboarded"},
+    "suspended": {"active", "inactive", "offboarded"},
+    "offboarded": set(),
+}
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+class ProfileCreate(StrictModel):
+    tenant_id: UUID
+    user_id: UUID
+    membership_id: UUID | None = None
+    worker_code: str = Field(min_length=2, max_length=48)
+    display_name: str = Field(min_length=2, max_length=160)
+    legal_name: str | None = Field(default=None, max_length=180)
+    job_family: str | None = Field(default=None, max_length=100)
+    job_title: str | None = Field(default=None, max_length=120)
+    timezone: str = Field(default="Asia/Jakarta", max_length=80)
+    locale: str = Field(default="id-ID", max_length=16)
+    experience_years: float = Field(default=0, ge=0, le=80)
+    profile_metadata: dict[str, Any] = Field(default_factory=dict)
+
+class ProfilePatch(StrictModel):
+    tenant_id: UUID
+    display_name: str | None = Field(default=None, min_length=2, max_length=160)
+    legal_name: str | None = Field(default=None, max_length=180)
+    job_family: str | None = Field(default=None, max_length=100)
+    job_title: str | None = Field(default=None, max_length=120)
+    timezone: str | None = Field(default=None, max_length=80)
+    experience_years: float | None = Field(default=None, ge=0, le=80)
+    profile_metadata: dict[str, Any] | None = None
+
+class VerificationInput(StrictModel):
+    tenant_id: UUID
+    verification_type: str = Field(default="identity", pattern="^(identity|address|right_to_work|background_check|other)$")
+    document_metadata: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+
+class VerificationDecision(StrictModel):
+    tenant_id: UUID
+    decision: str = Field(pattern="^(verified|rejected|in_review)$")
+    reason: str = Field(min_length=3, max_length=2000)
+    reviewer_notes: str | None = Field(default=None, max_length=2000)
+    expires_at: datetime | None = None
+
+class DocumentMetadata(StrictModel):
+    tenant_id: UUID
+    verification_id: UUID
+    storage_path: str = Field(min_length=3, max_length=500)
+    document_type: str = Field(min_length=2, max_length=80)
+    original_filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(pattern="^(application/pdf|image/jpeg|image/png)$")
+    file_size_bytes: int = Field(ge=1, le=10485760)
+    sha256: str = Field(pattern="^[a-f0-9]{64}$")
+    retention_until: datetime | None = None
+
+class EngagementInput(StrictModel):
+    tenant_id: UUID
+    classification: str = Field(pattern="^(employee|outsourced_worker|independent_contractor|freelance|affiliate|technical_partner|project_based_worker)$")
+    agreement_reference: str = Field(min_length=3, max_length=160)
+    effective_from: date
+    effective_until: date | None = None
+    legal_review_reference: str | None = Field(default=None, max_length=160)
+    facts_acknowledged: bool
+    change_reason: str = Field(min_length=3, max_length=2000)
+    @model_validator(mode="after")
+    def dates(self):
+        if self.effective_until and self.effective_until < self.effective_from:
+            raise ValueError("effective_until must be on or after effective_from")
+        if not self.facts_acknowledged:
+            raise ValueError("Classification requires acknowledgement of actual engagement facts")
+        return self
+
+class SkillInput(StrictModel):
+    tenant_id: UUID
+    skill_key: str = Field(min_length=2, max_length=80)
+    name: str = Field(min_length=2, max_length=120)
+    category: str = Field(min_length=2, max_length=80)
+    description: str | None = Field(default=None, max_length=1000)
+
+class WorkerSkillInput(StrictModel):
+    tenant_id: UUID
+    skill_id: UUID
+    proficiency: str = Field(pattern="^(beginner|intermediate|advanced|expert)$")
+    experience_months: int = Field(default=0, ge=0, le=960)
+    evidence_reference: str | None = Field(default=None, max_length=500)
+
+class CertificationInput(StrictModel):
+    tenant_id: UUID
+    skill_id: UUID | None = None
+    name: str = Field(min_length=2, max_length=160)
+    issuer: str = Field(min_length=2, max_length=160)
+    certificate_reference: str | None = Field(default=None, max_length=160)
+    issued_at: date | None = None
+    valid_from: date | None = None
+    expires_at: date | None = None
+    evidence_metadata: dict[str, Any] = Field(default_factory=dict)
+
+class AvailabilityInput(StrictModel):
+    tenant_id: UUID
+    availability_type: str = Field(pattern="^(working_hours|unavailable|leave|preferred_shift)$")
+    starts_at: datetime
+    ends_at: datetime
+    timezone: str = Field(min_length=2, max_length=80)
+    recurrence_rule: str | None = Field(default=None, max_length=500)
+    reason: str | None = Field(default=None, max_length=500)
+    @model_validator(mode="after")
+    def period(self):
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be after starts_at")
+        if self.starts_at.tzinfo is None or self.ends_at.tzinfo is None:
+            raise ValueError("Availability timestamps must include timezone offsets")
+        return self
+
+class CourseInput(StrictModel):
+    tenant_id: UUID | None = None
+    course_key: str = Field(min_length=2, max_length=80)
+    title: str = Field(min_length=2, max_length=180)
+    description: str | None = Field(default=None, max_length=3000)
+    materials: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    assessment: dict[str, Any] = Field(default_factory=dict)
+    eligibility_rules: dict[str, Any] = Field(default_factory=dict)
+    validity_days: int | None = Field(default=None, ge=1, le=3650)
+    status: str = Field(default="draft", pattern="^(draft|published|archived)$")
+
+class EnrollmentInput(StrictModel):
+    tenant_id: UUID
+    course_id: UUID
+
+class ProgressInput(StrictModel):
+    tenant_id: UUID
+    progress_percent: float = Field(ge=0, le=100)
+    assessment_score: float | None = Field(default=None, ge=0, le=100)
+    assessment_result: dict[str, Any] = Field(default_factory=dict)
+    certificate_reference: str | None = Field(default=None, max_length=160)
+
+class OnboardingTaskInput(StrictModel):
+    tenant_id: UUID
+    task_key: str = Field(min_length=2, max_length=80)
+    title: str = Field(min_length=2, max_length=180)
+    description: str | None = Field(default=None, max_length=1000)
+    required: bool = True
+    task_type: str = Field(pattern="^(document|agreement_acknowledgement|training|verification|approval|other)$")
+    assigned_to: UUID | None = None
+    due_at: datetime | None = None
+
+class TaskCompletion(StrictModel):
+    tenant_id: UUID
+    status: str = Field(pattern="^(in_progress|completed|waived|blocked)$")
+    reason: str = Field(min_length=3, max_length=2000)
+    completion_reference: str | None = Field(default=None, max_length=500)
+
+class LifecycleTransition(StrictModel):
+    tenant_id: UUID
+    to_status: str
+    reason: str = Field(min_length=3, max_length=2000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+class AssignmentInput(StrictModel):
+    tenant_id: UUID
+    assignment_reference: str = Field(min_length=2, max_length=160)
+    assignment_type: str = Field(min_length=2, max_length=80)
+    starts_at: datetime
+    ends_at: datetime | None = None
+    workload_units: float = Field(default=1, ge=0, le=10000)
+
+async def _authorize(claims: dict, tenant_id: UUID, key: str, request: Request, resource_id: UUID | None = None):
+    permission, resource_type, action = PERMISSIONS[key]
+    async with engine.connect() as connection:
+        await authorize_action(
+            connection, user_id=UUID(claims["sub"]), tenant_id=tenant_id,
+            permission_key=permission, platform_permission="platform.tenants.read",
+            aal=claims.get("aal"), resource_type=resource_type, action=action,
+            resource={"id": str(resource_id or tenant_id), "tenant_id": str(tenant_id)},
+            request_id=getattr(request.state, "request_id", None),
+        )
+
+async def _profile(connection, tenant_id: UUID, profile_id: UUID):
+    result = await connection.execute(text("""
+      select p.* from public.workforce_profiles p
+      where p.tenant_id=:tenant and p.id=:id
+    """), {"tenant": tenant_id, "id": profile_id})
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Workforce profile tidak ditemukan.")
+    return dict(row)
+
+async def _write_audit(connection, tenant_id: UUID, actor: UUID, action: str, resource_type: str, resource_id: UUID, request: Request, metadata: dict | None = None):
+    await connection.execute(text("""
+      insert into public.audit_logs(tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata)
+      values(:tenant,:actor,:action,:type,:id,:request_id,cast(:metadata as jsonb))
+    """), {"tenant":tenant_id,"actor":actor,"action":action,"type":resource_type,"id":str(resource_id),
+           "request_id":getattr(request.state,"request_id",None),"metadata":json.dumps(metadata or {},default=str)})
+
+@router.get("/passport")
+async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,tenant_id,"profile.read",request)
+    async with engine.connect() as connection:
+        result=await connection.execute(text("""
+          select p.* from public.workforce_profiles p
+          join public.memberships m on m.id=p.membership_id and m.tenant_id=p.tenant_id
+          where p.tenant_id=:tenant and p.user_id=:actor and m.user_id=:actor and m.status='active'
+        """),{"tenant":tenant_id,"actor":actor})
+        row=result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404,detail="Workforce Passport belum tersedia.")
+        profile=dict(row)
+        for key,table in [("engagements","workforce_engagements"),("skills","workforce_worker_skills"),("certifications","workforce_certifications"),("availability","workforce_availability"),("training","workforce_training_enrollments"),("assignments","workforce_assignments"),("onboarding","workforce_onboarding_tasks"),("history","workforce_lifecycle_events")]:
+            rows=await connection.execute(text(f"select * from public.{table} where tenant_id=:tenant and workforce_profile_id=:profile order by created_at desc limit 100" if key not in ("history",) else "select * from public.workforce_lifecycle_events where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 100"),{"tenant":tenant_id,"profile":profile["id"]})
+            profile[key]=[dict(item) for item in rows.mappings().all()]
+        return {"data":profile}
+
+@router.get("/profiles")
+async def list_profiles(tenant_id: UUID, request: Request, status: str | None = None, limit: int = Query(50,ge=1,le=100), claims: dict = claims_dependency):
+    await _authorize(claims,tenant_id,"profile.read",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("""
+          select id,tenant_id,user_id,membership_id,worker_code,display_name,job_family,job_title,lifecycle_status,engagement_status,experience_years,created_at,updated_at
+          from public.workforce_profiles where tenant_id=:tenant and (:status is null or lifecycle_status=:status)
+          order by created_at desc,id desc limit :limit
+        """),{"tenant":tenant_id,"status":status,"limit":limit})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/profiles",status_code=201)
+async def create_profile(payload: ProfileCreate, request: Request, claims: dict = claims_dependency, idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"profile.manage",request)
+    if not idempotency_key or len(idempotency_key)<8:
+        raise HTTPException(status_code=428,detail="Idempotency-Key wajib untuk pembuatan profile.")
+    async with engine.begin() as connection:
+        membership=await connection.execute(text("select id from public.memberships where id=:id and tenant_id=:tenant and user_id=:user and status in ('invited','active')"),{"id":payload.membership_id,"tenant":payload.tenant_id,"user":payload.user_id}) if payload.membership_id else None
+        if payload.membership_id and not membership.scalar_one_or_none():
+            raise HTTPException(status_code=422,detail="Membership tidak valid untuk tenant dan user.")
+        row=await connection.execute(text("""
+          insert into public.workforce_profiles(tenant_id,user_id,membership_id,worker_code,display_name,legal_name,job_family,job_title,timezone,locale,experience_years,profile_metadata,created_by,updated_by)
+          values(:tenant,:user,:membership,:code,:name,:legal,:family,:title,:timezone,:locale,:experience,cast(:metadata as jsonb),:actor,:actor)
+          returning *
+        """),{"tenant":payload.tenant_id,"user":payload.user_id,"membership":payload.membership_id,"code":payload.worker_code,"name":payload.display_name,"legal":payload.legal_name,"family":payload.job_family,"title":payload.job_title,"timezone":payload.timezone,"locale":payload.locale,"experience":payload.experience_years,"metadata":json.dumps(payload.profile_metadata),"actor":actor})
+        profile=dict(row.mappings().one())
+        await connection.execute(text("""
+          insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id,metadata)
+          values(:tenant,:profile,null,'registered',:actor,'Profile registered','workforce.profile.manage',:request,cast(:metadata as jsonb))
+        """),{"tenant":payload.tenant_id,"profile":profile["id"],"actor":actor,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({"idempotency_key":idempotency_key})})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.created","workforce_profile",profile["id"],request)
+        return {"data":profile}
+
+@router.patch("/profiles/{profile_id}")
+async def update_profile(profile_id: UUID,payload: ProfilePatch,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"profile.manage",request,profile_id)
+    fields=payload.model_dump(exclude={"tenant_id"},exclude_unset=True)
+    if not fields: raise HTTPException(status_code=422,detail="Tidak ada field untuk diperbarui.")
+    allowed={"display_name","legal_name","job_family","job_title","timezone","experience_years","profile_metadata"}
+    if set(fields)-allowed: raise HTTPException(status_code=422,detail="Field tidak diizinkan.")
+    assignments=", ".join(f"{key}=:{key}" for key in fields)
+    params={**fields,"tenant":payload.tenant_id,"id":profile_id,"actor":actor}
+    if "profile_metadata" in params: params["profile_metadata"]=json.dumps(params["profile_metadata"])
+    async with engine.begin() as connection:
+        result=await connection.execute(text(f"update public.workforce_profiles set {assignments},updated_by=:actor,updated_at=now() where tenant_id=:tenant and id=:id returning *"),params)
+        row=result.mappings().first()
+        if not row: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.updated","workforce_profile",profile_id,request,{"fields":sorted(fields)})
+        return {"data":dict(row)}
+
+@router.post("/profiles/{profile_id}/identity",status_code=201)
+async def submit_identity(profile_id: UUID,payload: VerificationInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"identity.submit",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        row=await connection.execute(text("""
+          insert into public.workforce_identity_verifications(tenant_id,workforce_profile_id,verification_type,document_metadata)
+          values(:tenant,:profile,:type,cast(:metadata as jsonb)) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"type":payload.verification_type,"metadata":json.dumps(payload.document_metadata)})
+        verification=dict(row.mappings().one())
+        await connection.execute(text("update public.workforce_profiles set lifecycle_status='identity_pending',updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant and lifecycle_status in ('registered','identity_pending')"),{"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.identity.submitted","workforce_identity_verification",verification["id"],request)
+        return {"data":verification}
+
+@router.post("/identity/{verification_id}/decision")
+async def decide_identity(verification_id: UUID,payload: VerificationDecision,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"identity.review",request,verification_id)
+    async with engine.begin() as connection:
+        existing=await connection.execute(text("select * from public.workforce_identity_verifications where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":verification_id})
+        verification=existing.mappings().first()
+        if not verification: raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
+        if verification["status"] in ("verified","rejected"): raise HTTPException(status_code=409,detail="Keputusan verifikasi sudah final.")
+        reason=payload.reason if payload.decision=="rejected" else None
+        result=await connection.execute(text("""
+          update public.workforce_identity_verifications set status=:status,reviewed_by=:actor,reviewed_at=now(),
+          rejection_reason=:reason,reviewer_notes=:notes,expires_at=:expires,updated_at=now()
+          where id=:id and tenant_id=:tenant returning *
+        """),{"status":payload.decision,"actor":actor,"reason":reason,"notes":payload.reviewer_notes,"expires":payload.expires_at,"id":verification_id,"tenant":payload.tenant_id})
+        profile_status="verified" if payload.decision=="verified" else "registered" if payload.decision=="rejected" else "identity_pending"
+        await connection.execute(text("update public.workforce_profiles set lifecycle_status=:status,updated_by=:actor,updated_at=now() where id=:profile and tenant_id=:tenant"),{"status":profile_status,"actor":actor,"profile":verification["workforce_profile_id"],"tenant":payload.tenant_id})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.identity."+payload.decision,"workforce_identity_verification",verification_id,request,{"reason":payload.reason})
+        return {"data":dict(result.mappings().one())}
+
+@router.post("/identity/{verification_id}/documents",status_code=201)
+async def register_identity_document(verification_id: UUID,payload: DocumentMetadata,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"identity.submit",request,verification_id)
+    expected_prefix=f"{payload.tenant_id}/{verification_id}/"
+    if not payload.storage_path.startswith(expected_prefix) or ".." in payload.storage_path:
+        raise HTTPException(status_code=422,detail="Storage path tidak sesuai scope tenant/verifikasi.")
+    async with engine.begin() as connection:
+        row=await connection.execute(text("""
+          insert into public.workforce_identity_documents(tenant_id,verification_id,storage_path,document_type,original_filename,content_type,file_size_bytes,sha256,retention_until,uploaded_by)
+          values(:tenant,:verification,:path,:type,:filename,:mime,:size,:sha,:retention,:actor) returning *
+        """),{"tenant":payload.tenant_id,"verification":verification_id,"path":payload.storage_path,"type":payload.document_type,"filename":payload.original_filename,"mime":payload.content_type,"size":payload.file_size_bytes,"sha":payload.sha256,"retention":payload.retention_until,"actor":actor})
+        document=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.identity.document_registered","workforce_identity_document",document["id"],request,{"content_type":payload.content_type,"size":payload.file_size_bytes})
+        return {"data":document}
+
+@router.post("/documents/{document_id}/download")
+async def signed_document_download(document_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"identity.review",request,document_id)
+    if not settings.supabase_service_role_key:
+        raise HTTPException(status_code=503,detail="Secure document storage belum dikonfigurasi.")
+    async with engine.connect() as connection:
+        result=await connection.execute(text("select storage_bucket,storage_path,original_filename,scan_status from public.workforce_identity_documents where tenant_id=:tenant and id=:id and redacted_at is null"),{"tenant":tenant_id,"id":document_id})
+        doc=result.mappings().first()
+    if not doc or doc["scan_status"]!="clean": raise HTTPException(status_code=404,detail="Dokumen tidak tersedia atau belum lolos pemindaian.")
+    url=f"{settings.supabase_url.rstrip('/')}/storage/v1/object/sign/{doc['storage_bucket']}/{quote(doc['storage_path'],safe='/')}"
+    headers={"Authorization":f"Bearer {settings.supabase_service_role_key}","apikey":settings.supabase_service_role_key}
+    async with httpx.AsyncClient(timeout=15) as client:
+        response=await client.post(url,headers=headers,json={"expiresIn":60})
+    if response.status_code not in (200,201): raise HTTPException(status_code=503,detail="Signed URL dokumen gagal dibuat.")
+    signed=response.json().get("signedURL")
+    if not signed: raise HTTPException(status_code=503,detail="Signed URL tidak tersedia.")
+    if not signed.startswith("http"): signed=f"{settings.supabase_url.rstrip('/')}/storage/v1{signed}"
+    return {"data":{"document_id":str(document_id),"filename":doc["original_filename"],"signed_url":signed,"expires_in_seconds":60}}
+
+@router.get("/profiles/{profile_id}/engagements")
+async def list_engagements(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"engagement.read",request,profile_id)
+    async with engine.connect() as connection:
+        await _profile(connection,tenant_id,profile_id)
+        rows=await connection.execute(text("select * from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile order by effective_from desc"),{"tenant":tenant_id,"profile":profile_id})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/profiles/{profile_id}/engagements",status_code=201)
+async def create_engagement(profile_id: UUID,payload: EngagementInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"engagement.manage",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        await connection.execute(text("update public.workforce_engagements set status='superseded',updated_at=now() where tenant_id=:tenant and workforce_profile_id=:profile and status in ('pending','active')"),{"tenant":payload.tenant_id,"profile":profile_id})
+        row=await connection.execute(text("""
+          insert into public.workforce_engagements(tenant_id,workforce_profile_id,classification,agreement_reference,effective_from,effective_until,legal_review_reference,facts_acknowledged,change_reason,created_by)
+          values(:tenant,:profile,:classification,:agreement,:start,:end,:legal,:facts,:reason,:actor) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"classification":payload.classification,"agreement":payload.agreement_reference,"start":payload.effective_from,"end":payload.effective_until,"legal":payload.legal_review_reference,"facts":payload.facts_acknowledged,"reason":payload.change_reason,"actor":actor})
+        engagement=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.created","workforce_engagement",engagement["id"],request,{"classification":payload.classification,"reason":payload.change_reason})
+        return {"data":engagement}
+
+@router.get("/skills")
+async def list_skills(tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"skills.read",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("select * from public.workforce_skill_registry where tenant_id is null or tenant_id=:tenant order by category,name"),{"tenant":tenant_id})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/skills",status_code=201)
+async def create_skill(payload: SkillInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"skills.manage",request)
+    async with engine.begin() as connection:
+        row=await connection.execute(text("insert into public.workforce_skill_registry(tenant_id,skill_key,name,category,description) values(:tenant,:key,:name,:category,:description) returning *"),{"tenant":payload.tenant_id,"key":payload.skill_key,"name":payload.name,"category":payload.category,"description":payload.description})
+        skill=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.skill.created","workforce_skill",skill["id"],request)
+        return {"data":skill}
+
+@router.post("/profiles/{profile_id}/skills",status_code=201)
+async def add_worker_skill(profile_id: UUID,payload: WorkerSkillInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"skills.manage",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        valid=await connection.execute(text("select exists(select 1 from public.workforce_skill_registry where id=:skill and (tenant_id is null or tenant_id=:tenant) and status='active')"),{"skill":payload.skill_id,"tenant":payload.tenant_id})
+        if not valid.scalar_one(): raise HTTPException(status_code=422,detail="Skill registry tidak valid.")
+        row=await connection.execute(text("""
+          insert into public.workforce_worker_skills(tenant_id,workforce_profile_id,skill_id,proficiency,experience_months,evidence_reference)
+          values(:tenant,:profile,:skill,:proficiency,:months,:evidence)
+          on conflict(tenant_id,workforce_profile_id,skill_id) do update set proficiency=excluded.proficiency,experience_months=excluded.experience_months,evidence_reference=excluded.evidence_reference,updated_at=now()
+          returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"skill":payload.skill_id,"proficiency":payload.proficiency,"months":payload.experience_months,"evidence":payload.evidence_reference})
+        return {"data":dict(row.mappings().one())}
+
+@router.post("/profiles/{profile_id}/certifications",status_code=201)
+async def add_certification(profile_id: UUID,payload: CertificationInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"skills.manage",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        row=await connection.execute(text("""
+          insert into public.workforce_certifications(tenant_id,workforce_profile_id,skill_id,name,issuer,certificate_reference,issued_at,valid_from,expires_at,evidence_metadata)
+          values(:tenant,:profile,:skill,:name,:issuer,:reference,:issued,:valid,:expires,cast(:evidence as jsonb)) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"skill":payload.skill_id,"name":payload.name,"issuer":payload.issuer,"reference":payload.certificate_reference,"issued":payload.issued_at,"valid":payload.valid_from,"expires":payload.expires_at,"evidence":json.dumps(payload.evidence_metadata)})
+        cert=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.certification.submitted","workforce_certification",cert["id"],request)
+        return {"data":cert}
+
+@router.post("/certifications/{certification_id}/verify")
+async def verify_certification(certification_id: UUID,tenant_id: UUID,decision: str=Query(pattern="^(verified|rejected)$"),reason: str=Query(min_length=3,max_length=2000),request: Request=None,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,tenant_id,"certifications.verify",request,certification_id)
+    async with engine.begin() as connection:
+        result=await connection.execute(text("""
+          update public.workforce_certifications set verification_status=:decision,verified_by=:actor,verified_at=now(),rejection_reason=:reason,updated_at=now()
+          where tenant_id=:tenant and id=:id and verification_status='pending' returning *
+        """),{"decision":decision,"actor":actor,"reason":reason if decision=="rejected" else None,"tenant":tenant_id,"id":certification_id})
+        row=result.mappings().first()
+        if not row: raise HTTPException(status_code=404,detail="Sertifikasi tidak ditemukan atau sudah diputuskan.")
+        await _write_audit(connection,tenant_id,actor,"workforce.certification."+decision,"workforce_certification",certification_id,request,{"reason":reason})
+        return {"data":dict(row)}
+
+@router.get("/profiles/{profile_id}/availability")
+async def list_availability(profile_id: UUID,tenant_id: UUID,starts_at: datetime | None=None,ends_at: datetime | None=None,request: Request=None,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"availability.read",request,profile_id)
+    async with engine.connect() as connection:
+        await _profile(connection,tenant_id,profile_id)
+        rows=await connection.execute(text("""
+          select * from public.workforce_availability where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
+          and (:start is null or ends_at>:start) and (:end is null or starts_at<:end) order by starts_at
+        """),{"tenant":tenant_id,"profile":profile_id,"start":starts_at,"end":ends_at})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/profiles/{profile_id}/availability",status_code=201)
+async def create_availability(profile_id: UUID,payload: AvailabilityInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"availability.manage",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        conflict=await connection.execute(text("""
+          select exists(select 1 from public.workforce_availability where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
+            and availability_type in ('unavailable','leave') and :start < ends_at and :end > starts_at)
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
+        if payload.availability_type in ("working_hours","preferred_shift") and conflict.scalar_one():
+            raise HTTPException(status_code=409,detail="Availability berbenturan dengan leave/unavailable period.")
+        row=await connection.execute(text("""
+          insert into public.workforce_availability(tenant_id,workforce_profile_id,availability_type,starts_at,ends_at,timezone,recurrence_rule,reason,created_by)
+          values(:tenant,:profile,:type,:start,:end,:timezone,:recurrence,:reason,:actor) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"type":payload.availability_type,"start":payload.starts_at,"end":payload.ends_at,"timezone":payload.timezone,"recurrence":payload.recurrence_rule,"reason":payload.reason,"actor":actor})
+        return {"data":dict(row.mappings().one())}
+
+@router.get("/training/courses")
+async def list_courses(tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"training.read",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("select * from public.workforce_training_courses where status='published' and (tenant_id is null or tenant_id=:tenant) order by title"),{"tenant":tenant_id})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/training/courses",status_code=201)
+async def create_course(payload: CourseInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    if payload.tenant_id is None: raise HTTPException(status_code=422,detail="Tenant-scoped course creation requires tenant_id.")
+    await _authorize(claims,payload.tenant_id,"training.manage",request)
+    async with engine.begin() as connection:
+        row=await connection.execute(text("""
+          insert into public.workforce_training_courses(tenant_id,course_key,title,description,materials,assessment,eligibility_rules,validity_days,status,created_by)
+          values(:tenant,:key,:title,:description,cast(:materials as jsonb),cast(:assessment as jsonb),cast(:rules as jsonb),:validity,:status,:actor) returning *
+        """),{"tenant":payload.tenant_id,"key":payload.course_key,"title":payload.title,"description":payload.description,"materials":json.dumps(payload.materials),"assessment":json.dumps(payload.assessment),"rules":json.dumps(payload.eligibility_rules),"validity":payload.validity_days,"status":payload.status,"actor":actor})
+        return {"data":dict(row.mappings().one())}
+
+@router.post("/profiles/{profile_id}/training/enroll",status_code=201)
+async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"training.manage",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        course=await connection.execute(text("select id,eligibility_rules from public.workforce_training_courses where id=:id and status='published' and (tenant_id is null or tenant_id=:tenant)"),{"id":payload.course_id,"tenant":payload.tenant_id})
+        if not course.mappings().first(): raise HTTPException(status_code=404,detail="Training course tidak tersedia.")
+        row=await connection.execute(text("""
+          insert into public.workforce_training_enrollments(tenant_id,workforce_profile_id,course_id)
+          values(:tenant,:profile,:course) on conflict(tenant_id,workforce_profile_id,course_id) do update set status='enrolled',updated_at=now()
+          returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"course":payload.course_id})
+        return {"data":dict(row.mappings().one())}
+
+@router.patch("/training/enrollments/{enrollment_id}")
+async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"training.read",request,enrollment_id)
+    async with engine.begin() as connection:
+        existing=await connection.execute(text("""
+          select e.*,c.validity_days from public.workforce_training_enrollments e join public.workforce_training_courses c on c.id=e.course_id
+          where e.tenant_id=:tenant and e.id=:id for update
+        """),{"tenant":payload.tenant_id,"id":enrollment_id})
+        enrollment=existing.mappings().first()
+        if not enrollment: raise HTTPException(status_code=404,detail="Enrollment tidak ditemukan.")
+        if enrollment["status"] in ("completed","cancelled","expired"): raise HTTPException(status_code=409,detail="Enrollment sudah final.")
+        complete=payload.progress_percent==100 and payload.assessment_score is not None and payload.assessment_score>=70
+        if payload.progress_percent==100 and not complete: raise HTTPException(status_code=422,detail="Assessment score minimal 70 diperlukan untuk completion.")
+        expiry=None
+        if complete and enrollment["validity_days"]: expiry=datetime.now(timezone.utc)+__import__("datetime").timedelta(days=enrollment["validity_days"])
+        row=await connection.execute(text("""
+          update public.workforce_training_enrollments set progress_percent=:progress,assessment_score=:score,assessment_result=cast(:result as jsonb),
+          status=:status,completed_at=case when :complete then now() else completed_at end,certificate_reference=coalesce(:certificate,certificate_reference),
+          certificate_expires_at=:expiry,updated_at=now() where tenant_id=:tenant and id=:id returning *
+        """),{"progress":payload.progress_percent,"score":payload.assessment_score,"result":json.dumps(payload.assessment_result),"status":"completed" if complete else "in_progress","complete":complete,"certificate":payload.certificate_reference,"expiry":expiry,"tenant":payload.tenant_id,"id":enrollment_id})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.training.progress_updated","workforce_training_enrollment",enrollment_id,request,{"progress":payload.progress_percent,"completed":complete})
+        return {"data":dict(row.mappings().one())}
+
+@router.get("/profiles/{profile_id}/onboarding")
+async def list_onboarding(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"onboarding.read",request,profile_id)
+    async with engine.connect() as connection:
+        await _profile(connection,tenant_id,profile_id)
+        rows=await connection.execute(text("select * from public.workforce_onboarding_tasks where tenant_id=:tenant and workforce_profile_id=:profile order by created_at"),{"tenant":tenant_id,"profile":profile_id})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/profiles/{profile_id}/onboarding",status_code=201)
+async def add_onboarding_task(profile_id: UUID,payload: OnboardingTaskInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"onboarding.manage",request,profile_id)
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        row=await connection.execute(text("""
+          insert into public.workforce_onboarding_tasks(tenant_id,workforce_profile_id,task_key,title,description,required,task_type,assigned_to,due_at)
+          values(:tenant,:profile,:key,:title,:description,:required,:type,:assignee,:due) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"key":payload.task_key,"title":payload.title,"description":payload.description,"required":payload.required,"type":payload.task_type,"assignee":payload.assigned_to,"due":payload.due_at})
+        return {"data":dict(row.mappings().one())}
+
+@router.patch("/onboarding/tasks/{task_id}")
+async def update_onboarding_task(task_id: UUID,payload: TaskCompletion,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"onboarding.manage",request,task_id)
+    async with engine.begin() as connection:
+        row=await connection.execute(text("""
+          update public.workforce_onboarding_tasks set status=:status,completed_by=case when :status in ('completed','waived') then :actor else completed_by end,
+          completed_at=case when :status in ('completed','waived') then now() else null end,completion_reference=:reference,reason=:reason,updated_at=now()
+          where tenant_id=:tenant and id=:id returning *
+        """),{"status":payload.status,"actor":actor,"reference":payload.completion_reference,"reason":payload.reason,"tenant":payload.tenant_id,"id":task_id})
+        task=row.mappings().first()
+        if not task: raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.onboarding.task_"+payload.status,"workforce_onboarding_task",task_id,request,{"reason":payload.reason})
+        return {"data":dict(task)}
+
+@router.post("/profiles/{profile_id}/lifecycle")
+async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,request: Request,claims: dict=claims_dependency,idempotency_key: str | None=Header(default=None,alias="Idempotency-Key")):
+    actor=UUID(claims["sub"])
+    if payload.to_status not in LIFECYCLE: raise HTTPException(status_code=422,detail="Lifecycle status tidak valid.")
+    await _authorize(claims,payload.tenant_id,"lifecycle.transition",request,profile_id)
+    if not idempotency_key or len(idempotency_key)<8: raise HTTPException(status_code=428,detail="Idempotency-Key wajib untuk transisi lifecycle.")
+    async with engine.begin() as connection:
+        current=await connection.execute(text("select * from public.workforce_profiles where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":profile_id})
+        profile=current.mappings().first()
+        if not profile: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
+        old=profile["lifecycle_status"]; target=payload.to_status
+        if target not in TRANSITIONS[old]: raise HTTPException(status_code=409,detail=f"Transisi {old} ke {target} tidak diizinkan.")
+        if target=="verified":
+            ok=await connection.execute(text("select exists(select 1 from public.workforce_identity_verifications where tenant_id=:tenant and workforce_profile_id=:profile and status='verified')"),{"tenant":payload.tenant_id,"profile":profile_id})
+            if not ok.scalar_one(): raise HTTPException(status_code=409,detail="Identity verification belum verified.")
+        if target in ("eligible","active"):
+            tasks=await connection.execute(text("select count(*) from public.workforce_onboarding_tasks where tenant_id=:tenant and workforce_profile_id=:profile and required and status not in ('completed','waived')"),{"tenant":payload.tenant_id,"profile":profile_id})
+            if tasks.scalar_one()>0: raise HTTPException(status_code=409,detail="Onboarding checklist wajib belum selesai.")
+            engagement=await connection.execute(text("select exists(select 1 from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile and status='active' and effective_from<=current_date and (effective_until is null or effective_until>=current_date))"),{"tenant":payload.tenant_id,"profile":profile_id})
+            if not engagement.scalar_one(): raise HTTPException(status_code=409,detail="Engagement agreement aktif belum tersedia.")
+        if target=="active" and old!="eligible": raise HTTPException(status_code=409,detail="Activation hanya dapat dilakukan dari status eligible.")
+        updated=await connection.execute(text("update public.workforce_profiles set lifecycle_status=:target,engagement_status=case when :target='active' then 'active' when :target in ('inactive','suspended','offboarded') then :target else engagement_status end,updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant returning *"),{"target":target,"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
+        await connection.execute(text("""
+          insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id,metadata)
+          values(:tenant,:profile,:old,:new,:actor,:reason,'workforce.lifecycle.transition',:request,cast(:metadata as jsonb))
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"old":old,"new":target,"actor":actor,"reason":payload.reason,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({**payload.metadata,"idempotency_key":idempotency_key})})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.lifecycle.transitioned","workforce_profile",profile_id,request,{"from":old,"to":target,"reason":payload.reason})
+        return {"data":dict(updated.mappings().one())}
+
+@router.get("/profiles/{profile_id}/assignments")
+async def list_assignments(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"assignments.read",request,profile_id)
+    async with engine.connect() as connection:
+        await _profile(connection,tenant_id,profile_id)
+        rows=await connection.execute(text("select * from public.workforce_assignments where tenant_id=:tenant and workforce_profile_id=:profile order by starts_at desc limit 100"),{"tenant":tenant_id,"profile":profile_id})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/profiles/{profile_id}/assignments",status_code=201)
+async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"assignments.manage",request,profile_id)
+    if payload.starts_at.tzinfo is None or (payload.ends_at and payload.ends_at.tzinfo is None): raise HTTPException(status_code=422,detail="Assignment timestamps must include timezone offsets.")
+    async with engine.begin() as connection:
+        await _profile(connection,payload.tenant_id,profile_id)
+        if payload.ends_at:
+            conflicts=await connection.execute(text("""
+              select exists(select 1 from public.workforce_assignments where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
+              and :start < coalesce(ends_at,'infinity'::timestamptz) and :end > starts_at)
+            """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
+            if conflicts.scalar_one(): raise HTTPException(status_code=409,detail="Assignment berbenturan dengan penugasan yang sudah terjadwal.")
+        row=await connection.execute(text("""
+          insert into public.workforce_assignments(tenant_id,workforce_profile_id,assignment_reference,assignment_type,starts_at,ends_at,workload_units,created_by)
+          values(:tenant,:profile,:reference,:type,:start,:end,:load,:actor) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"reference":payload.assignment_reference,"type":payload.assignment_type,"start":payload.starts_at,"end":payload.ends_at,"load":payload.workload_units,"actor":actor})
+        return {"data":dict(row.mappings().one())}
+
+@router.get("/profiles/{profile_id}/history")
+async def get_workforce_history(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"profile.read",request,profile_id)
+    async with engine.connect() as connection:
+        await _profile(connection,tenant_id,profile_id)
+        rows=await connection.execute(text("select * from public.workforce_lifecycle_events where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 200"),{"tenant":tenant_id,"profile":profile_id})
+        return {"data":[dict(r) for r in rows.mappings().all()]}
