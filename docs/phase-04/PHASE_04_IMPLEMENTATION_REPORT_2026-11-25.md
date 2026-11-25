@@ -56,7 +56,7 @@ All **13 Phase 04 migrations** are present in `supabase/migrations/` and recorde
 - `20261125105528_phase_04_workforce_observability_metrics_view`
 
 Live schema evidence queried from Supabase:
-- 14 workforce base tables; **14/14 RLS enabled**.
+- 14 workforce base tables; **14/14 RLS enabled**. There are currently 0 explicit policies on the workforce base tables; with 0 `anon`/`authenticated` grants, browser-role access is default-denied and workforce access is routed through FastAPI. `FORCE ROW LEVEL SECURITY` is not enabled.
 - 46 workforce indexes and 249 constraints (PK/FK/unique/check).
 - 3 security-invoker compatibility/metrics views: `workforce_contracts`, `workforce_skills`, `workforce_operation_metrics`.
 - 19 workforce permission keys; **19/19 have active matching ABAC allow policies** and role mappings.
@@ -92,7 +92,7 @@ No staging, UAT, load testing, penetration testing or Phase 22 release-gate work
 - SMTP and Google OAuth secrets remain intentionally unconfigured; adapters, environment schema, callbacks and outbox hooks remain code-ready. Their providers are **not claimed active**.
 - Secure identity document upload/download/redaction/retention requires deployment values for `SUPABASE_SERVICE_ROLE_KEY` and `CLAMAV_HOST`. Without them, protected document operations return a controlled 503; no secrets were written to the repository.
 - Notification delivery requires SMTP deployment configuration. Events can be queued before dispatch is enabled.
-- RLS is enabled on all 14 workforce tables and browser roles have no grants. `FORCE ROW LEVEL SECURITY` is not enabled (0 tables); the application therefore relies on FastAPI authorization and the backend-only database credential boundary. This remains a hardening item to review alongside the broader platform baseline.
+- RLS is enabled on all 14 workforce tables; there are 0 explicit workforce base-table policies, 0 browser-role grants and 0 tables with `FORCE ROW LEVEL SECURITY`. Browser access is default-denied and all workforce operations go through FastAPI. The backend database credential bypasses RLS; server-side RBAC/ABAC and tenant/object checks are therefore the active authorization boundary. A future DB session/role design could add tenant-claim RLS policies and FORCE RLS where compatible. This remains a hardening item to review alongside the broader platform baseline.
 - The workforce live tables are empty and the project has no real workforce users in this evidence set; this implementation check does not claim a live-user end-to-end session.
 - Phase 00 remains separately marked **IN PROGRESS** in the existing backlog. This Phase 04 implementation does not claim Phase 00 closure or modify Phase 00 scope.
 
