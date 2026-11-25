@@ -322,7 +322,10 @@ async def enqueue_contract_event(connection, *, tenant_id, contract_id, event_ty
             "event_type": event_type,
             "contract_id": contract_id,
             "recipient": recipient,
-            "payload": json.dumps({"tenant_id": str(tenant_id), **payload}, default=str),
+            "payload": json.dumps(
+                {"tenant_id": str(tenant_id), "contract_id": str(contract_id), **payload},
+                default=str,
+            ),
         },
     )
     logger.info(
