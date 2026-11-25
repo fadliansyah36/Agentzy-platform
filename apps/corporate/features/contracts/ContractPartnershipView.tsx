@@ -223,7 +223,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
       scope_summary:newContract.scope_summary,terms:newContract.terms || null,
       commercial_snapshot:{},services:[{
         service_key:newContract.service_key,service_scope:newContract.service_scope,quantity:Number(newContract.quantity || '1'),
-        monthly_fee:newContract.monthly_fee || null,sla:{},kpi:{},entitlement:{},
+        monthly_fee:newContract.monthly_fee || null,
         human_workforce_limit:newContract.human_limit ? Number(newContract.human_limit) : null,
         ai_worker_limit:newContract.ai_limit ? Number(newContract.ai_limit) : null,
         sla:JSON.parse(newContract.sla_json || '{}'),
