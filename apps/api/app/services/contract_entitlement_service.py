@@ -82,6 +82,10 @@ async def assert_membership_entitlement_capacity(
     else:
         return
 
+    await session.execute(
+        text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),
+        {"lock_key": f"{tenant_id}:{label.lower().replace(' ', '_')}:workforce_capacity"},
+    )
     result = await session.execute(
         text(f"""
             select coalesce(sum(g.{limit_column}),0) as entitlement_limit,
