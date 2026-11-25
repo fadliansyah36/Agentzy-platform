@@ -455,18 +455,22 @@ async def update_profile(profile_id: UUID,payload: ProfilePatch,request: Request
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"profile.read",request,profile_id)
     fields=payload.model_dump(exclude={"tenant_id"},exclude_unset=True)
-    if not fields: raise HTTPException(status_code=422,detail="Tidak ada field untuk diperbarui.")
+    if not fields:
+        raise HTTPException(status_code=422,detail="Tidak ada field untuk diperbarui.")
     allowed={"display_name","legal_name","job_family","job_title","timezone","experience_years","profile_metadata"}
-    if set(fields)-allowed: raise HTTPException(status_code=422,detail="Field tidak diizinkan.")
+    if set(fields)-allowed:
+        raise HTTPException(status_code=422,detail="Field tidak diizinkan.")
     assignments=", ".join(f"{key}=:{key}" for key in fields)
     params={**fields,"tenant":payload.tenant_id,"id":profile_id,"actor":actor}
-    if "profile_metadata" in params: params["profile_metadata"]=json.dumps(params["profile_metadata"])
+    if "profile_metadata" in params:
+        params["profile_metadata"]=json.dumps(params["profile_metadata"])
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         result=await connection.execute(text(f"update public.workforce_profiles set {assignments},updated_by=:actor,updated_at=now() where tenant_id=:tenant and id=:id returning *"),params)
         row=result.mappings().first()
-        if not row: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
+        if not row:
+            raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
         await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.updated","workforce_profile",profile_id,request,{"fields":sorted(fields)})
         return {"data":dict(row)}
 
@@ -501,8 +505,10 @@ async def decide_identity(verification_id: UUID,payload: VerificationDecision,re
     async with engine.begin() as connection:
         existing=await connection.execute(text("select * from public.workforce_identity_verifications where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":verification_id})
         verification=existing.mappings().first()
-        if not verification: raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
-        if verification["status"] in ("verified","rejected"): raise HTTPException(status_code=409,detail="Keputusan verifikasi sudah final.")
+        if not verification:
+            raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
+        if verification["status"] in ("verified","rejected"):
+            raise HTTPException(status_code=409,detail="Keputusan verifikasi sudah final.")
         if payload.decision == "verified":
             evidence = await connection.execute(text("""
               select exists(select 1 from public.workforce_identity_documents
@@ -539,7 +545,8 @@ async def register_identity_document(verification_id: UUID,payload: DocumentMeta
     async with engine.begin() as connection:
         verification=await connection.execute(text("select workforce_profile_id from public.workforce_identity_verifications where tenant_id=:tenant and id=:id"),{"tenant":payload.tenant_id,"id":verification_id})
         verification_row=verification.mappings().first()
-        if not verification_row: raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
+        if not verification_row:
+            raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
         profile=await _profile(connection,payload.tenant_id,verification_row["workforce_profile_id"])
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         row=await connection.execute(text("""
@@ -578,8 +585,10 @@ async def signed_document_download(document_id: UUID,tenant_id: UUID,request: Re
     if response.status_code not in (200,201):
         raise HTTPException(status_code=503,detail="Signed URL dokumen gagal dibuat.")
     signed=response.json().get("signedURL")
-    if not signed: raise HTTPException(status_code=503,detail="Signed URL tidak tersedia.")
-    if not signed.startswith("http"): signed=f"{settings.supabase_url.rstrip('/')}/storage/v1{signed}"
+    if not signed:
+        raise HTTPException(status_code=503,detail="Signed URL tidak tersedia.")
+    if not signed.startswith("http"):
+        signed=f"{settings.supabase_url.rstrip('/')}/storage/v1{signed}"
     async with engine.begin() as connection:
         await _write_audit(connection,tenant_id,actor,"workforce.identity.document_download_authorized","workforce_identity_document",document_id,request,{"expires_in_seconds":60})
     return {"data":{"document_id":str(document_id),"filename":doc["original_filename"],"signed_url":signed,"expires_in_seconds":60}}
@@ -596,7 +605,8 @@ async def redact_identity_document(document_id: UUID,tenant_id: UUID,payload: En
           where tenant_id=:tenant and id=:id and redacted_at is null
         """),{"tenant":tenant_id,"id":document_id})
         doc=result.mappings().first()
-    if not doc: raise HTTPException(status_code=404,detail="Dokumen tidak ditemukan atau sudah di-redact.")
+    if not doc:
+        raise HTTPException(status_code=404,detail="Dokumen tidak ditemukan atau sudah di-redact.")
     object_url=f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{doc['storage_bucket']}/{quote(doc['storage_path'],safe='/')}"
     headers={"Authorization":f"Bearer {settings.supabase_service_role_key}","apikey":settings.supabase_service_role_key}
     async with httpx.AsyncClient(timeout=15) as client:
@@ -682,7 +692,8 @@ async def add_worker_skill(profile_id: UUID,payload: WorkerSkillInput,request: R
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         valid=await connection.execute(text("select exists(select 1 from public.workforce_skill_registry where id=:skill and (tenant_id is null or tenant_id=:tenant) and status='active')"),{"skill":payload.skill_id,"tenant":payload.tenant_id})
-        if not valid.scalar_one(): raise HTTPException(status_code=422,detail="Skill registry tidak valid.")
+        if not valid.scalar_one():
+            raise HTTPException(status_code=422,detail="Skill registry tidak valid.")
         row=await connection.execute(text("""
           insert into public.workforce_worker_skills(tenant_id,workforce_profile_id,skill_id,proficiency,experience_months,evidence_reference)
           values(:tenant,:profile,:skill,:proficiency,:months,:evidence)
@@ -718,7 +729,8 @@ async def verify_certification(certification_id: UUID,tenant_id: UUID,decision: 
           where tenant_id=:tenant and id=:id and verification_status='pending' and (expires_at is null or expires_at>=current_date) returning *
         """),{"decision":decision,"actor":actor,"reason":reason if decision=="rejected" else None,"tenant":tenant_id,"id":certification_id})
         row=result.mappings().first()
-        if not row: raise HTTPException(status_code=404,detail="Sertifikasi tidak ditemukan atau sudah diputuskan.")
+        if not row:
+            raise HTTPException(status_code=404,detail="Sertifikasi tidak ditemukan atau sudah diputuskan.")
         await _write_audit(connection,tenant_id,actor,"workforce.certification."+decision,"workforce_certification",certification_id,request,{"reason":reason})
         return {"data":dict(row)}
 
@@ -773,7 +785,8 @@ async def list_courses(tenant_id: UUID,request: Request,claims: dict=claims_depe
 @router.post("/training/courses",status_code=201)
 async def create_course(payload: CourseInput,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
-    if payload.tenant_id is None: raise HTTPException(status_code=422,detail="Tenant-scoped course creation requires tenant_id.")
+    if payload.tenant_id is None:
+        raise HTTPException(status_code=422,detail="Tenant-scoped course creation requires tenant_id.")
     await _authorize(claims,payload.tenant_id,"training.manage",request)
     async with engine.begin() as connection:
         row=await connection.execute(text("""
@@ -791,7 +804,8 @@ async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Req
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         course=await connection.execute(text("select id,eligibility_rules from public.workforce_training_courses where id=:id and status='published' and (tenant_id is null or tenant_id=:tenant)"),{"id":payload.course_id,"tenant":payload.tenant_id})
         course_row=course.mappings().first()
-        if not course_row: raise HTTPException(status_code=404,detail="Training course tidak tersedia.")
+        if not course_row:
+            raise HTTPException(status_code=404,detail="Training course tidak tersedia.")
         rules=course_row["eligibility_rules"] or {}
         if rules.get("required_lifecycle_statuses") and profile["lifecycle_status"] not in rules["required_lifecycle_statuses"]:
             raise HTTPException(status_code=403,detail="Lifecycle status belum memenuhi eligibility course.")
@@ -836,16 +850,20 @@ async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,re
           where e.tenant_id=:tenant and e.id=:id for update
         """),{"tenant":payload.tenant_id,"id":enrollment_id})
         enrollment=existing.mappings().first()
-        if not enrollment: raise HTTPException(status_code=404,detail="Enrollment tidak ditemukan.")
+        if not enrollment:
+            raise HTTPException(status_code=404,detail="Enrollment tidak ditemukan.")
         profile=await _profile(connection,payload.tenant_id,enrollment["profile_id"])
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
-        if enrollment["status"] in ("completed","cancelled","expired"): raise HTTPException(status_code=409,detail="Enrollment sudah final.")
+        if enrollment["status"] in ("completed","cancelled","expired"):
+            raise HTTPException(status_code=409,detail="Enrollment sudah final.")
         assessment_rules=enrollment["assessment"] or {}
         pass_score=float(assessment_rules.get("pass_score",70))
         complete=payload.progress_percent==100 and payload.assessment_score is not None and payload.assessment_score>=pass_score
-        if payload.progress_percent==100 and not complete: raise HTTPException(status_code=422,detail=f"Assessment score minimal {pass_score:g} diperlukan untuk completion.")
+        if payload.progress_percent==100 and not complete:
+            raise HTTPException(status_code=422,detail=f"Assessment score minimal {pass_score:g} diperlukan untuk completion.")
         expiry=None
-        if complete and enrollment["validity_days"]: expiry=datetime.now(timezone.utc)+__import__("datetime").timedelta(days=enrollment["validity_days"])
+        if complete and enrollment["validity_days"]:
+            expiry=datetime.now(timezone.utc)+__import__("datetime").timedelta(days=enrollment["validity_days"])
         row=await connection.execute(text("""
           update public.workforce_training_enrollments set progress_percent=:progress,assessment_score=:score,assessment_result=cast(:result as jsonb),
           status=:status,completed_at=case when :complete then now() else completed_at end,certificate_reference=coalesce(:certificate,certificate_reference),
@@ -884,7 +902,8 @@ async def update_onboarding_task(task_id: UUID,payload: TaskCompletion,request: 
     async with engine.begin() as connection:
         task_scope=await connection.execute(text("select workforce_profile_id,task_type,required from public.workforce_onboarding_tasks where tenant_id=:tenant and id=:id"),{"tenant":payload.tenant_id,"id":task_id})
         task_scope_row=task_scope.mappings().first()
-        if not task_scope_row: raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
+        if not task_scope_row:
+            raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
         manager_only=task_scope_row["task_type"] in ("approval","verification") or payload.status in ("waived","blocked")
         await _authorize(claims,payload.tenant_id,"onboarding.manage" if manager_only else "onboarding.read",request,task_id)
         profile=await _profile(connection,payload.tenant_id,task_scope_row["workforce_profile_id"])
@@ -907,14 +926,16 @@ async def update_onboarding_task(task_id: UUID,payload: TaskCompletion,request: 
           where tenant_id=:tenant and id=:id returning *
         """),{"status":payload.status,"actor":actor,"reference":payload.completion_reference,"reason":payload.reason,"tenant":payload.tenant_id,"id":task_id})
         task=row.mappings().first()
-        if not task: raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
+        if not task:
+            raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
         await _write_audit(connection,payload.tenant_id,actor,"workforce.onboarding.task_"+payload.status,"workforce_onboarding_task",task_id,request,{"reason":payload.reason})
         return {"data":dict(task)}
 
 @router.post("/profiles/{profile_id}/lifecycle")
 async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,request: Request,claims: dict=claims_dependency,idempotency_key: str | None=Header(default=None,alias="Idempotency-Key")):
     actor=UUID(claims["sub"])
-    if payload.to_status not in LIFECYCLE: raise HTTPException(status_code=422,detail="Lifecycle status tidak valid.")
+    if payload.to_status not in LIFECYCLE:
+        raise HTTPException(status_code=422,detail="Lifecycle status tidak valid.")
     await _authorize(claims,payload.tenant_id,"lifecycle.transition",request,profile_id)
     async with engine.begin() as connection:
         reservation = await reserve_idempotency(
@@ -926,19 +947,25 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
             return reservation.replay_body
         current=await connection.execute(text("select * from public.workforce_profiles where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":profile_id})
         profile=current.mappings().first()
-        if not profile: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
+        if not profile:
+            raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
         await _assert_profile_scope(connection,claims,payload.tenant_id,dict(profile),request)
         old=profile["lifecycle_status"]; target=payload.to_status
-        if target not in TRANSITIONS[old]: raise HTTPException(status_code=409,detail=f"Transisi {old} ke {target} tidak diizinkan.")
+        if target not in TRANSITIONS[old]:
+            raise HTTPException(status_code=409,detail=f"Transisi {old} ke {target} tidak diizinkan.")
         if target=="verified":
             ok=await connection.execute(text("select exists(select 1 from public.workforce_identity_verifications where tenant_id=:tenant and workforce_profile_id=:profile and status='verified')"),{"tenant":payload.tenant_id,"profile":profile_id})
-            if not ok.scalar_one(): raise HTTPException(status_code=409,detail="Identity verification belum verified.")
+            if not ok.scalar_one():
+                raise HTTPException(status_code=409,detail="Identity verification belum verified.")
         if target in ("eligible","active"):
             tasks=await connection.execute(text("select count(*) from public.workforce_onboarding_tasks where tenant_id=:tenant and workforce_profile_id=:profile and required and status not in ('completed','waived')"),{"tenant":payload.tenant_id,"profile":profile_id})
-            if tasks.scalar_one()>0: raise HTTPException(status_code=409,detail="Onboarding checklist wajib belum selesai.")
+            if tasks.scalar_one()>0:
+                raise HTTPException(status_code=409,detail="Onboarding checklist wajib belum selesai.")
             engagement=await connection.execute(text("select exists(select 1 from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile and status='active' and effective_from<=current_date and (effective_until is null or effective_until>=current_date))"),{"tenant":payload.tenant_id,"profile":profile_id})
-            if not engagement.scalar_one(): raise HTTPException(status_code=409,detail="Engagement agreement aktif belum tersedia.")
-        if target=="active" and old!="eligible": raise HTTPException(status_code=409,detail="Activation hanya dapat dilakukan dari status eligible.")
+            if not engagement.scalar_one():
+                raise HTTPException(status_code=409,detail="Engagement agreement aktif belum tersedia.")
+        if target=="active" and old!="eligible":
+            raise HTTPException(status_code=409,detail="Activation hanya dapat dilakukan dari status eligible.")
         if target in ("eligible","active"):
             required_training=await connection.execute(text("""
               select count(*) from public.workforce_training_courses c
@@ -1001,7 +1028,8 @@ async def list_assignments(profile_id: UUID,tenant_id: UUID,request: Request,cla
 async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"assignments.manage",request,profile_id)
-    if payload.starts_at.tzinfo is None or (payload.ends_at and payload.ends_at.tzinfo is None): raise HTTPException(status_code=422,detail="Assignment timestamps must include timezone offsets.")
+    if payload.starts_at.tzinfo is None or (payload.ends_at and payload.ends_at.tzinfo is None):
+        raise HTTPException(status_code=422,detail="Assignment timestamps must include timezone offsets.")
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
@@ -1215,8 +1243,10 @@ async def activate_engagement(
           where tenant_id=:tenant and id=:id for update
         """),{"tenant":payload.tenant_id,"id":engagement_id})
         engagement=result.mappings().first()
-        if not engagement: raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
-        if engagement["status"] not in ("pending","suspended"): raise HTTPException(status_code=409,detail="Engagement harus pending atau suspended untuk aktivasi/resume.")
+        if not engagement:
+            raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
+        if engagement["status"] not in ("pending","suspended"):
+            raise HTTPException(status_code=409,detail="Engagement harus pending atau suspended untuk aktivasi/resume.")
         previous_status=engagement["status"]
         if engagement["effective_from"]>date.today() or (engagement["effective_until"] and engagement["effective_until"]<date.today()):
             raise HTTPException(status_code=409,detail="Engagement belum atau tidak lagi berada dalam periode efektif.")
@@ -1255,8 +1285,10 @@ async def change_engagement_status(
     async with engine.begin() as connection:
         result=await connection.execute(text("select * from public.workforce_engagements where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":engagement_id})
         engagement=result.mappings().first()
-        if not engagement: raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
-        if engagement["status"] not in ("active","suspended"): raise HTTPException(status_code=409,detail="Status engagement tidak dapat diubah.")
+        if not engagement:
+            raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
+        if engagement["status"] not in ("active","suspended"):
+            raise HTTPException(status_code=409,detail="Status engagement tidak dapat diubah.")
         old=engagement["status"]
         updated=await connection.execute(text("update public.workforce_engagements set status=:status,updated_at=now() where tenant_id=:tenant and id=:id returning *"),{"status":target_status,"tenant":payload.tenant_id,"id":engagement_id})
         await connection.execute(text("update public.workforce_profiles set engagement_status=:status,updated_at=now() where tenant_id=:tenant and id=:profile"),{"status":target_status,"tenant":payload.tenant_id,"profile":engagement["workforce_profile_id"]})
@@ -1278,7 +1310,8 @@ async def verify_worker_skill(worker_skill_id: UUID,payload: SkillVerification,r
           where tenant_id=:tenant and id=:id for update
         """),{"tenant":payload.tenant_id,"id":worker_skill_id})
         skill=result.mappings().first()
-        if not skill: raise HTTPException(status_code=404,detail="Skill workforce tidak ditemukan.")
+        if not skill:
+            raise HTTPException(status_code=404,detail="Skill workforce tidak ditemukan.")
         updated=await connection.execute(text("""
           update public.workforce_worker_skills set verified=true,verified_by=:actor,verified_at=now(),updated_at=now()
           where tenant_id=:tenant and id=:id returning *
@@ -1297,7 +1330,8 @@ async def renew_certification(certification_id: UUID,payload: CertificationRenew
           where tenant_id=:tenant and id=:id for update
         """),{"tenant":payload.tenant_id,"id":certification_id})
         old=old_result.mappings().first()
-        if not old: raise HTTPException(status_code=404,detail="Sertifikasi sebelumnya tidak ditemukan.")
+        if not old:
+            raise HTTPException(status_code=404,detail="Sertifikasi sebelumnya tidak ditemukan.")
         if old["verification_status"] not in ("verified","expired"):
             raise HTTPException(status_code=409,detail="Hanya sertifikat verified atau expired yang dapat diperbarui.")
         profile=await _profile(connection,payload.tenant_id,old["workforce_profile_id"])
