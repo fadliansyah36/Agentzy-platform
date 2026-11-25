@@ -1285,7 +1285,9 @@ export type WorkforceProfile = {
   experience_years:number; profile_metadata:Record<string,unknown>; created_at:string; updated_at:string;
 };
 export type WorkforcePassport = WorkforceProfile & {
-  engagements:Record<string,unknown>[]; skills:Record<string,unknown>[]; certifications:Record<string,unknown>[];
+  identity_verifications:Record<string,unknown>[]; identity_documents:Record<string,unknown>[];
+  engagements:Record<string,unknown>[]; engagement_history:Record<string,unknown>[];
+  skills:Record<string,unknown>[]; certifications:Record<string,unknown>[];
   availability:Record<string,unknown>[]; training:Record<string,unknown>[]; assignments:Record<string,unknown>[];
   onboarding:Record<string,unknown>[]; history:Record<string,unknown>[];
 };
