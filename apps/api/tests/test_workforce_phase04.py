@@ -9,6 +9,7 @@ from app.api.v1.routes.workforce import (
     PERMISSIONS,
     TRANSITIONS,
     AvailabilityInput,
+    CourseInput,
     EngagementInput,
     ProfileCreate,
     router,
@@ -124,3 +125,13 @@ def test_workforce_router_exposes_phase04_end_to_end_commands():
         ("/workforce/documents/retention/purge", "POST"),
     }
     assert required.issubset(operations)
+
+
+def test_training_materials_reject_unsafe_url_schemes():
+    with pytest.raises(ValidationError):
+        CourseInput(
+            tenant_id="00000000-0000-0000-0000-000000000001",
+            course_key="security-basics",
+            title="Security Basics",
+            materials=[{"title": "Unsafe", "url": "javascript:alert(1)"}],
+        )
