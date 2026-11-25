@@ -220,6 +220,11 @@ class AvailabilityInput(StrictModel):
             raise ValueError("Availability timestamps must include timezone offsets")
         return self
 
+class AvailabilityCancellation(StrictModel):
+    tenant_id: UUID
+    reason: str = Field(min_length=3, max_length=1000)
+
+
 class CourseInput(StrictModel):
     tenant_id: UUID | None = None
     course_key: str = Field(min_length=2, max_length=80)
@@ -807,6 +812,66 @@ async def create_availability(profile_id: UUID,payload: AvailabilityInput,reques
         record=dict(row.mappings().one())
         await _write_audit(connection,payload.tenant_id,actor,"workforce.availability.created","workforce_availability",record["id"],request)
         return {"data":record}
+
+
+@router.post("/availability/{availability_id}/cancel")
+async def cancel_availability(
+    availability_id: UUID,
+    payload: AvailabilityCancellation,
+    request: Request,
+    claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await _authorize(claims, payload.tenant_id, "availability.manage", request, availability_id)
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text(
+                """
+                select * from public.workforce_availability
+                where tenant_id=:tenant and id=:id
+                for update
+                """
+            ),
+            {"tenant": payload.tenant_id, "id": availability_id},
+        )
+        availability = result.mappings().first()
+        if not availability:
+            raise HTTPException(status_code=404, detail="Availability tidak ditemukan.")
+        profile = await _profile(
+            connection, payload.tenant_id, availability["workforce_profile_id"]
+        )
+        await _assert_profile_scope(connection, claims, payload.tenant_id, profile, request)
+        if availability["status"] != "active":
+            raise HTTPException(status_code=409, detail="Availability sudah tidak aktif.")
+        updated = await connection.execute(
+            text(
+                """
+                update public.workforce_availability
+                set status='cancelled',updated_at=now()
+                where tenant_id=:tenant and id=:id returning *
+                """
+            ),
+            {"tenant": payload.tenant_id, "id": availability_id},
+        )
+        await _write_audit(
+            connection,
+            payload.tenant_id,
+            actor,
+            "workforce.availability.cancelled",
+            "workforce_availability",
+            availability_id,
+            request,
+            {"reason": payload.reason},
+        )
+        await _enqueue_workforce_notification(
+            connection,
+            payload.tenant_id,
+            availability["workforce_profile_id"],
+            "workforce.availability.cancelled",
+            {"availability_id": str(availability_id), "reason": payload.reason},
+        )
+        return {"data": dict(updated.mappings().one())}
+
 
 @router.get("/training/courses")
 async def list_courses(tenant_id: UUID,request: Request,claims: dict=claims_dependency):
