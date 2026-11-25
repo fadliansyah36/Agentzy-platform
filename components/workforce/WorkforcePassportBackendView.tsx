@@ -5,7 +5,7 @@ import {
   ApiError, getMyWorkforcePassport, listWorkforceCourses, registerMyWorkforceProfile,
   submitWorkforceIdentity, uploadWorkforceIdentityDocument, enrollWorkforceTraining, updateWorkforceTrainingProgress,
   createWorkforceAvailability, updateWorkforceOnboardingTask,
-  listWorkforceSkills, addWorkforceSkill, addWorkforceCertification,
+  listWorkforceSkills, addWorkforceSkill, addWorkforceCertification, renewWorkforceCertification,
   type AgentzyWorkforceTenantContext, type WorkforcePassport,
 } from '@/apps/web/lib/api-client';
 
@@ -30,6 +30,7 @@ export function WorkforcePassportBackendView({
   const [skillRegistry,setSkillRegistry]=useState<Record<string,unknown>[]>([]);
   const [skillForm,setSkillForm]=useState({skill_id:'',proficiency:'intermediate',experience_months:'0',evidence_reference:''});
   const [certForm,setCertForm]=useState({name:'',issuer:'',certificate_reference:'',valid_from:'',expires_at:''});
+  const [renewalOf,setRenewalOf]=useState('');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string|null>(null);
@@ -123,6 +124,10 @@ export function WorkforcePassportBackendView({
     tenant_id:tenantId,skill_id:skillForm.skill_id,proficiency:skillForm.proficiency,
     experience_months:Number(skillForm.experience_months),evidence_reference:skillForm.evidence_reference||undefined,
   }));
+  const renewCertification=()=>renewalOf&&run(()=>renewWorkforceCertification(accessToken!,renewalOf,{
+    tenant_id:tenantId,certificate_reference:certForm.certificate_reference,
+    valid_from:certForm.valid_from,expires_at:certForm.expires_at||undefined,
+  }));
   const submitCertification=()=>passport&&run(()=>addWorkforceCertification(accessToken!,passport.id,{
     tenant_id:tenantId,name:certForm.name,issuer:certForm.issuer,
     certificate_reference:certForm.certificate_reference||undefined,
@@ -178,7 +183,7 @@ export function WorkforcePassportBackendView({
             </section>
             <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Certification & Renewal</h3>
               {passport.certifications.map((item,index)=><p key={String(item.id??index)} className="mt-2 text-xs text-[#526675]">{String(item.name)} · {String(item.issuer)} · {String(item.verification_status)} · Expires {String(item.expires_at??'—')}</p>)}
-              <div className="mt-3 grid gap-2"><input value={certForm.name} onChange={e=>setCertForm(v=>({...v,name:e.target.value}))} placeholder="Certification name" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input value={certForm.issuer} onChange={e=>setCertForm(v=>({...v,issuer:e.target.value}))} placeholder="Issuer" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input value={certForm.certificate_reference} onChange={e=>setCertForm(v=>({...v,certificate_reference:e.target.value}))} placeholder="Certificate reference" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={certForm.valid_from} onChange={e=>setCertForm(v=>({...v,valid_from:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={certForm.expires_at} onChange={e=>setCertForm(v=>({...v,expires_at:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={busy||!certForm.name||!certForm.issuer||!certForm.valid_from} onClick={()=>void submitCertification()} className="h-9 rounded-lg bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Submit Certification</button></div>
+              <div className="mt-3 grid gap-2"><input value={certForm.name} onChange={e=>setCertForm(v=>({...v,name:e.target.value}))} placeholder="Certification name" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input value={certForm.issuer} onChange={e=>setCertForm(v=>({...v,issuer:e.target.value}))} placeholder="Issuer" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input value={certForm.certificate_reference} onChange={e=>setCertForm(v=>({...v,certificate_reference:e.target.value}))} placeholder="Certificate reference" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={certForm.valid_from} onChange={e=>setCertForm(v=>({...v,valid_from:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={certForm.expires_at} onChange={e=>setCertForm(v=>({...v,expires_at:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={busy||!certForm.name||!certForm.issuer||!certForm.valid_from} onClick={()=>void submitCertification()} className="h-9 rounded-lg bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Submit Certification</button><select value={renewalOf} onChange={e=>setRenewalOf(e.target.value)} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"><option value="">Select certificate to renew</option>{passport.certifications.map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.name)} · {String(item.certificate_reference??item.id)}</option>)}</select><button type="button" disabled={busy||!renewalOf||!certForm.certificate_reference||!certForm.valid_from} onClick={()=>void renewCertification()} className="h-9 rounded-lg border border-[#0284C7] text-xs font-semibold text-[#0284C7] disabled:opacity-40">Renew Selected Certificate</button></div>
             </section>
           </div>
           <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-2"><h3 className="text-sm font-bold text-[#17324D]">Engagement Classification</h3>{passport.engagements.length===0?<p className="mt-2 text-xs text-[#718391]">Belum ada agreement classification yang ditetapkan Corporate.</p>:<div className="mt-3 space-y-2">{passport.engagements.map((item,index)=><div key={String(item.id??index)} className="flex flex-wrap justify-between gap-2 border-b border-[#EAF2F6] pb-2 text-xs"><span className="font-semibold text-[#17324D]">{String(item.classification)}</span><span className="text-[#526675]">{String(item.agreement_reference)} · {String(item.status)}</span></div>)}</div>}</section>
