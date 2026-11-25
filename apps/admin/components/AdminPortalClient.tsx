@@ -195,12 +195,8 @@ export function AdminPortalClient({
 
         {portal.activeSection === 'human-workforce' && (
           <HumanWorkforceAdminView
-            staffList={portal.staffList}
-            corporateSchemas={portal.corporateSchemas}
-            onOpenStaffModal={(staff) => portal.setModal({ type: 'staff-crud', staff })}
-            onVerifyStaff={portal.verifyHumanStaff}
-            onDeleteStaff={portal.deleteHumanStaff}
-            onShowToast={portal.showToast}
+            accessToken={portal.accessToken}
+            tenants={portal.tenants.map((tenant) => ({ id: tenant.id, name: tenant.name }))}
             onBack={backToOverview}
           />
         )}
