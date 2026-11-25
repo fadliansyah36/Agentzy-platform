@@ -1470,6 +1470,17 @@ async def decide_contract_renewal(
             metadata={"renewal_id": str(renewal_id), "reason": reason, "fingerprint": fingerprint},
             idempotency_key=idempotency_key,
         )
+        await enqueue_contract_event(
+            connection,
+            tenant_id=tenant_id,
+            contract_id=renewal["contract_id"],
+            event_type=f"contract.renewal.{decision}",
+            payload={
+                "renewal_id": str(renewal_id),
+                "requested_end": renewal["requested_end"].isoformat(),
+                "reason": reason,
+            },
+        )
     return {"data": {"id": str(renewal_id), "status": decision}}
 
 
