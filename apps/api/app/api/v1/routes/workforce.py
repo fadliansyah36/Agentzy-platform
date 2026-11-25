@@ -25,6 +25,7 @@ settings = get_settings()
 PERMISSIONS = {
     "profile.read": ("workforce.profile.read", "workforce.profile", "read"),
     "profile.manage": ("workforce.profile.manage", "workforce.profile", "manage"),
+    "profile.directory": ("workforce.directory.read", "workforce.profile", "directory_read"),
     "identity.submit": ("workforce.identity.submit", "workforce.identity", "submit"),
     "identity.review": ("workforce.identity.review", "workforce.identity", "review"),
     "engagement.read": ("workforce.engagement.read", "workforce.engagement", "read"),
@@ -296,7 +297,7 @@ async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = clai
 
 @router.get("/profiles")
 async def list_profiles(tenant_id: UUID, request: Request, status: str | None = None, limit: int = Query(50,ge=1,le=100), claims: dict = claims_dependency):
-    await _authorize(claims,tenant_id,"profile.read",request)
+    await _authorize(claims,tenant_id,"profile.directory",request)
     async with engine.connect() as connection:
         rows=await connection.execute(text("""
           select id,tenant_id,user_id,membership_id,worker_code,display_name,job_family,job_title,lifecycle_status,engagement_status,experience_years,created_at,updated_at
@@ -477,7 +478,7 @@ async def create_skill(payload: SkillInput,request: Request,claims: dict=claims_
 @router.post("/profiles/{profile_id}/skills",status_code=201)
 async def add_worker_skill(profile_id: UUID,payload: WorkerSkillInput,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
-    await _authorize(claims,payload.tenant_id,"skills.manage",request,profile_id)
+    await _authorize(claims,payload.tenant_id,"skills.read",request,profile_id)
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
@@ -489,12 +490,14 @@ async def add_worker_skill(profile_id: UUID,payload: WorkerSkillInput,request: R
           on conflict(tenant_id,workforce_profile_id,skill_id) do update set proficiency=excluded.proficiency,experience_months=excluded.experience_months,evidence_reference=excluded.evidence_reference,updated_at=now()
           returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"skill":payload.skill_id,"proficiency":payload.proficiency,"months":payload.experience_months,"evidence":payload.evidence_reference})
-        return {"data":dict(row.mappings().one())}
+        skill_record=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.skill_submitted","workforce_worker_skill",skill_record["id"],request)
+        return {"data":skill_record}
 
 @router.post("/profiles/{profile_id}/certifications",status_code=201)
 async def add_certification(profile_id: UUID,payload: CertificationInput,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
-    await _authorize(claims,payload.tenant_id,"skills.manage",request,profile_id)
+    await _authorize(claims,payload.tenant_id,"skills.read",request,profile_id)
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
@@ -549,7 +552,9 @@ async def create_availability(profile_id: UUID,payload: AvailabilityInput,reques
           insert into public.workforce_availability(tenant_id,workforce_profile_id,availability_type,starts_at,ends_at,timezone,recurrence_rule,reason,created_by)
           values(:tenant,:profile,:type,:start,:end,:timezone,:recurrence,:reason,:actor) returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"type":payload.availability_type,"start":payload.starts_at,"end":payload.ends_at,"timezone":payload.timezone,"recurrence":payload.recurrence_rule,"reason":payload.reason,"actor":actor})
-        return {"data":dict(row.mappings().one())}
+        record=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.availability.created","workforce_availability",record["id"],request)
+        return {"data":record}
 
 @router.get("/training/courses")
 async def list_courses(tenant_id: UUID,request: Request,claims: dict=claims_dependency):
@@ -573,7 +578,7 @@ async def create_course(payload: CourseInput,request: Request,claims: dict=claim
 @router.post("/profiles/{profile_id}/training/enroll",status_code=201)
 async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
-    await _authorize(claims,payload.tenant_id,"training.manage",request,profile_id)
+    await _authorize(claims,payload.tenant_id,"training.read",request,profile_id)
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
@@ -584,7 +589,9 @@ async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Req
           values(:tenant,:profile,:course) on conflict(tenant_id,workforce_profile_id,course_id) do update set status='enrolled',updated_at=now()
           returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"course":payload.course_id})
-        return {"data":dict(row.mappings().one())}
+        record=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.training.enrolled","workforce_training_enrollment",record["id"],request)
+        return {"data":record}
 
 @router.patch("/training/enrollments/{enrollment_id}")
 async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,request: Request,claims: dict=claims_dependency):
@@ -634,7 +641,9 @@ async def add_onboarding_task(profile_id: UUID,payload: OnboardingTaskInput,requ
           insert into public.workforce_onboarding_tasks(tenant_id,workforce_profile_id,task_key,title,description,required,task_type,assigned_to,due_at)
           values(:tenant,:profile,:key,:title,:description,:required,:type,:assignee,:due) returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"key":payload.task_key,"title":payload.title,"description":payload.description,"required":payload.required,"type":payload.task_type,"assignee":payload.assigned_to,"due":payload.due_at})
-        return {"data":dict(row.mappings().one())}
+        record=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.onboarding.task_created","workforce_onboarding_task",record["id"],request)
+        return {"data":record}
 
 @router.patch("/onboarding/tasks/{task_id}")
 async def update_onboarding_task(task_id: UUID,payload: TaskCompletion,request: Request,claims: dict=claims_dependency):
@@ -714,7 +723,9 @@ async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: R
           insert into public.workforce_assignments(tenant_id,workforce_profile_id,assignment_reference,assignment_type,starts_at,ends_at,workload_units,created_by)
           values(:tenant,:profile,:reference,:type,:start,:end,:load,:actor) returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"reference":payload.assignment_reference,"type":payload.assignment_type,"start":payload.starts_at,"end":payload.ends_at,"load":payload.workload_units,"actor":actor})
-        return {"data":dict(row.mappings().one())}
+        record=dict(row.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.assignment.created","workforce_assignment",record["id"],request)
+        return {"data":record}
 
 @router.get("/profiles/{profile_id}/history")
 async def get_workforce_history(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
