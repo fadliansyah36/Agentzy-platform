@@ -264,6 +264,10 @@ async def find_contract_event_replay(
     connection, *, tenant_id: UUID, idempotency_key: str, fingerprint: str,
     expected_event_type: str,
 ):
+    await connection.execute(
+        text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),
+        {"lock_key": f"{tenant_id}:{idempotency_key}"},
+    )
     result = await connection.execute(
         text("""
             select id,contract_id,event_type,metadata
