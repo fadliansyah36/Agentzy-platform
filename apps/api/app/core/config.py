@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     clamav_host: str | None = None
     clamav_port: int = 3310
     clamav_timeout_seconds: float = 30.0
-    workforce_document_retention_days: int = 365
+    workforce_document_retention_days: int = Field(default=365, ge=30, le=3650)
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
