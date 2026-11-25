@@ -173,6 +173,10 @@ class WorkerSkillInput(StrictModel):
     experience_months: int = Field(default=0, ge=0, le=960)
     evidence_reference: str | None = Field(default=None, max_length=500)
 
+class SkillVerification(StrictModel):
+    tenant_id: UUID
+    reason: str = Field(min_length=3, max_length=2000)
+
 class CertificationInput(StrictModel):
     tenant_id: UUID
     skill_id: UUID | None = None
@@ -1246,5 +1250,24 @@ async def change_engagement_status(
           values(:tenant,:engagement,:profile,:event,:old,:new,:actor,:reason)
         """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"event":target_status,"old":old,"new":target_status,"actor":actor,"reason":payload.reason})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement."+target_status,"workforce_engagement",engagement_id,request,{"reason":payload.reason})
+        return {"data":dict(updated.mappings().one())}
+
+
+@router.post("/skills/{worker_skill_id}/verify")
+async def verify_worker_skill(worker_skill_id: UUID,payload: SkillVerification,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"skills.manage",request,worker_skill_id)
+    async with engine.begin() as connection:
+        result=await connection.execute(text("""
+          select workforce_profile_id from public.workforce_worker_skills
+          where tenant_id=:tenant and id=:id for update
+        """),{"tenant":payload.tenant_id,"id":worker_skill_id})
+        skill=result.mappings().first()
+        if not skill: raise HTTPException(status_code=404,detail="Skill workforce tidak ditemukan.")
+        updated=await connection.execute(text("""
+          update public.workforce_worker_skills set verified=true,verified_by=:actor,verified_at=now(),updated_at=now()
+          where tenant_id=:tenant and id=:id returning *
+        """),{"actor":actor,"tenant":payload.tenant_id,"id":worker_skill_id})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.skill.verified","workforce_worker_skill",worker_skill_id,request,{"reason":payload.reason})
         return {"data":dict(updated.mappings().one())}
 
