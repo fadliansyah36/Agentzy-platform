@@ -116,6 +116,7 @@ def test_workforce_router_exposes_phase04_end_to_end_commands():
         ("/workforce/profiles/{profile_id}/skills", "POST"),
         ("/workforce/profiles/{profile_id}/certifications", "POST"),
         ("/workforce/profiles/{profile_id}/availability", "POST"),
+        ("/workforce/availability/{availability_id}/cancel", "POST"),
         ("/workforce/training/courses", "POST"),
         ("/workforce/profiles/{profile_id}/training/enroll", "POST"),
         ("/workforce/profiles/{profile_id}/onboarding", "POST"),
