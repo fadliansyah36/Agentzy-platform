@@ -19,9 +19,11 @@ from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine
 from app.domain.workforce import (
-    WORKFORCE_LIFECYCLE_TRANSITIONS as TRANSITIONS,
+    WORKFORCE_LIFECYCLE_TRANSITIONS,
     is_lifecycle_transition_allowed,
 )
+
+TRANSITIONS = WORKFORCE_LIFECYCLE_TRANSITIONS
 from app.repositories.workforce_repository import (
     append_workforce_audit,
     enqueue_workforce_notification,
@@ -962,7 +964,8 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
         if not profile:
             raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
         await _assert_profile_scope(connection,claims,payload.tenant_id,dict(profile),request)
-        old=profile["lifecycle_status"]; target=payload.to_status
+        old=profile["lifecycle_status"]
+        target=payload.to_status
         if not is_lifecycle_transition_allowed(old, target):
             raise HTTPException(status_code=409,detail=f"Transisi {old} ke {target} tidak diizinkan.")
         if target=="verified":
