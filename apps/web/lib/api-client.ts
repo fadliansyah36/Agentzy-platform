@@ -1296,7 +1296,7 @@ export const getMyWorkforcePassport=(accessToken:string,tenantId:string)=>
 export const listWorkforceProfiles=(accessToken:string,tenantId:string,status?:WorkforceLifecycleStatus)=>
   apiRequest<WorkforcePage<WorkforceProfile>>(workforcePath(`profiles${status?`?status=${encodeURIComponent(status)}`:""}`,tenantId),{method:"GET",accessToken});
 export const createWorkforceProfile=(accessToken:string,payload:{
-  tenant_id:string;user_id:string;membership_id?:string|null;worker_code:string;display_name:string;
+  tenant_id:string;user_id:string;membership_id:string;worker_code:string;display_name:string;
   legal_name?:string|null;job_family?:string|null;job_title?:string|null;timezone?:string;locale?:string;
   experience_years?:number;profile_metadata?:Record<string,unknown>;
 })=>apiRequest<{data:WorkforceProfile}>("/workforce/profiles",{method:"POST",accessToken,
