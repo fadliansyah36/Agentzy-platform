@@ -1378,3 +1378,22 @@ export const uploadWorkforceIdentityDocument=(accessToken:string,tenantId:string
     {method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:form},
   );
 };
+
+export const verifyWorkforceSkill=(accessToken:string,tenantId:string,workerSkillId:string,reason:string)=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/skills/${encodeURIComponent(workerSkillId)}/verify`,{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},
+    body:JSON.stringify({tenant_id:tenantId,reason})});
+export const renewWorkforceCertification=(accessToken:string,certificationId:string,payload:{
+  tenant_id:string;certificate_reference:string;issued_at?:string|null;valid_from:string;expires_at?:string|null;
+  evidence_metadata?:Record<string,unknown>;
+})=>apiRequest<{data:Record<string,unknown>}>(`/workforce/certifications/${encodeURIComponent(certificationId)}/renew`,{
+  method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const activateWorkforceEngagement=(accessToken:string,engagementId:string,payload:{tenant_id:string;reason:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/engagements/${encodeURIComponent(engagementId)}/activate`,{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const changeWorkforceEngagementStatus=(accessToken:string,engagementId:string,tenantId:string,targetStatus:"suspended"|"ended",reason:string)=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/engagements/${encodeURIComponent(engagementId)}/status?${new URLSearchParams({tenant_id:tenantId,target_status:targetStatus})}`,{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify({tenant_id:tenantId,reason})});
+export const redactWorkforceDocument=(accessToken:string,tenantId:string,documentId:string,reason:string)=>
+  apiRequest<{data:{document_id:string;redacted:boolean}}>(`/workforce/documents/${encodeURIComponent(documentId)}/redact?tenant_id=${encodeURIComponent(tenantId)}`,{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify({tenant_id:tenantId,reason})});
