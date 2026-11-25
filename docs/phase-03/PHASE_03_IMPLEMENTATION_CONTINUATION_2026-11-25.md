@@ -100,3 +100,21 @@ Actual completed checks:
 Phase 03 implementation is closed. Deployment/runtime configuration still required before real customer use: API deployment URL/CORS, SMTP credentials, Google OAuth client credentials/encryption key, Turnstile keys, ClamAV endpoint and server-only Supabase Storage service-role key. These are intentionally not fabricated or activated here.
 
 No staging, UAT, load test, penetration test, production deployment, real customer contract, real payment or external SMTP/Google OAuth activation was performed. Payment references are reconciliation records only; no payment transaction is asserted or fabricated.
+
+
+## 2026-11-25 ABAC enforcement hardening addendum
+
+A source-level authorization review found that the original Phase 03 corporate route guards checked tenant-scoped RBAC but did not consistently invoke the central dynamic ABAC evaluator. This was corrected before final closure:
+
+- `corporate_contracts.py` now maps every corporate profile, contract, approval, document, lifecycle, finance, entitlement, provider and AI Worker permission to an explicit ABAC resource/action and calls `authorize_action` after permission resolution.
+- `contracts.py` contract create/read/decision/activation routes now invoke the same central RBAC + ABAC evaluator.
+- `ai_workers.py` reuses the corporate permission guard; both AI Worker read/manage permissions are mapped to the `corporate.ai` ABAC policies.
+- All 15 permission keys referenced by these route groups were checked against the live permission registry and role-permission mappings; every key has one or more role mappings and no route permission is unmapped.
+- Additive policy migrations are applied and source-controlled: `20261125101028_phase_03_abac_enforcement_hardening` and `20261125101124_phase_03_ai_worker_abac_policy_hardening`. Previously applied migrations were not modified.
+- Live Phase 03 table check: 17/17 expected tables exist; RLS enabled 17/17; FORCE RLS 0/17; direct anon business grants 0; direct authenticated business grants 0. These business tables remain backend-only; API authorization is enforced by FastAPI RBAC + ABAC and object/tenant validation.
+- No invoice, payment reference, contract document, contract event or Auth user rows were seeded by this hardening work.
+
+**Final hardening code commit:** `7329be889ae779a80e263b07195e3892cc24e57a`  
+**GitHub Actions:** [Agentzy Minimum Engineering Checks — run 45592736547](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45592736547) — **SUCCESS**.
+
+Actual checks on this commit: frontend lint, TypeScript type-check, Python compile, Ruff, focused deterministic API checks, FastAPI import/OpenAPI contract, and migration source consistency — all SUCCESS.
