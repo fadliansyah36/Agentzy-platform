@@ -67,8 +67,8 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
-  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',provider_profile_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',effective_start:'',effective_end:''});
-  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:''});
+  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',provider_profile_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'{}',kpi_json:'{}',entitlement_json:'{}',effective_start:'',effective_end:''});
+  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'',kpi_json:'',entitlement_json:''});
   const [policyName,setPolicyName] = useState('');
   const [policyType,setPolicyType] = useState<'master'|'statement_of_work'|'amendment'>('master');
   const [policySteps,setPolicySteps] = useState(1);
@@ -222,6 +222,9 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
         monthly_fee:newContract.monthly_fee || null,sla:{},kpi:{},entitlement:{},
         human_workforce_limit:newContract.human_limit ? Number(newContract.human_limit) : null,
         ai_worker_limit:newContract.ai_limit ? Number(newContract.ai_limit) : null,
+        sla:JSON.parse(newContract.sla_json || '{}'),
+        kpi:JSON.parse(newContract.kpi_json || '{}'),
+        entitlement:JSON.parse(newContract.entitlement_json || '{}'),
       }],
     });
     setSelectedId(result.data.id); setTab('contracts');
@@ -434,6 +437,9 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
               <label><span className={label}>Fee/bulan</span><input type="number" min="0" className={field} value={newContract.monthly_fee} onChange={(e)=>setNewContract(p=>({...p,monthly_fee:e.target.value}))}/></label>
               <label><span className={label}>Human limit</span><input type="number" min="0" className={field} value={newContract.human_limit} onChange={(e)=>setNewContract(p=>({...p,human_limit:e.target.value}))}/></label>
               <label><span className={label}>AI limit</span><input type="number" min="0" className={field} value={newContract.ai_limit} onChange={(e)=>setNewContract(p=>({...p,ai_limit:e.target.value}))}/></label>
+              <label><span className={label}>SLA (JSON object)</span><textarea className="min-h-20 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={newContract.sla_json} onChange={e=>setNewContract(p=>({...p,sla_json:e.target.value}))}/></label>
+              <label><span className={label}>KPI (JSON object)</span><textarea className="min-h-20 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={newContract.kpi_json} onChange={e=>setNewContract(p=>({...p,kpi_json:e.target.value}))}/></label>
+              <label className="md:col-span-2"><span className={label}>Entitlement scope (JSON object)</span><textarea className="min-h-20 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" value={newContract.entitlement_json} onChange={e=>setNewContract(p=>({...p,entitlement_json:e.target.value}))}/></label>
             </div>
           </div>
           {canManage && <button className={primary} disabled={saving || !newContract.contract_number || !newContract.title || !newContract.scope_summary || !newContract.service_key || !newContract.service_scope || (newContract.contract_type==='statement_of_work' && !newContract.parent_contract_id)} onClick={()=>void createContract()}>Simpan Draft ke Backend</button>}
@@ -448,6 +454,9 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
           <label><span className={label}>Fee bulanan baru</span><input type="number" min="0" className={field} value={amendment.monthly_fee} onChange={e=>setAmendment(p=>({...p,monthly_fee:e.target.value}))}/></label>
           <label><span className={label}>Human workforce limit</span><input type="number" min="0" className={field} value={amendment.human_limit} onChange={e=>setAmendment(p=>({...p,human_limit:e.target.value}))}/></label>
           <label><span className={label}>AI Worker limit</span><input type="number" min="0" className={field} value={amendment.ai_limit} onChange={e=>setAmendment(p=>({...p,ai_limit:e.target.value}))}/></label>
+          <label><span className={label}>SLA amendment (JSON object)</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.sla_json} onChange={e=>setAmendment(p=>({...p,sla_json:e.target.value}))}/></label>
+          <label><span className={label}>KPI amendment (JSON object)</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.kpi_json} onChange={e=>setAmendment(p=>({...p,kpi_json:e.target.value}))}/></label>
+          <label className="md:col-span-2"><span className={label}>Entitlement amendment (JSON object)</span><textarea className="min-h-16 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.entitlement_json} onChange={e=>setAmendment(p=>({...p,entitlement_json:e.target.value}))}/></label>
         </div>
         {canManage && detail && ['active','approved'].includes(detail.status) && <button className={primary+' mt-3'} disabled={saving || !amendment.change_summary || !amendment.scope_summary || !amendment.effective_from} onClick={()=>void createAmendment()}>Buat Amendment Version</button>}
         {detail && <p className="mt-4 text-xs text-[#526675]">Selected {detail.contract_number} · current v{detail.current_version}</p>}
