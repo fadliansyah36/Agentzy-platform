@@ -71,7 +71,7 @@ The safe `.env.example` contains blank placeholders and no secret values. Provid
 
 GitHub Actions: [Agentzy Minimum Engineering Checks — run 45590318180](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45590318180)
 
-- Final checked main commit: `a4b69c7d79bffd101c561770f79d7c85bb556300`.
+- Final code commit verified by CI: `a4b69c7d79bffd101c561770f79d7c85bb556300`.
 - Result: SUCCESS.
 - Frontend lint: SUCCESS.
 - Frontend TypeScript type-check: SUCCESS.
