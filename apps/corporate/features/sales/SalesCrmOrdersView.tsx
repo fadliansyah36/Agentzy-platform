@@ -49,7 +49,7 @@ export function SalesCrmOrdersView({tenantId,accessToken,onBack}:{tenantId:strin
       setError(e instanceof ApiError?e.message:'Data Sales CRM tidak dapat dimuat dari Agentzy API.');
     } finally {setLoading(false);}
   },[accessToken,tenantId,selectedLead]);
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{void Promise.resolve().then(()=>load());},[load]);
 
   const activeLead=leads.find(item=>item.id===selectedLead)??null;
   const selectedProductRow=products.find(item=>item.id===selectedProduct)??null;

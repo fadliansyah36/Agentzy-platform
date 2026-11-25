@@ -27,7 +27,7 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
     } catch(e){setError(e instanceof ApiError?e.message:'Provider catalogue tidak dapat dimuat.');}
     finally{setLoading(false);}
   },[tenantId,accessToken,providerId]);
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{void Promise.resolve().then(()=>load());},[load]);
 
   const createProduct=async(event:FormEvent)=>{
     event.preventDefault();if(!providerId)return;
