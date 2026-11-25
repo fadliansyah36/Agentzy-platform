@@ -63,11 +63,15 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
   const [providerProfiles,setProviderProfiles] = useState<CorporateProviderProfile[]>([]);
   const [providerForm,setProviderForm] = useState({provider_code:'',provider_name:'',provider_type:'isp' as CorporateProviderProfile['provider_type'],registration_number:'',contact_email:'',contact_phone:'',service_regions:''});
   const [editingProviderId,setEditingProviderId] = useState('');
+  const [additionalServices,setAdditionalServices] = useState<Array<{
+    id:string;service_key:string;service_scope:string;quantity:string;monthly_fee:string;
+    human_limit:string;ai_limit:string;sla_json:string;kpi_json:string;entitlement_json:string;
+  }>>([]);
   const [loading,setLoading] = useState(false);
   const [saving,setSaving] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
-  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',provider_profile_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'{}',kpi_json:'{}',entitlement_json:'{}',effective_start:'',effective_end:''});
+  const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',provider_profile_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',quantity:'1',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'{}',kpi_json:'{}',entitlement_json:'{}',effective_start:'',effective_end:''});
   const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'',kpi_json:'',entitlement_json:''});
   const [policyName,setPolicyName] = useState('');
   const [policyType,setPolicyType] = useState<'master'|'statement_of_work'|'amendment'>('master');
@@ -218,14 +222,26 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
       effective_start:newContract.effective_start || null,effective_end:newContract.effective_end || null,
       scope_summary:newContract.scope_summary,terms:newContract.terms || null,
       commercial_snapshot:{},services:[{
-        service_key:newContract.service_key,service_scope:newContract.service_scope,quantity:1,
+        service_key:newContract.service_key,service_scope:newContract.service_scope,quantity:Number(newContract.quantity || '1'),
         monthly_fee:newContract.monthly_fee || null,sla:{},kpi:{},entitlement:{},
         human_workforce_limit:newContract.human_limit ? Number(newContract.human_limit) : null,
         ai_worker_limit:newContract.ai_limit ? Number(newContract.ai_limit) : null,
         sla:JSON.parse(newContract.sla_json || '{}'),
         kpi:JSON.parse(newContract.kpi_json || '{}'),
         entitlement:JSON.parse(newContract.entitlement_json || '{}'),
-      }],
+      },
+      ...additionalServices.map(service=>({
+        service_key:service.service_key,
+        service_scope:service.service_scope,
+        quantity:Number(service.quantity || '1'),
+        monthly_fee:service.monthly_fee || null,
+        sla:JSON.parse(service.sla_json || '{}'),
+        kpi:JSON.parse(service.kpi_json || '{}'),
+        entitlement:JSON.parse(service.entitlement_json || '{}'),
+        human_workforce_limit:service.human_limit ? Number(service.human_limit) : null,
+        ai_worker_limit:service.ai_limit ? Number(service.ai_limit) : null,
+      })),
+      ],
     });
     setSelectedId(result.data.id); setTab('contracts');
   }, 'Draft kontrak dibuat.');
@@ -434,6 +450,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
             <label><span className={label}>Service catalogue</span><select className={field} value={newContract.service_key} onChange={(e)=>{const item=catalogue.find(x=>x.service_key===e.target.value);setNewContract(p=>({...p,service_key:e.target.value,service_scope:item?.scope ?? p.service_scope}));}}><option value="">Pilih service catalogue</option>{catalogue.map(item=><option key={item.service_key} value={item.service_key}>{item.name} · {item.service_key}</option>)}</select></label>
             <label className="mt-2 block"><span className={label}>Deskripsi scope</span><textarea className="min-h-16 w-full rounded-lg border border-[#D8E3E9] p-3 text-sm" value={newContract.service_scope} onChange={(e)=>setNewContract(p=>({...p,service_scope:e.target.value}))}/></label>
             <div className="mt-2 grid grid-cols-3 gap-2">
+              <label><span className={label}>Quantity</span><input type="number" min="1" max="100000" className={field} value={newContract.quantity} onChange={(e)=>setNewContract(p=>({...p,quantity:e.target.value}))}/></label>
               <label><span className={label}>Fee/bulan</span><input type="number" min="0" className={field} value={newContract.monthly_fee} onChange={(e)=>setNewContract(p=>({...p,monthly_fee:e.target.value}))}/></label>
               <label><span className={label}>Human limit</span><input type="number" min="0" className={field} value={newContract.human_limit} onChange={(e)=>setNewContract(p=>({...p,human_limit:e.target.value}))}/></label>
               <label><span className={label}>AI limit</span><input type="number" min="0" className={field} value={newContract.ai_limit} onChange={(e)=>setNewContract(p=>({...p,ai_limit:e.target.value}))}/></label>
@@ -441,6 +458,23 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
               <label><span className={label}>KPI (JSON object)</span><textarea className="min-h-20 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={newContract.kpi_json} onChange={e=>setNewContract(p=>({...p,kpi_json:e.target.value}))}/></label>
               <label className="md:col-span-2"><span className={label}>Entitlement scope (JSON object)</span><textarea className="min-h-20 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" value={newContract.entitlement_json} onChange={e=>setNewContract(p=>({...p,entitlement_json:e.target.value}))}/></label>
             </div>
+          </div>
+          <div className="mt-3 space-y-3">
+            <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-[#17324D]">Additional service scopes</h3><button type="button" className={secondary} onClick={()=>setAdditionalServices(rows=>[...rows,{id:crypto.randomUUID(),service_key:'',service_scope:'',quantity:'1',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'{}',kpi_json:'{}',entitlement_json:'{}'}])}>Tambah Service</button></div>
+            {additionalServices.map((service,index)=><div key={service.id} className="rounded-lg border border-[#D8E3E9] p-3">
+              <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">Service #{index+2}</p><button type="button" className={secondary} onClick={()=>setAdditionalServices(rows=>rows.filter(item=>item.id!==service.id))}>Hapus</button></div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <label><span className={label}>Catalogue</span><select className={field} value={service.service_key} onChange={e=>{const item=catalogue.find(x=>x.service_key===e.target.value);setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,service_key:e.target.value,service_scope:item?.scope ?? row.service_scope}:row));}}><option value="">Pilih service</option>{catalogue.map(item=><option key={item.service_key} value={item.service_key}>{item.name} · {item.service_key}</option>)}</select></label>
+                <label><span className={label}>Scope</span><input className={field} value={service.service_scope} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,service_scope:e.target.value}:row))}/></label>
+                <label><span className={label}>Quantity</span><input type="number" min="1" max="100000" className={field} value={service.quantity} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,quantity:e.target.value}:row))}/></label>
+                <label><span className={label}>Monthly fee</span><input type="number" min="0" className={field} value={service.monthly_fee} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,monthly_fee:e.target.value}:row))}/></label>
+                <label><span className={label}>Human limit</span><input type="number" min="0" className={field} value={service.human_limit} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,human_limit:e.target.value}:row))}/></label>
+                <label><span className={label}>AI Worker limit</span><input type="number" min="0" className={field} value={service.ai_limit} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,ai_limit:e.target.value}:row))}/></label>
+                <label><span className={label}>SLA JSON</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-2 text-xs" value={service.sla_json} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,sla_json:e.target.value}:row))}/></label>
+                <label><span className={label}>KPI JSON</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-2 text-xs" value={service.kpi_json} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,kpi_json:e.target.value}:row))}/></label>
+                <label className="md:col-span-2"><span className={label}>Entitlement JSON</span><textarea className="min-h-16 w-full rounded-lg border border-[#D8E3E9] p-2 text-xs" value={service.entitlement_json} onChange={e=>setAdditionalServices(rows=>rows.map(row=>row.id===service.id?{...row,entitlement_json:e.target.value}:row))}/></label>
+              </div>
+            </div>)}
           </div>
           {canManage && <button className={primary} disabled={saving || !newContract.contract_number || !newContract.title || !newContract.scope_summary || !newContract.service_key || !newContract.service_scope || (newContract.contract_type==='statement_of_work' && !newContract.parent_contract_id)} onClick={()=>void createContract()}>Simpan Draft ke Backend</button>}
         </div>
