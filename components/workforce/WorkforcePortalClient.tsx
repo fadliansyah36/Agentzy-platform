@@ -62,7 +62,6 @@ import {
   TechCommissionView,
 } from '@/components/workforce/TechnicianViews';
 import {
-  AttendanceView,
   PerformanceKPIView,
   NotificationsView,
   WorkspaceCenterView,
@@ -1281,7 +1280,7 @@ export function WorkforcePortalClient() {
 
                 {/* SHARED WORKFORCE ROUTES */}
                 {activeTab === 'attendance' && roleMode !== 'affiliate' && (
-                  <AttendanceView roleMode={roleMode} />
+                  <WorkforcePassportBackendView accessToken={accessToken ?? null} tenantContexts={workforceTenantContexts} userName={currentUser.name} initialTab="availability" />
                 )}
 
                 {activeTab === 'performance' && (
