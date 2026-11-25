@@ -18,6 +18,19 @@ from app.core.config import get_settings
 from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine
+from app.domain.workforce import (
+    WORKFORCE_LIFECYCLE_TRANSITIONS as TRANSITIONS,
+    is_lifecycle_transition_allowed,
+)
+from app.repositories.workforce_repository import (
+    append_workforce_audit,
+    enqueue_workforce_notification,
+    get_workforce_profile,
+)
+from app.services.workforce_service import (
+    assert_activation_prerequisites,
+    assert_offboarding_ready,
+)
 
 router = APIRouter(prefix="/workforce", tags=["Human Workforce"])
 claims_dependency = Depends(current_claims)
@@ -45,19 +58,6 @@ PERMISSIONS = {
     "assignments.manage": ("workforce.assignments.manage", "workforce.assignments", "manage"),
 }
 LIFECYCLE = {"invited", "registered", "identity_pending", "verified", "onboarding", "eligible", "active", "inactive", "suspended", "offboarded"}
-TRANSITIONS = {
-    "invited": {"registered", "inactive"},
-    "registered": {"identity_pending", "inactive"},
-    "identity_pending": {"verified", "inactive"},
-    "verified": {"onboarding", "inactive"},
-    "onboarding": {"eligible", "inactive"},
-    "eligible": {"active", "inactive"},
-    "active": {"inactive", "suspended", "offboarded"},
-    "inactive": {"onboarding", "active", "offboarded"},
-    "suspended": {"active", "inactive", "offboarded"},
-    "offboarded": set(),
-}
-
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -281,21 +281,33 @@ async def _authorize(claims: dict, tenant_id: UUID, key: str, request: Request, 
         )
 
 async def _profile(connection, tenant_id: UUID, profile_id: UUID):
-    result = await connection.execute(text("""
-      select p.* from public.workforce_profiles p
-      where p.tenant_id=:tenant and p.id=:id
-    """), {"tenant": tenant_id, "id": profile_id})
-    row = result.mappings().first()
-    if not row:
+    profile = await get_workforce_profile(connection, tenant_id, profile_id)
+    if not profile:
         raise HTTPException(status_code=404, detail="Workforce profile tidak ditemukan.")
-    return dict(row)
+    return profile
+
 
 async def _write_audit(connection, tenant_id: UUID, actor: UUID, action: str, resource_type: str, resource_id: UUID, request: Request, metadata: dict | None = None):
-    await connection.execute(text("""
-      insert into public.audit_logs(tenant_id,actor_user_id,action,resource_type,resource_id,request_id,metadata)
-      values(:tenant,:actor,:action,:type,:id,:request_id,cast(:metadata as jsonb))
-    """), {"tenant":tenant_id,"actor":actor,"action":action,"type":resource_type,"id":str(resource_id),
-           "request_id":getattr(request.state,"request_id",None),"metadata":json.dumps(metadata or {},default=str)})
+    await append_workforce_audit(
+        connection,
+        tenant_id=tenant_id,
+        actor_user_id=actor,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        request_id=getattr(request.state, "request_id", None),
+        metadata=metadata,
+    )
+
+
+async def _enqueue_workforce_notification(connection, tenant_id: UUID, profile_id: UUID, event_type: str, payload: dict):
+    await enqueue_workforce_notification(
+        connection,
+        tenant_id=tenant_id,
+        profile_id=profile_id,
+        event_type=event_type,
+        payload=payload,
+    )
 
 
 async def _assert_profile_scope(connection, claims: dict, tenant_id: UUID, profile: dict, request: Request):
@@ -951,45 +963,16 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
             raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
         await _assert_profile_scope(connection,claims,payload.tenant_id,dict(profile),request)
         old=profile["lifecycle_status"]; target=payload.to_status
-        if target not in TRANSITIONS[old]:
+        if not is_lifecycle_transition_allowed(old, target):
             raise HTTPException(status_code=409,detail=f"Transisi {old} ke {target} tidak diizinkan.")
         if target=="verified":
             ok=await connection.execute(text("select exists(select 1 from public.workforce_identity_verifications where tenant_id=:tenant and workforce_profile_id=:profile and status='verified')"),{"tenant":payload.tenant_id,"profile":profile_id})
             if not ok.scalar_one():
                 raise HTTPException(status_code=409,detail="Identity verification belum verified.")
         if target in ("eligible","active"):
-            tasks=await connection.execute(text("select count(*) from public.workforce_onboarding_tasks where tenant_id=:tenant and workforce_profile_id=:profile and required and status not in ('completed','waived')"),{"tenant":payload.tenant_id,"profile":profile_id})
-            if tasks.scalar_one()>0:
-                raise HTTPException(status_code=409,detail="Onboarding checklist wajib belum selesai.")
-            engagement=await connection.execute(text("select exists(select 1 from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile and status='active' and effective_from<=current_date and (effective_until is null or effective_until>=current_date))"),{"tenant":payload.tenant_id,"profile":profile_id})
-            if not engagement.scalar_one():
-                raise HTTPException(status_code=409,detail="Engagement agreement aktif belum tersedia.")
-        if target=="active" and old!="eligible":
-            raise HTTPException(status_code=409,detail="Activation hanya dapat dilakukan dari status eligible.")
-        if target in ("eligible","active"):
-            required_training=await connection.execute(text("""
-              select count(*) from public.workforce_training_courses c
-              where c.status='published' and (c.tenant_id is null or c.tenant_id=:tenant)
-                and coalesce(c.eligibility_rules->>'required_for_activation','false')='true'
-                and not exists(
-                  select 1 from public.workforce_training_enrollments e
-                  where e.tenant_id=:tenant and e.workforce_profile_id=:profile and e.course_id=c.id
-                    and e.status='completed' and (e.certificate_expires_at is null or e.certificate_expires_at>=now())
-                )
-            """),{"tenant":payload.tenant_id,"profile":profile_id})
-            if required_training.scalar_one()>0:
-                raise HTTPException(status_code=409,detail="Training wajib untuk eligibility belum selesai atau sudah kedaluwarsa.")
+            await assert_activation_prerequisites(connection,payload.tenant_id,profile_id)
         if target=="offboarded":
-            active_assignments=await connection.execute(text("""
-              select count(*) from public.workforce_assignments
-              where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
-            """),{"tenant":payload.tenant_id,"profile":profile_id})
-            active_engagements=await connection.execute(text("""
-              select count(*) from public.workforce_engagements
-              where tenant_id=:tenant and workforce_profile_id=:profile and status in ('active','suspended','pending')
-            """),{"tenant":payload.tenant_id,"profile":profile_id})
-            if active_assignments.scalar_one()>0 or active_engagements.scalar_one()>0:
-                raise HTTPException(status_code=409,detail="Offboarding readiness gagal: assignment dan engagement harus ditutup terlebih dahulu.")
+            await assert_offboarding_ready(connection,payload.tenant_id,profile_id)
         updated=await connection.execute(text("update public.workforce_profiles set lifecycle_status=:target,engagement_status=case when :target='active' then 'active' when :target='offboarded' then 'ended' when :target in ('inactive','suspended') then :target else engagement_status end,updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant returning *"),{"target":target,"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
         if target == "suspended":
             rows=await connection.execute(text("""
