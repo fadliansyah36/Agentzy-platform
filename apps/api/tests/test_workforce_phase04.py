@@ -1,6 +1,6 @@
 """Deterministic Phase 04 workforce domain contract tests."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -75,7 +75,7 @@ def test_availability_requires_timezone_aware_period():
 
 
 def test_availability_rejects_non_positive_period():
-    instant = datetime(2026, 11, 26, 9, 0, tzinfo=timezone.utc)
+    instant = datetime(2026, 11, 26, 9, 0, tzinfo=UTC)
     with pytest.raises(ValidationError):
         AvailabilityInput(
             tenant_id="00000000-0000-0000-0000-000000000001",
