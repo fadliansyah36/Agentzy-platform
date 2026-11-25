@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid4
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
@@ -230,6 +230,18 @@ class CourseInput(StrictModel):
     eligibility_rules: dict[str, Any] = Field(default_factory=dict)
     validity_days: int | None = Field(default=None, ge=1, le=3650)
     status: str = Field(default="draft", pattern="^(draft|published|archived)$")
+
+    @field_validator("materials")
+    @classmethod
+    def validate_material_links(cls, materials):
+        for material in materials:
+            url = material.get("url")
+            if url:
+                parsed = urlsplit(str(url))
+                if parsed.scheme != "https" or not parsed.netloc:
+                    raise ValueError("Training material links must use HTTPS.")
+        return materials
+
 
 class EnrollmentInput(StrictModel):
     tenant_id: UUID
