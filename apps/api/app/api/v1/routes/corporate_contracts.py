@@ -487,7 +487,10 @@ async def create_contract_amendment(
         raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
     await require_tenant_permission(actor, payload.tenant_id, "corporate.contracts.manage")
     fingerprint = hashlib.sha256(
-        json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
+        json.dumps(
+            {"contract_id": str(contract_id), **payload.model_dump(mode="json")},
+            sort_keys=True,
+        ).encode()
     ).hexdigest()
     async with engine.begin() as connection:
         replay = await connection.execute(
@@ -1285,7 +1288,10 @@ async def request_contract_renewal(
     if payload.requested_start and payload.requested_end < payload.requested_start:
         raise HTTPException(status_code=422, detail="Rentang renewal tidak valid.")
     fingerprint = hashlib.sha256(
-        json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
+        json.dumps(
+            {"contract_id": str(contract_id), **payload.model_dump(mode="json")},
+            sort_keys=True,
+        ).encode()
     ).hexdigest()
     async with engine.begin() as connection:
         contract = await connection.execute(
@@ -1522,7 +1528,10 @@ async def create_contract_invoice(
         raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
     await require_tenant_permission(actor, payload.tenant_id, "corporate.finance.invoice.manage")
     fingerprint = hashlib.sha256(
-        json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
+        json.dumps(
+            {"contract_id": str(contract_id), **payload.model_dump(mode="json")},
+            sort_keys=True,
+        ).encode()
     ).hexdigest()
     async with engine.begin() as connection:
         existing = await connection.execute(
@@ -2094,7 +2103,7 @@ async def verify_payment_reference(
         actor, payload.tenant_id, "corporate.finance.invoice.manage"
     )
     fingerprint = hashlib.sha256(
-        f"{payload.decision}:{payload.evidence_reference}:{payload.reason}".encode()
+        f"{reference_id}:{payload.decision}:{payload.evidence_reference}:{payload.reason}".encode()
     ).hexdigest()
     async with engine.begin() as connection:
         replay_result = await connection.execute(
