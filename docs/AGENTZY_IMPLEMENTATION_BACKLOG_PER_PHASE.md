@@ -76,14 +76,14 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | `AGZ-P04-INT-001` | 04 — Human Workforce Passport & Onboarding | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete |
 | `AGZ-P04-OBS-001` | 04 — Human Workforce Passport & Onboarding | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete |
 | `AGZ-P04-DOC-001` | 04 — Human Workforce Passport & Onboarding | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE — implementation complete |
-| `AGZ-P05-FE-001` | 05 — Sales CRM, Provider Catalogue & Order | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
-| `AGZ-P05-BE-001` | 05 — Sales CRM, Provider Catalogue & Order | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
-| `AGZ-P05-DB-001` | 05 — Sales CRM, Provider Catalogue & Order | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
-| `AGZ-P05-API-001` | 05 — Sales CRM, Provider Catalogue & Order | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | BLOCKED / NOT STARTED |
-| `AGZ-P05-PERM-001` | 05 — Sales CRM, Provider Catalogue & Order | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | BLOCKED / NOT STARTED |
-| `AGZ-P05-INT-001` | 05 — Sales CRM, Provider Catalogue & Order | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | BLOCKED / NOT STARTED |
-| `AGZ-P05-OBS-001` | 05 — Sales CRM, Provider Catalogue & Order | Observability | Structured logs, metrics, traces, audit events and operational alerts. | BLOCKED / NOT STARTED |
-| `AGZ-P05-DOC-001` | 05 — Sales CRM, Provider Catalogue & Order | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | BLOCKED / NOT STARTED |
+| `AGZ-P05-FE-001` | 05 — Sales CRM, Provider Catalogue & Order | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | DONE — implementation complete |
+| `AGZ-P05-BE-001` | 05 — Sales CRM, Provider Catalogue & Order | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | DONE — implementation complete |
+| `AGZ-P05-DB-001` | 05 — Sales CRM, Provider Catalogue & Order | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE — implementation complete |
+| `AGZ-P05-API-001` | 05 — Sales CRM, Provider Catalogue & Order | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE — implementation complete |
+| `AGZ-P05-PERM-001` | 05 — Sales CRM, Provider Catalogue & Order | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE — implementation complete |
+| `AGZ-P05-INT-001` | 05 — Sales CRM, Provider Catalogue & Order | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete |
+| `AGZ-P05-OBS-001` | 05 — Sales CRM, Provider Catalogue & Order | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete |
+| `AGZ-P05-DOC-001` | 05 — Sales CRM, Provider Catalogue & Order | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE — implementation complete |
 | `AGZ-P06-FE-001` | 06 — Affiliate Recruitment & Registration | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P06-BE-001` | 06 — Affiliate Recruitment & Registration | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
 | `AGZ-P06-DB-001` | 06 — Affiliate Recruitment & Registration | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
@@ -272,7 +272,7 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 
 ### Phase 05 — Sales CRM, Provider Catalogue & Order
 
-**Scope:** Provider/product catalogue, leads, customer consent, coverage abstraction, orders, authorized provider adapters, webhooks and reconciliation.
+**Scope:** Sales CRM/lead lifecycle, Phase 02 prospect linkage, Phase 04 workforce assignment, provider/product catalogue, customer consent, coverage abstraction, offers/orders, sales order attribution, authorized provider adapters, webhooks, outbox/retries and reconciliation.
 
 **Exit:** seluruh task applicable memiliki commit SHA, migration evidence bila ada, API/OpenAPI, permission/RLS, UI wiring ke backend, event/integration, observability, dokumentasi dan known limitations. Phase 22 menampung full UAT/staging/security/load/release gate; Phase 23 adalah controlled launch.
 
@@ -1116,4 +1116,22 @@ Evidence: `docs/phase-04/PHASE_04_IMPLEMENTATION_REPORT_2026-11-25.md`.
 - Supabase evidence contains no seeded workforce records or fake business data.
 - Engineering evidence: Agentzy Minimum Engineering Checks run [45602180669](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45602180669) on implementation commit `a710163a19036aeb6d070c988e6ab5df7a3b5097` — SUCCESS (frontend lint, TypeScript, Python compile, Ruff, focused deterministic checks, FastAPI/OpenAPI and migration consistency).
 - Deployment limitations: document operations require `SUPABASE_SERVICE_ROLE_KEY` and `CLAMAV_HOST`; notification dispatch requires SMTP. SMTP/Google OAuth credentials remain deferred and are not claimed active. Phase 00 remains separately IN PROGRESS; this update does not close Phase 00.
-- **Next phase:** Phase 05 — Sales CRM, Provider Catalogue & Order. No Phase 05 implementation has been started.
+- **Next phase:** Phase 06 — Affiliate Recruitment & Registration. Phase 05 is DONE — Implementation Complete; Phase 06 implementation has not started.
+
+
+## 27. Phase 05 implementation closure — 2026-11-25
+
+**Phase 05 — Sales CRM, Provider Catalogue & Order: DONE — Implementation Complete.**
+
+Evidence: `docs/phase-05/PHASE_05_IMPLEMENTATION_REPORT_2026-11-25.md`.
+
+- All eight Phase 05 task IDs (`AGZ-P05-FE-001`, `BE-001`, `DB-001`, `API-001`, `PERM-001`, `INT-001`, `OBS-001`, `DOC-001`) are marked DONE — implementation complete.
+- Corporate Portal Sales CRM and Super Admin Provider/Product Catalogue are wired to typed FastAPI APIs. Sales pipeline, customer profile, workforce assignment, qualification, follow-up, notes/activity, consent capture/revocation, coverage, offers, orders, event history, attribution and reconciliation are implemented.
+- FastAPI exposes 36 `/api/v1/sales` endpoints. Provider HTTP JSON adapter, provider health, signed webhook ingestion, idempotent outbox, bounded retries, dead-letter/requeue and reconciliation are implemented. Partner portal/secure file exchange remain contract-only until an authorized partner channel is supplied.
+- Four Phase 05 migrations are present and applied: `20261125115219`, `20261125115634`, `20261125115731`, and `20261125124732`.
+- Live Supabase evidence: 14/14 Phase 05 business tables have RLS and explicit client-deny policies; zero direct grants to anon/authenticated/service_role; zero FORCE-RLS tables; 9 Sales permission keys with role mappings. Backend DB role bypasses RLS, so FastAPI RBAC/ABAC and object-level authorization remain mandatory.
+- No provider/customer/order/attribution/outbox/webhook test data was seeded. No synthetic coverage or provider result was created.
+- Engineering evidence: [Agentzy Minimum Engineering Checks run 45618835927](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45618835927) — SUCCESS on tested implementation source commit `330eb890a7a753c9723238fdaa9dda9410966d13`. Frontend lint, TypeScript type-check, Python compile, Ruff, focused deterministic API checks, FastAPI import/OpenAPI contract and migration source consistency all passed. The subsequent `.env.example` correction is commit `15c04c26d11137a0542e1fe2b2d1bc39c9b856d7`.
+- Known limitations: no provider credentials/official access configured; provider cancellation after acceptance requires a partner cancellation contract; customer consent is operator attestation, not OTP/e-signature; SMTP and Google OAuth remain deferred. No UAT/staging/load/penetration test or production deployment was performed.
+- Phase 00 remains separately IN PROGRESS and was not changed by Phase 05 closure.
+- **Next phase:** Phase 06 — Affiliate Recruitment & Registration. No Phase 06 code has been started.
