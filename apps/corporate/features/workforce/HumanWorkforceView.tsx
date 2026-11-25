@@ -38,7 +38,6 @@ export function HumanWorkforceView({
   useEffect(() => {
     let active = true;
     if (!accessToken || !tenantId) return;
-    setLoading(true);
     void listWorkforceProfiles(accessToken, tenantId)
       .then((result) => { if (active) { setProfiles(result.data); setError(null); } })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Data Workforce gagal dimuat.'); })
@@ -78,7 +77,7 @@ export function HumanWorkforceView({
       </div>
       {(!accessToken || !tenantId) && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Sesi atau tenant context tidak tersedia.</div>}
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
-      {loading ? (
+      {(!accessToken || !tenantId) ? (<div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Sesi atau tenant context tidak tersedia.</div>) : loading ? (
         <div className="rounded-xl border border-[#D8E3E9] bg-white p-8 text-center text-sm text-[#526675]">Memuat workforce dari FastAPI…</div>
       ) : (
         <>
