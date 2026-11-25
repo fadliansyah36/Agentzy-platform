@@ -110,12 +110,12 @@ export function HumanWorkforceView({
   };
   const activateEngagement=async(engagementId:string)=>{
     if(!accessToken)return;
-    try{await activateWorkforceEngagement(accessToken,engagementId,{tenant_id:tenantId,reason:'Corporate approval setelah review fakta dan dokumen.'});await listWorkforceEngagements(accessToken,tenantId,selectedProfileId!).then(x=>setEngagements(x.data));await load();}
+    try{await activateWorkforceEngagement(accessToken,engagementId,{tenant_id:tenantId,reason:actionReason.trim()});setActionReason('');await listWorkforceEngagements(accessToken,tenantId,selectedProfileId!).then(x=>setEngagements(x.data));await load();}
     catch(cause){setDetailError(cause instanceof Error?cause.message:'Engagement activation gagal.');}
   };
   const updateEngagement=async(engagementId:string,status:'suspended'|'ended')=>{
     if(!accessToken)return;
-    try{await changeWorkforceEngagementStatus(accessToken,engagementId,tenantId,status,'Perubahan status disetujui Corporate.');await listWorkforceEngagements(accessToken,tenantId,selectedProfileId!).then(x=>setEngagements(x.data));await load();}
+    try{await changeWorkforceEngagementStatus(accessToken,engagementId,tenantId,status,actionReason.trim());setActionReason('');await listWorkforceEngagements(accessToken,tenantId,selectedProfileId!).then(x=>setEngagements(x.data));await load();}
     catch(cause){setDetailError(cause instanceof Error?cause.message:'Perubahan engagement gagal.');}
   };
 
@@ -198,7 +198,7 @@ export function HumanWorkforceView({
             {detailError&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-800">{detailError}</p>}
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Engagement & Contract</h4>
-                {engagements.map((item,index)=><div key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-xs"><p className="font-semibold text-[#17324D]">{String(item.classification)} · {String(item.status)}</p><p className="mt-1 text-[#526675]">{String(item.agreement_reference)} · {String(item.contract_id??'External agreement')}</p>{item.status==='pending'&&<button type="button" onClick={()=>void activateEngagement(String(item.id))} className="mt-2 rounded-md bg-[#0284C7] px-2 py-1 text-[10px] font-semibold text-white">Activate</button>}{item.status==='active'&&<div className="mt-2 flex gap-2"><button type="button" onClick={()=>void updateEngagement(String(item.id),'suspended')} className="rounded-md border border-[#D8E3E9] px-2 py-1 text-[10px]">Suspend</button><button type="button" onClick={()=>void updateEngagement(String(item.id),'ended')} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">End</button></div>}</div>)}
+                {engagements.map((item,index)=><div key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-xs"><p className="font-semibold text-[#17324D]">{String(item.classification)} · {String(item.status)}</p><p className="mt-1 text-[#526675]">{String(item.agreement_reference)} · {String(item.contract_id??'External agreement')}</p>{item.status==='pending'&&<button type="button" disabled={actionReason.trim().length<3} onClick={()=>void activateEngagement(String(item.id))} className="mt-2 rounded-md bg-[#0284C7] px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40">Activate</button>}{item.status==='active'&&<div className="mt-2 flex gap-2"><button type="button" disabled={actionReason.trim().length<3} onClick={()=>void updateEngagement(String(item.id),'suspended')} className="rounded-md border border-[#D8E3E9] px-2 py-1 text-[10px] disabled:opacity-40">Suspend</button><button type="button" disabled={actionReason.trim().length<3} onClick={()=>void updateEngagement(String(item.id),'ended')} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700 disabled:opacity-40">End</button></div>}</div>)}
                 <div className="mt-3 grid gap-2">
                   <select value={engagementForm.classification} onChange={e=>setEngagementForm(v=>({...v,classification:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['employee','outsourced_worker','independent_contractor','freelance','affiliate','technical_partner','project_based_worker'].map(x=><option key={x}>{x}</option>)}</select>
                   <input value={engagementForm.agreement_reference} onChange={e=>setEngagementForm(v=>({...v,agreement_reference:e.target.value}))} placeholder="Agreement / Contract number" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
