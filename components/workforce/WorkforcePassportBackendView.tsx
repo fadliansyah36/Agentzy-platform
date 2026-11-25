@@ -53,9 +53,27 @@ export function WorkforcePassportBackendView({
     }finally{setLoading(false);}
   },[accessToken,tenantId]);
 
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{
+    if(!accessToken||!tenantId)return;
+    let active=true;
+    void Promise.all([
+      getMyWorkforcePassport(accessToken,tenantId).then(result=>({kind:'passport' as const,result})).catch(cause=>({kind:'passport-error' as const,cause})),
+      listWorkforceCourses(accessToken,tenantId).then(result=>({kind:'courses' as const,result})).catch(cause=>({kind:'courses-error' as const,cause})),
+    ]).then(results=>{
+      if(!active)return;
+      for(const item of results){
+        if(item.kind==='passport') {setPassport(item.result.data);setNotRegistered(false);}
+        else if(item.kind==='passport-error') {
+          if(item.cause instanceof ApiError&&item.cause.status===404){setPassport(null);setNotRegistered(true);}
+          else setError(item.cause instanceof Error?item.cause.message:'Workforce Passport gagal dimuat.');
+        } else if(item.kind==='courses') setCourses(item.result.data as Course[]);
+        else if(!(item.cause instanceof ApiError&&item.cause.status===403)) setError(item.cause instanceof Error?item.cause.message:'Training catalogue gagal dimuat.');
+      }
+    }).finally(()=>{if(active)setLoading(false);});
+    return ()=>{active=false;};
+  },[accessToken,tenantId]);
 
-  const run=async(action:()=>Promise<unknown>,success:string)=>{
+  const run=async(action:()=>Promise<unknown>)=>{
     setBusy(true);setError(null);
     try{await action();await load();}
     catch(cause){setError(cause instanceof Error?cause.message:'Operasi Workforce gagal disimpan.');}
