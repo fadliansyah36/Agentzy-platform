@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import text
 
 from app.adapters.clamav import scan_bytes
@@ -85,6 +85,16 @@ class ProfileCreate(StrictModel):
     experience_years: float = Field(default=0, ge=0, le=80)
     profile_metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("profile_metadata")
+    @classmethod
+    def restrict_profile_metadata(cls, value):
+        allowed={"portfolio_url","linkedin_url","bio","work_location","preferred_language","pronunciation"}
+        if set(value)-allowed:
+            raise ValueError("profile_metadata hanya menerima atribut non-sensitif yang diizinkan.")
+        if len(json.dumps(value,ensure_ascii=False))>4096:
+            raise ValueError("profile_metadata maksimal 4 KB.")
+        return value
+
 class ProfilePatch(StrictModel):
     tenant_id: UUID
     display_name: str | None = Field(default=None, min_length=2, max_length=160)
@@ -95,10 +105,19 @@ class ProfilePatch(StrictModel):
     experience_years: float | None = Field(default=None, ge=0, le=80)
     profile_metadata: dict[str, Any] | None = None
 
+    @field_validator("profile_metadata")
+    @classmethod
+    def restrict_profile_metadata(cls, value):
+        allowed={"portfolio_url","linkedin_url","bio","work_location","preferred_language","pronunciation"}
+        if value is not None and set(value)-allowed:
+            raise ValueError("profile_metadata hanya menerima atribut non-sensitif yang diizinkan.")
+        if value is not None and len(json.dumps(value,ensure_ascii=False))>4096:
+            raise ValueError("profile_metadata maksimal 4 KB.")
+        return value
+
 class VerificationInput(StrictModel):
     tenant_id: UUID
     verification_type: str = Field(default="identity", pattern="^(identity|address|right_to_work|background_check|other)$")
-    document_metadata: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
 
 class VerificationDecision(StrictModel):
     tenant_id: UUID
@@ -444,7 +463,7 @@ async def submit_identity(profile_id: UUID,payload: VerificationInput,request: R
         row=await connection.execute(text("""
           insert into public.workforce_identity_verifications(tenant_id,workforce_profile_id,verification_type,document_metadata)
           values(:tenant,:profile,:type,cast(:metadata as jsonb)) returning *
-        """),{"tenant":payload.tenant_id,"profile":profile_id,"type":payload.verification_type,"metadata":json.dumps(payload.document_metadata)})
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"type":payload.verification_type,"metadata":"[]"})
         verification=dict(row.mappings().one())
         if old_status != "identity_pending":
             await connection.execute(text("update public.workforce_profiles set lifecycle_status='identity_pending',updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant"),{"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
