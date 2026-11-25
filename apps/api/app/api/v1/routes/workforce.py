@@ -135,6 +135,10 @@ class EngagementInput(StrictModel):
             raise ValueError("Classification requires acknowledgement of actual engagement facts")
         return self
 
+class EngagementApproval(StrictModel):
+    tenant_id: UUID
+    reason: str = Field(min_length=3, max_length=2000)
+
 class SkillInput(StrictModel):
     tenant_id: UUID
     skill_key: str = Field(min_length=2, max_length=80)
@@ -475,12 +479,25 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
-        await connection.execute(text("update public.workforce_engagements set status='superseded',updated_at=now() where tenant_id=:tenant and workforce_profile_id=:profile and status in ('pending','active')"),{"tenant":payload.tenant_id,"profile":profile_id})
+        superseded=await connection.execute(text("""
+          update public.workforce_engagements set status='superseded',updated_at=now()
+          where tenant_id=:tenant and workforce_profile_id=:profile and status in ('pending','active')
+          returning id,status
+        """),{"tenant":payload.tenant_id,"profile":profile_id})
+        for previous in superseded.mappings().all():
+            await connection.execute(text("""
+              insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason)
+              values(:tenant,:engagement,:profile,'superseded',:from_status,'superseded',:actor,:reason)
+            """),{"tenant":payload.tenant_id,"engagement":previous["id"],"profile":profile_id,"from_status":previous["status"],"actor":actor,"reason":payload.change_reason})
         row=await connection.execute(text("""
           insert into public.workforce_engagements(tenant_id,workforce_profile_id,classification,agreement_reference,effective_from,effective_until,legal_review_reference,facts_acknowledged,change_reason,created_by)
           values(:tenant,:profile,:classification,:agreement,:start,:end,:legal,:facts,:reason,:actor) returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"classification":payload.classification,"agreement":payload.agreement_reference,"start":payload.effective_from,"end":payload.effective_until,"legal":payload.legal_review_reference,"facts":payload.facts_acknowledged,"reason":payload.change_reason,"actor":actor})
         engagement=dict(row.mappings().one())
+        await connection.execute(text("""
+          insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason,metadata)
+          values(:tenant,:engagement,:profile,'created',null,'pending',:actor,:reason,cast(:metadata as jsonb))
+        """),{"tenant":payload.tenant_id,"engagement":engagement["id"],"profile":profile_id,"actor":actor,"reason":payload.change_reason,"metadata":json.dumps({"classification":payload.classification,"agreement_reference":payload.agreement_reference})})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.created","workforce_engagement",engagement["id"],request,{"classification":payload.classification,"reason":payload.change_reason})
         return {"data":engagement}
 
@@ -933,4 +950,41 @@ async def upload_identity_document(
                 "apikey":settings.supabase_service_role_key,
             })
         raise
+
+
+@router.post("/engagements/{engagement_id}/activate")
+async def activate_engagement(
+    engagement_id: UUID,
+    payload: EngagementApproval,
+    request: Request,
+    claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"engagement.manage",request,engagement_id)
+    async with engine.begin() as connection:
+        result=await connection.execute(text("""
+          select * from public.workforce_engagements
+          where tenant_id=:tenant and id=:id for update
+        """),{"tenant":payload.tenant_id,"id":engagement_id})
+        engagement=result.mappings().first()
+        if not engagement: raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
+        if engagement["status"]!="pending": raise HTTPException(status_code=409,detail="Hanya engagement pending yang dapat diaktifkan.")
+        if engagement["effective_from"]>date.today() or (engagement["effective_until"] and engagement["effective_until"]<date.today()):
+            raise HTTPException(status_code=409,detail="Engagement belum atau tidak lagi berada dalam periode efektif.")
+        if not engagement["facts_acknowledged"] or not engagement["legal_review_reference"]:
+            raise HTTPException(status_code=409,detail="Acknowledgement fakta kerja dan legal review reference wajib sebelum aktivasi.")
+        updated=await connection.execute(text("""
+          update public.workforce_engagements set status='active',updated_at=now()
+          where tenant_id=:tenant and id=:id returning *
+        """),{"tenant":payload.tenant_id,"id":engagement_id})
+        await connection.execute(text("""
+          update public.workforce_profiles set engagement_status='active',updated_at=now()
+          where tenant_id=:tenant and id=:profile
+        """),{"tenant":payload.tenant_id,"profile":engagement["workforce_profile_id"]})
+        await connection.execute(text("""
+          insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason)
+          values(:tenant,:engagement,:profile,'activated','pending','active',:actor,:reason)
+        """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"actor":actor,"reason":payload.reason})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.activated","workforce_engagement",engagement_id,request,{"reason":payload.reason})
+        return {"data":dict(updated.mappings().one())}
 
