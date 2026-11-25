@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     clamav_host: str | None = None
     clamav_port: int = 3310
     clamav_timeout_seconds: float = 30.0
+    workforce_document_retention_days: int = 365
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
