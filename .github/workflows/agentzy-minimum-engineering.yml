@@ -86,6 +86,7 @@ jobs:
           assert "/api/v1/workforce/profiles/{profile_id}/skills" in paths
           assert "/api/v1/workforce/profiles/{profile_id}/certifications" in paths
           assert "/api/v1/workforce/profiles/{profile_id}/availability" in paths
+          assert "/api/v1/workforce/availability/{availability_id}/cancel" in paths
           assert "/api/v1/workforce/training/courses" in paths
           assert "/api/v1/workforce/profiles/{profile_id}/training/enroll" in paths
           assert "/api/v1/workforce/profiles/{profile_id}/onboarding" in paths
