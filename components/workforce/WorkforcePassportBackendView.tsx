@@ -88,27 +88,39 @@ export function WorkforcePassportBackendView({
     experience_years:Number(registration.experience_years),
   }));
 
-  const submitIdentity=()=>passport&&run(()=>submitWorkforceIdentity(accessToken!,passport.id,{
-    tenant_id:tenantId,verification_type:'identity',
-    document_metadata:[{submission_channel:'workforce_portal',submitted_at:new Date().toISOString()}],
-  }),'Verifikasi identitas diajukan');
+  const submitIdentity=async()=>{
+    if(!passport||!accessToken||!identityFile){setError('Pilih dokumen identitas terlebih dahulu.');return;}
+    setBusy(true);setError(null);
+    try{
+      let verificationId=pendingVerificationId;
+      if(!verificationId){
+        const submitted=await submitWorkforceIdentity(accessToken,passport.id,{tenant_id:tenantId,verification_type:'identity',document_metadata:[]});
+        verificationId=String(submitted.data.id);
+        setPendingVerificationId(verificationId);
+      }
+      await uploadWorkforceIdentityDocument(accessToken,tenantId,verificationId,identityFile,'identity_document');
+      setIdentityFile(null);setPendingVerificationId(null);
+      await load();
+    }catch(cause){setError(cause instanceof Error?cause.message:'Dokumen identitas gagal diunggah atau diverifikasi.');}
+    finally{setBusy(false);}
+  };
 
-  const enroll=(courseId:string)=>passport&&run(()=>enrollWorkforceTraining(accessToken!,passport.id,{tenant_id:tenantId,course_id:courseId}),'Training diikuti');
+  const enroll=(courseId:string)=>passport&&run(()=>enrollWorkforceTraining(accessToken!,passport.id,{tenant_id:tenantId,course_id:courseId}));
 
   const saveProgress=(enrollmentId:string)=>run(()=>updateWorkforceTrainingProgress(accessToken!,enrollmentId,{
     tenant_id:tenantId,progress_percent:100,assessment_score:Number(assessmentScore),
     assessment_result:{recorded_at:new Date().toISOString(),source:'workforce_portal'},
-  }),'Progress training disimpan');
+  }));
 
   const saveAvailability=()=>passport&&run(()=>createWorkforceAvailability(accessToken!,passport.id,{
     tenant_id:tenantId,availability_type:availability.type,
     starts_at:new Date(availability.starts_at).toISOString(),ends_at:new Date(availability.ends_at).toISOString(),
     timezone:passport.timezone,reason:availability.reason,
-  }),'Availability disimpan');
+  }));
 
   const completeTask=(taskId:string)=>run(()=>updateWorkforceOnboardingTask(accessToken!,taskId,{
     tenant_id:tenantId,status:'completed',reason:'Diselesaikan oleh pemilik Workforce Passport.',
-  }),'Onboarding task diselesaikan');
+  }));
 
   const nav:[Tab,string][]=[['passport','Passport'],['training','Training'],['availability','Availability'],['onboarding','Onboarding'],['history','History']];
 
