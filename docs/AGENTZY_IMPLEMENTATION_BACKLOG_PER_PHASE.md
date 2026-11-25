@@ -52,22 +52,22 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | `AGZ-P01-INT-001` | 01 — Platform Core, Identity & Tenant | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE |
 | `AGZ-P01-OBS-001` | 01 — Platform Core, Identity & Tenant | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE |
 | `AGZ-P01-DOC-001` | 01 — Platform Core, Identity & Tenant | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE |
-| `AGZ-P02-FE-001` | 02 — Public Landing & Partnership Acquisition | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | DONE |
-| `AGZ-P02-BE-001` | 02 — Public Landing & Partnership Acquisition | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | DONE |
-| `AGZ-P02-DB-001` | 02 — Public Landing & Partnership Acquisition | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE |
-| `AGZ-P02-API-001` | 02 — Public Landing & Partnership Acquisition | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE |
-| `AGZ-P02-PERM-001` | 02 — Public Landing & Partnership Acquisition | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE |
-| `AGZ-P02-INT-001` | 02 — Public Landing & Partnership Acquisition | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete |
-| `AGZ-P02-OBS-001` | 02 — Public Landing & Partnership Acquisition | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE |
-| `AGZ-P02-DOC-001` | 02 — Public Landing & Partnership Acquisition | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE |
-| `AGZ-P03-FE-001` | 03 — Corporate & Contract Management | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | IN PROGRESS |
-| `AGZ-P03-BE-001` | 03 — Corporate & Contract Management | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | IN PROGRESS |
-| `AGZ-P03-DB-001` | 03 — Corporate & Contract Management | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE — applied and live |
-| `AGZ-P03-API-001` | 03 — Corporate & Contract Management | API contract | Implement /api/v1 routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE — implementation complete |
-| `AGZ-P03-PERM-001` | 03 — Corporate & Contract Management | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE — implementation complete |
-| `AGZ-P03-INT-001` | 03 — Corporate & Contract Management | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | IN PROGRESS |
-| `AGZ-P03-OBS-001` | 03 — Corporate & Contract Management | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete |
-| `AGZ-P03-DOC-001` | 03 — Corporate & Contract Management | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | IN PROGRESS |
+| `AGZ-P02-FE-001` | 02 — Public Landing & Partnership Acquisition | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | DONE | DONE — implementation complete |
+| `AGZ-P02-BE-001` | 02 — Public Landing & Partnership Acquisition | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | DONE | DONE — implementation complete |
+| `AGZ-P02-DB-001` | 02 — Public Landing & Partnership Acquisition | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE | DONE — implementation complete |
+| `AGZ-P02-API-001` | 02 — Public Landing & Partnership Acquisition | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE | DONE — implementation complete |
+| `AGZ-P02-PERM-001` | 02 — Public Landing & Partnership Acquisition | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE | DONE — implementation complete |
+| `AGZ-P02-INT-001` | 02 — Public Landing & Partnership Acquisition | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete | DONE — implementation complete |
+| `AGZ-P02-OBS-001` | 02 — Public Landing & Partnership Acquisition | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE | DONE — implementation complete |
+| `AGZ-P02-DOC-001` | 02 — Public Landing & Partnership Acquisition | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE | DONE — implementation complete |
+| `AGZ-P03-FE-001` | 03 — Corporate & Contract Management | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | IN PROGRESS | DONE — implementation complete |
+| `AGZ-P03-BE-001` | 03 — Corporate & Contract Management | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | IN PROGRESS | DONE — implementation complete |
+| `AGZ-P03-DB-001` | 03 — Corporate & Contract Management | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE — applied and live | DONE — implementation complete |
+| `AGZ-P03-API-001` | 03 — Corporate & Contract Management | API contract | Implement /api/v1 routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE — implementation complete | DONE — implementation complete |
+| `AGZ-P03-PERM-001` | 03 — Corporate & Contract Management | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE — implementation complete | DONE — implementation complete |
+| `AGZ-P03-INT-001` | 03 — Corporate & Contract Management | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | IN PROGRESS | DONE — implementation complete |
+| `AGZ-P03-OBS-001` | 03 — Corporate & Contract Management | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete | DONE — implementation complete |
+| `AGZ-P03-DOC-001` | 03 — Corporate & Contract Management | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | IN PROGRESS | DONE — implementation complete |
 | `AGZ-P04-FE-001` | 04 — Human Workforce Passport & Onboarding | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P04-BE-001` | 04 — Human Workforce Passport & Onboarding | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
 | `AGZ-P04-DB-001` | 04 — Human Workforce Passport & Onboarding | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
@@ -1062,7 +1062,7 @@ Latest code commit at this checkpoint: `e09d15a307afaa98b6e092ae930bf044ba0e65b9
 - SMTP, Turnstile, ClamAV/Storage service-role, Google OAuth client credentials/encryption key, and deployed API/CORS values remain blank deployment configuration. Their absence does not block source implementation or this gate closure.
 - No provider credentials were invented, and no external provider is claimed active without deployment evidence.
 
-### Phase 03 — IN PROGRESS (do not close yet)
+### Phase 03 — DONE (implementation complete; verified)
 
 Implemented in the current main branch:
 - Corporate profile CRUD/status and organization/branch association; provider profile CRUD/status and contract association.
@@ -1082,8 +1082,10 @@ Implemented in the current main branch:
 - Corporate/contract/provider/approval/document/renewal/invoice/payment/entitlement/AI-worker tables have RLS enabled; direct anon and authenticated client business grants are absent on the inspected Phase 03 tables.
 - Corporate role mappings include Owner, Admin, Finance Manager, AI Manager, Auditor, and Director Viewer permissions.
 
-### Remaining closure evidence
+### Phase 03 closure evidence
 
-- Phase 03 remains IN PROGRESS until the current main-branch minimum engineering workflow (frontend lint/type-check, Python compile/import, Ruff, focused deterministic tests, OpenAPI assertions and migration source consistency) completes successfully on the final implementation commit.
+- Final main commit: a4b69c7d79bffd101c561770f79d7c85bb556300.
+- Minimum engineering workflow SUCCESS: https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45590318180.
+- Frontend lint/type-check, Python compile, Ruff, focused deterministic tests, FastAPI import/OpenAPI assertions and migration source consistency all passed.
 - No staging, UAT, load test, penetration test, production deployment, real payment transaction, or external SMTP/Google OAuth activation was performed.
-- Phase 04 — Human Workforce Passport & Onboarding is next in backlog order; do not begin until Phase 03 is closed.
+- Phase 04 — Human Workforce Passport & Onboarding is next in backlog order.
