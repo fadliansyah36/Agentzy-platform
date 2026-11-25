@@ -453,7 +453,7 @@ async def create_profile(payload: ProfileCreate, request: Request, claims: dict 
 @router.patch("/profiles/{profile_id}")
 async def update_profile(profile_id: UUID,payload: ProfilePatch,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
-    await _authorize(claims,payload.tenant_id,"profile.manage",request,profile_id)
+    await _authorize(claims,payload.tenant_id,"profile.read",request,profile_id)
     fields=payload.model_dump(exclude={"tenant_id"},exclude_unset=True)
     if not fields: raise HTTPException(status_code=422,detail="Tidak ada field untuk diperbarui.")
     allowed={"display_name","legal_name","job_family","job_title","timezone","experience_years","profile_metadata"}
@@ -462,6 +462,8 @@ async def update_profile(profile_id: UUID,payload: ProfilePatch,request: Request
     params={**fields,"tenant":payload.tenant_id,"id":profile_id,"actor":actor}
     if "profile_metadata" in params: params["profile_metadata"]=json.dumps(params["profile_metadata"])
     async with engine.begin() as connection:
+        profile=await _profile(connection,payload.tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         result=await connection.execute(text(f"update public.workforce_profiles set {assignments},updated_by=:actor,updated_at=now() where tenant_id=:tenant and id=:id returning *"),params)
         row=result.mappings().first()
         if not row: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
@@ -800,7 +802,7 @@ async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Req
             skill_check=await connection.execute(text("""
               select count(distinct s.skill_key) from public.workforce_worker_skills ws
               join public.workforce_skill_registry s on s.id=ws.skill_id
-              where ws.tenant_id=:tenant and ws.workforce_profile_id=:profile and s.skill_key=any(:skills)
+              where ws.tenant_id=:tenant and ws.workforce_profile_id=:profile and s.skill_key=any(cast(:skills as text[]))
             """),{"tenant":payload.tenant_id,"profile":profile_id,"skills":required_skills})
             if skill_check.scalar_one()<len(set(required_skills)):
                 raise HTTPException(status_code=403,detail="Skill prerequisite belum terpenuhi.")
@@ -809,7 +811,7 @@ async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Req
             class_check=await connection.execute(text("""
               select exists(select 1 from public.workforce_engagements
                 where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
-                  and classification=any(:classes))
+                  and classification=any(cast(:classes as text[])))
             """),{"tenant":payload.tenant_id,"profile":profile_id,"classes":required_classes})
             if not class_check.scalar_one():
                 raise HTTPException(status_code=403,detail="Engagement classification belum memenuhi eligibility course.")
@@ -1296,6 +1298,8 @@ async def renew_certification(certification_id: UUID,payload: CertificationRenew
         """),{"tenant":payload.tenant_id,"id":certification_id})
         old=old_result.mappings().first()
         if not old: raise HTTPException(status_code=404,detail="Sertifikasi sebelumnya tidak ditemukan.")
+        if old["verification_status"] not in ("verified","expired"):
+            raise HTTPException(status_code=409,detail="Hanya sertifikat verified atau expired yang dapat diperbarui.")
         profile=await _profile(connection,payload.tenant_id,old["workforce_profile_id"])
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if old["expires_at"] and payload.valid_from<=old["expires_at"]:
