@@ -40,7 +40,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions): Promise<
   if (!headers.has("X-Trace-ID")) headers.set("X-Trace-ID", createIdempotencyKey());
   headers.set("Authorization", `Bearer ${accessToken}`);
   headers.set("Accept", "application/json");
-  if (requestOptions.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (requestOptions.body && !headers.has("Content-Type") && !(typeof FormData !== "undefined" && requestOptions.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_BASE_URL}/api/v1${path.startsWith("/") ? path : `/${path}`}`,
     { ...requestOptions, headers, cache: "no-store" });
   if (!response.ok) {
@@ -1369,3 +1369,12 @@ export const registerMyWorkforceProfile=(accessToken:string,payload:{
   headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const listWorkforceIdentityVerifications=(accessToken:string,tenantId:string,status:"pending"|"in_review"|"verified"|"rejected"|"expired"|"all"="pending")=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/identity/verifications?tenant_id=${encodeURIComponent(tenantId)}&status=${status}`,{method:"GET",accessToken});
+
+export const uploadWorkforceIdentityDocument=(accessToken:string,tenantId:string,verificationId:string,file:File,documentType:string)=>{
+  const form=new FormData();
+  form.append('file',file);
+  return apiRequest<{data:Record<string,unknown>}>(
+    `/workforce/identity/${encodeURIComponent(verificationId)}/upload?tenant_id=${encodeURIComponent(tenantId)}&document_type=${encodeURIComponent(documentType)}`,
+    {method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:form},
+  );
+};
