@@ -21,6 +21,8 @@ Base prefix: `/api/v1/sales`. All authenticated operations require a verified te
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/providers` | Tenant provider profiles and adapter state |
+| POST | `/providers` | Create tenant provider profile as draft |
+| PATCH | `/providers/{provider_id}/status` | Activate/suspend/archive provider profile |
 | GET | `/providers/{provider_id}/health` | Provider health / external configuration status |
 | GET | `/catalogue` | Active product catalogue for Corporate Portal |
 | GET | `/products` | Product versions and status for Super Admin |

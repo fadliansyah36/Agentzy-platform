@@ -1534,3 +1534,8 @@ export const revokeSalesConsent=(accessToken:string,tenantId:string,consentId:st
   apiRequest<SalesEnvelope<{id:string;revoked:boolean}>>(`/sales/consents/${encodeURIComponent(consentId)}/revoke?${new URLSearchParams({tenant_id:tenantId,reason})}`,{method:"POST",accessToken});
 export const getSalesProviderHealth=(accessToken:string,tenantId:string,providerId:string)=>
   apiRequest<SalesEnvelope<{provider_id:string;status:string;checked_at:string|null}>>(`/sales/providers/${encodeURIComponent(providerId)}/health?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+
+export const createSalesProvider=(accessToken:string,payload:Record<string,unknown>)=>
+  apiRequest<SalesEnvelope<{id:string;status:string}>>("/sales/providers",{method:"POST",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});
+export const setSalesProviderStatus=(accessToken:string,providerId:string,payload:{tenant_id:string;status:"active"|"suspended"|"archived";reason:string})=>
+  apiRequest<SalesEnvelope<{id:string;status:string}>>(`/sales/providers/${encodeURIComponent(providerId)}/status`,{method:"PATCH",accessToken,headers:salesIdempotencyHeaders(),body:JSON.stringify(payload)});

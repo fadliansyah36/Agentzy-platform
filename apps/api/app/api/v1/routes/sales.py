@@ -30,6 +30,7 @@ PERMISSIONS = {
     "leads.read": ("sales.leads.read", "sales.lead", "read"),
     "leads.manage": ("sales.leads.manage", "sales.lead", "manage"),
     "catalogue.read": ("sales.catalogue.read", "sales.catalogue", "read"),
+    "providers.manage": ("sales.catalogue.manage", "sales.catalogue", "manage"),
     "catalogue.manage": ("sales.catalogue.manage", "sales.catalogue", "manage"),
     "consent.manage": ("sales.consent.manage", "sales.consent", "manage"),
     "coverage.check": ("sales.coverage.check", "sales.coverage", "check"),
@@ -1166,3 +1167,59 @@ async def _order_scope(connection, tenant_id: UUID, order_id: UUID, actor: UUID,
     if not order or (context and "sales_official" in context.role_keys and order["assigned_user_id"]!=actor):
         raise HTTPException(status_code=404,detail="Order tidak ditemukan.")
     return order
+
+
+class ProviderCreate(StrictModel):
+    tenant_id: UUID
+    provider_code: str = Field(min_length=2,max_length=80,pattern=r"^[A-Za-z0-9._/-]+$")
+    provider_name: str = Field(min_length=2,max_length=180)
+    provider_type: str = Field(pattern="^(isp|telecom|managed_service|technology|other)$")
+    registration_number: str | None = Field(default=None,max_length=120)
+    contact_email: str | None = Field(default=None,max_length=254)
+    contact_phone: str | None = Field(default=None,max_length=40)
+    service_regions: list[str] = Field(default_factory=list,max_length=200)
+    service_metadata: dict[str,Any] = Field(default_factory=dict)
+
+
+class ProviderStatusInput(StrictModel):
+    tenant_id: UUID
+    status: str = Field(pattern="^(active|suspended|archived)$")
+    reason: str = Field(min_length=3,max_length=1000)
+
+
+@router.post("/providers",status_code=201)
+async def create_sales_provider(payload: ProviderCreate,request: Request,claims: dict = claims_dependency,
+                                idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
+    await _authorize(claims,payload.tenant_id,"providers.manage",request)
+    actor=UUID(claims["sub"])
+    async with engine.begin() as connection:
+        result=await connection.execute(text("""
+          insert into public.provider_profiles(tenant_id,provider_code,provider_name,provider_type,
+            registration_number,contact_email,contact_phone,service_regions,service_metadata,status,created_by,updated_by)
+          values(:tenant,:code,:name,:type,:registration,:email,:phone,cast(:regions as jsonb),
+            cast(:metadata as jsonb),'draft',:actor,:actor) returning id,status
+        """),{"tenant":payload.tenant_id,"code":payload.provider_code,"name":payload.provider_name,
+              "type":payload.provider_type,"registration":payload.registration_number,
+              "email":payload.contact_email,"phone":payload.contact_phone,
+              "regions":json.dumps(payload.service_regions),"metadata":json.dumps(payload.service_metadata),"actor":actor})
+        row=result.mappings().one()
+        await _audit(connection,payload.tenant_id,actor,"sales.provider.created","provider_profile",row["id"],request,
+                     {"provider_code":payload.provider_code,"status":"draft"})
+    return {"data":{"id":str(row["id"]),"status":row["status"]}}
+
+
+@router.patch("/providers/{provider_id}/status")
+async def update_sales_provider_status(provider_id: UUID,payload: ProviderStatusInput,request: Request,claims: dict = claims_dependency):
+    await _authorize(claims,payload.tenant_id,"providers.manage",request,provider_id)
+    actor=UUID(claims["sub"])
+    async with engine.begin() as connection:
+        result=await connection.execute(text("""
+          update public.provider_profiles set status=:status,updated_by=:actor,updated_at=now()
+          where tenant_id=:tenant and id=:id and status<>'archived' returning id,status
+        """),{"status":payload.status,"actor":actor,"tenant":payload.tenant_id,"id":provider_id})
+        row=result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404,detail="Provider tidak ditemukan atau sudah diarsipkan.")
+        await _audit(connection,payload.tenant_id,actor,"sales.provider.status_changed","provider_profile",provider_id,request,
+                     {"status":payload.status,"reason":payload.reason})
+    return {"data":{"id":str(provider_id),"status":payload.status}}

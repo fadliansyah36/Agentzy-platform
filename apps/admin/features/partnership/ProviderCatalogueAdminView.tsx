@@ -2,7 +2,7 @@
 
 import { useCallback,useEffect,useState,type FormEvent } from 'react';
 import { RefreshCw,Plus,RadioTower,PackageCheck,ShieldCheck } from 'lucide-react';
-import { ApiError,listSalesProviders,listSalesProducts,createSalesProduct,setSalesProductStatus,configureSalesProvider,retrySalesProviderSubmissions,type SalesProvider,type SalesProduct } from '@/apps/web/lib/api-client';
+import { ApiError,listSalesProviders,listSalesProducts,createSalesProvider,setSalesProviderStatus,createSalesProduct,setSalesProductStatus,configureSalesProvider,retrySalesProviderSubmissions,type SalesProvider,type SalesProduct } from '@/apps/web/lib/api-client';
 
 type TenantOption={id:string;name:string};
 export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:string;tenants:TenantOption[]}) {
@@ -10,6 +10,7 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
   const [providers,setProviders]=useState<SalesProvider[]>([]);
   const [products,setProducts]=useState<SalesProduct[]>([]);
   const [providerId,setProviderId]=useState('');
+  const [providerForm,setProviderForm]=useState({provider_code:'',provider_name:'',provider_type:'isp',registration_number:'',contact_email:'',contact_phone:'',regions:''});
   const [form,setForm]=useState({product_code:'',name:'',category:'internet_access',coverage_source:'authorized_provider_api',region:'',pricingReference:'provider_quote_required'});
   const [integration,setIntegration]=useState({endpoint_url:'',auth_env_key:'',webhook_secret_env_key:'',enabled:false});
   const [loading,setLoading]=useState(false);
@@ -29,6 +30,8 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
   },[tenantId,accessToken,providerId]);
   useEffect(()=>{void Promise.resolve().then(()=>load());},[load]);
 
+  const createProvider=async(event:FormEvent)=>{event.preventDefault();setBusy(true);setError(null);setNotice(null);try{const {regions,...providerPayload}=providerForm;const result=await createSalesProvider(accessToken,{tenant_id:tenantId,...providerPayload,service_regions:regions.split(',').map(v=>v.trim()).filter(Boolean),service_metadata:{}});setProviderId(result.data.id);setNotice('Provider profile dibuat sebagai draft. Aktifkan setelah dokumen kemitraan dan cakupan wilayah diverifikasi.');setProviderForm({provider_code:'',provider_name:'',provider_type:'isp',registration_number:'',contact_email:'',contact_phone:'',regions:''});await load();}catch(e){setError(e instanceof ApiError?e.message:'Provider profile gagal dibuat.');}finally{setBusy(false);}};
+  const activateProvider=async(provider:SalesProvider)=>{setBusy(true);setError(null);try{await setSalesProviderStatus(accessToken,provider.id,{tenant_id:tenantId,status:'active',reason:'Provider profile verified by authorized platform operator.'});setNotice('Provider '+provider.provider_code+' diaktifkan.');await load();}catch(e){setError(e instanceof ApiError?e.message:'Provider status gagal diperbarui.');}finally{setBusy(false);}};
   const createProduct=async(event:FormEvent)=>{
     event.preventDefault();if(!providerId)return;
     setBusy(true);setError(null);setNotice(null);
@@ -80,6 +83,13 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
       <label className="text-xs font-semibold text-[#526675]">Corporate Tenant<select value={tenantId} onChange={e=>{setTenantId(e.target.value);setProviderId('');}} className="mt-1 w-full rounded-lg border border-[#D8E3E9] bg-white px-3 py-2 text-sm">{tenants.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
       <label className="text-xs font-semibold text-[#526675]">Provider Profile<select value={providerId} onChange={e=>setProviderId(e.target.value)} className="mt-1 w-full rounded-lg border border-[#D8E3E9] bg-white px-3 py-2 text-sm"><option value="">Pilih provider</option>{providers.map(p=><option key={p.id} value={p.id}>{p.provider_name} · {p.status}</option>)}</select></label>
     </div>
+    <form onSubmit={createProvider} className="grid gap-3 rounded-lg border border-[#EAF2F6] p-4 md:grid-cols-2">
+      <div className="md:col-span-2"><h3 className="font-semibold text-[#17324D]">Create Provider Profile</h3><p className="text-xs text-[#526675]">Provider profile dibuat draft; tidak mengaktifkan integrasi eksternal otomatis.</p></div>
+      {([['provider_code','Provider code'],['provider_name','Provider name'],['registration_number','Registration number'],['contact_email','Contact email'],['contact_phone','Contact phone'],['regions','Service regions (comma separated)']] as const).map(([key,label])=><label key={key} className="text-xs font-semibold text-[#526675]">{label}<input required={key==='provider_code'||key==='provider_name'} value={providerForm[key]} onChange={e=>setProviderForm(v=>({...v,[key]:e.target.value}))} className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-sm font-normal"/></label>)}
+      <label className="text-xs font-semibold text-[#526675]">Provider type<select value={providerForm.provider_type} onChange={e=>setProviderForm(v=>({...v,provider_type:e.target.value}))} className="mt-1 w-full rounded-lg border border-[#D8E3E9] bg-white px-3 py-2 text-sm"><option value="isp">ISP</option><option value="telecom">Telecom</option><option value="managed_service">Managed service</option><option value="technology">Technology</option><option value="other">Other</option></select></label>
+      <button disabled={busy||!tenantId} className="self-end rounded-lg bg-[#1769C2] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Create Provider Draft</button>
+    </form>
+    <div className="rounded-lg border border-[#EAF2F6] p-4"><h3 className="mb-2 font-semibold text-[#17324D]">Provider Profiles ({providers.length})</h3><div className="space-y-2">{providers.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#F8FBFC] p-3 text-xs"><span className="font-semibold text-[#17324D]">{p.provider_name} · {p.provider_code} · {p.status}</span>{p.status==='draft'&&<button disabled={busy} onClick={()=>void activateProvider(p)} className="font-semibold text-[#0284C7] disabled:opacity-50">Activate profile</button>}</div>)}</div></div>
     {selectedProvider&&<div className="rounded-lg border border-[#EAF2F6] bg-[#F8FBFC] p-3 text-xs text-[#526675]"><div className="flex items-center gap-2 font-semibold text-[#17324D]"><RadioTower className="h-4 w-4"/> {selectedProvider.provider_name} ({selectedProvider.provider_code})</div><p className="mt-1">Provider profile status: {selectedProvider.status} · Adapter: {selectedProvider.adapter_enabled?'enabled':'pending external configuration'}</p></div>}
     <div className="grid gap-4 xl:grid-cols-2">
       <form onSubmit={createProduct} className="space-y-3 rounded-lg border border-[#EAF2F6] p-4">

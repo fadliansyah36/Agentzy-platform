@@ -96,6 +96,7 @@ jobs:
           assert "/api/v1/sales/dashboard" in paths
           assert "/api/v1/sales/leads" in paths
           assert "/api/v1/sales/providers" in paths
+          assert "/api/v1/sales/providers/{provider_id}/status" in paths
           assert "/api/v1/sales/catalogue" in paths
           assert "/api/v1/sales/orders" in paths
           assert "/api/v1/sales/webhooks/providers/{provider_code}" in paths

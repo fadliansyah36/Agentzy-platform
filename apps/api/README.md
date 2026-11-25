@@ -65,6 +65,7 @@ The Sales bounded context is owned by FastAPI and stored in the primary Supabase
 
 - Domain rules: `app/domain/sales.py`; application invariants: `app/services/sales_service.py`.
 - Persistence: `app/repositories/sales_repository.py`; HTTP contract: `app/api/v1/routes/sales.py`.
+- Provider profiles and versioned products are managed in the Super Admin catalogue UI; provider profile creation/status uses `sales.catalogue.manage` and product versions use the same protected catalogue permission.
 - Provider integration: `app/adapters/provider_adapter.py`; durable outbox worker: `app/services/sales_worker.py`.
 - Typed portal API methods: `apps/web/lib/api-client.ts`; Corporate Portal and Super Admin screens are mounted from their existing portal clients.
 - Migrations: `20261125115219_phase_05_sales_crm_provider_catalogue_orders`, `20261125115634_phase_05_sales_explicit_deny_client_rls`, and `20261125115731_phase_05_sales_idempotency_constraints`.
