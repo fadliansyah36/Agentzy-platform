@@ -10,7 +10,8 @@ import {
   getContractDocumentDownload, getEffectiveContractEntitlements,
   listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
   requestContractRenewal, listContractVersions, listContractRenewals, decideContractRenewal,
-  getPublicCatalogue, getContractOperationalMetrics, listCorporateProviderProfiles, createCorporateProviderProfile,
+  getPublicCatalogue, getContractOperationalMetrics, patchCorporateContract,
+  listCorporateProviderProfiles, createCorporateProviderProfile,
   updateCorporateProviderProfile, updateCorporateProviderProfileStatus,
   submitContractPolicyReview, updateContractSignatureStatus, updateCorporateProfileStatus,
   upsertCorporateProfile, uploadContractDocument,
@@ -48,6 +49,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
   const [profileForm,setProfileForm] = useState({legal_name:'',registration_number:'',billing_email:'',billing_phone:'',contact_name:'',contact_title:'',website:'',country_code:'ID',organization_id:'',branch_id:'',tax_rate:'0'});
   const [contracts,setContracts] = useState<CorporateContract[]>([]);
   const [selectedId,setSelectedId] = useState('');
+  const [draftEdit,setDraftEdit] = useState({title:'',effective_start:'',effective_end:'',organization_id:'',branch_id:''});
   const [detail,setDetail] = useState<CorporateContract | null>(null);
   const [documents,setDocuments] = useState<ContractDocument[]>([]);
   const [versions,setVersions] = useState<ContractVersionRecord[]>([]);
@@ -132,7 +134,15 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
         listContractVersions(token,tenant.id,id),
         listContractRenewals(token,tenant.id,id),
       ]);
-      setDetail(d.data); setDocuments(docs.data);
+      setDetail(d.data);
+      setDraftEdit({
+        title:d.data.title,
+        effective_start:d.data.effective_start ?? '',
+        effective_end:d.data.effective_end ?? '',
+        organization_id:d.data.organization_id ?? '',
+        branch_id:d.data.branch_id ?? '',
+      });
+      setDocuments(docs.data);
       setVersions(versionRows.data); setRenewals(renewalRows.data);
     } catch(e) { setError(e instanceof Error ? e.message : 'Gagal memuat detail kontrak.'); }
   },[token,tenant.id]);
@@ -216,6 +226,22 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
     });
     setSelectedId(result.data.id); setTab('contracts');
   }, 'Draft kontrak dibuat.');
+
+  const updateDraftContract = () => {
+    if(!detail || detail.status!=='draft') return;
+    return action(async () => {
+      await patchCorporateContract(token,detail.id,{
+        tenant_id:tenant.id,
+        expected_row_version:detail.row_version,
+        title:draftEdit.title.trim(),
+        effective_start:draftEdit.effective_start || null,
+        effective_end:draftEdit.effective_end || null,
+        organization_id:draftEdit.organization_id || null,
+        branch_id:draftEdit.branch_id || null,
+      });
+      await loadDetail(detail.id);
+    },'Draft kontrak diperbarui melalui FastAPI.');
+  };
 
   const createPolicy = () => action(() => createContractApprovalPolicy(token,{
     tenant_id:tenant.id,policy_name:policyName,contract_type:policyType,currency:'IDR',
@@ -334,6 +360,17 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
           <p className="text-xs font-semibold text-[#0284C7]">{detail.contract_number}</p><h2 className="mt-1 text-lg font-bold text-[#17324D]">{detail.title}</h2>
           <p className="mt-1 text-xs text-[#718391]">{statusName[detail.status] ?? detail.status} · v{detail.current_version} · {fmt(detail.effective_start)} — {fmt(detail.effective_end)}</p>
           <div className="mt-4 rounded-lg bg-[#F5F8FA] p-4"><p className="text-xs font-semibold text-[#526675]">Scope</p><p className="mt-1 whitespace-pre-wrap text-sm text-[#17324D]">{detail.scope_summary ?? 'Scope belum tersedia.'}</p></div>
+          {canManage && detail.status==='draft' && <div className="mt-4 rounded-lg border border-[#D8E3E9] p-4">
+            <h3 className="text-xs font-bold text-[#17324D]">Edit Draft Contract</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="md:col-span-2"><span className={label}>Judul kontrak</span><input className={field} value={draftEdit.title} onChange={e=>setDraftEdit(p=>({...p,title:e.target.value}))}/></label>
+              <label><span className={label}>Tanggal mulai</span><input type="date" className={field} value={draftEdit.effective_start} onChange={e=>setDraftEdit(p=>({...p,effective_start:e.target.value}))}/></label>
+              <label><span className={label}>Tanggal akhir</span><input type="date" className={field} value={draftEdit.effective_end} onChange={e=>setDraftEdit(p=>({...p,effective_end:e.target.value}))}/></label>
+              <label><span className={label}>Organization</span><select className={field} value={draftEdit.organization_id} onChange={e=>setDraftEdit(p=>({...p,organization_id:e.target.value,branch_id:''}))}><option value="">Tanpa organization</option>{organizations.filter(o=>o.status==='active').map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+              <label><span className={label}>Branch</span><select className={field} value={draftEdit.branch_id} disabled={!draftEdit.organization_id} onChange={e=>setDraftEdit(p=>({...p,branch_id:e.target.value}))}><option value="">Tanpa branch</option>{branches.filter(b=>b.organization_id===draftEdit.organization_id && b.status==='active').map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+              <button className={primary} disabled={saving || !draftEdit.title.trim() || (draftEdit.effective_start && draftEdit.effective_end && draftEdit.effective_end<draftEdit.effective_start)} onClick={()=>void updateDraftContract()}>Simpan Perubahan Draft</button>
+            </div>
+          </div>}
           <div className="mt-4 rounded-lg border border-[#D8E3E9] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold text-[#17324D]">Signature status</p><span className="text-xs font-semibold text-[#526675]">{detail.signature_status ?? 'not_started'}</span></div>
             {canManage && detail.signature_status !== 'signed' && <div className="mt-3 grid gap-2 md:grid-cols-3">
