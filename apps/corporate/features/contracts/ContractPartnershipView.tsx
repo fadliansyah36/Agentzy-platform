@@ -233,10 +233,11 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
       setError('Versi kontrak tidak tersedia. Refresh detail sebelum mengubah draft.');
       return;
     }
+    const expectedRowVersion = detail.row_version;
     return action(async () => {
       await patchCorporateContract(token,detail.id,{
         tenant_id:tenant.id,
-        expected_row_version:detail.row_version,
+        expected_row_version:expectedRowVersion,
         title:draftEdit.title.trim(),
         effective_start:draftEdit.effective_start || null,
         effective_end:draftEdit.effective_end || null,
@@ -372,7 +373,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
               <label><span className={label}>Tanggal akhir</span><input type="date" className={field} value={draftEdit.effective_end} onChange={e=>setDraftEdit(p=>({...p,effective_end:e.target.value}))}/></label>
               <label><span className={label}>Organization</span><select className={field} value={draftEdit.organization_id} onChange={e=>setDraftEdit(p=>({...p,organization_id:e.target.value,branch_id:''}))}><option value="">Tanpa organization</option>{organizations.filter(o=>o.status==='active').map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
               <label><span className={label}>Branch</span><select className={field} value={draftEdit.branch_id} disabled={!draftEdit.organization_id} onChange={e=>setDraftEdit(p=>({...p,branch_id:e.target.value}))}><option value="">Tanpa branch</option>{branches.filter(b=>b.organization_id===draftEdit.organization_id && b.status==='active').map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-              <button className={primary} disabled={saving || !draftEdit.title.trim() || (draftEdit.effective_start && draftEdit.effective_end && draftEdit.effective_end<draftEdit.effective_start)} onClick={()=>void updateDraftContract()}>Simpan Perubahan Draft</button>
+              <button className={primary} disabled={saving || !draftEdit.title.trim() || Boolean(draftEdit.effective_start && draftEdit.effective_end && draftEdit.effective_end<draftEdit.effective_start)} onClick={()=>void updateDraftContract()}>Simpan Perubahan Draft</button>
             </div>
           </div>}
           <div className="mt-4 rounded-lg border border-[#D8E3E9] p-4">
