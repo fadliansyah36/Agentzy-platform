@@ -56,6 +56,16 @@ TRANSITIONS = {
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+class SelfRegistrationInput(StrictModel):
+    tenant_id: UUID
+    worker_code: str = Field(min_length=2, max_length=48)
+    display_name: str = Field(min_length=2, max_length=160)
+    legal_name: str | None = Field(default=None, max_length=180)
+    job_family: str | None = Field(default=None, max_length=100)
+    job_title: str | None = Field(default=None, max_length=120)
+    timezone: str = Field(default='Asia/Jakarta', max_length=80)
+    experience_years: float = Field(default=0, ge=0, le=80)
+
 class ProfileCreate(StrictModel):
     tenant_id: UUID
     user_id: UUID
@@ -240,6 +250,12 @@ async def _write_audit(connection, tenant_id: UUID, actor: UUID, action: str, re
       values(:tenant,:actor,:action,:type,:id,:request_id,cast(:metadata as jsonb))
     """), {"tenant":tenant_id,"actor":actor,"action":action,"type":resource_type,"id":str(resource_id),
            "request_id":getattr(request.state,"request_id",None),"metadata":json.dumps(metadata or {},default=str)})
+
+
+async def _assert_profile_scope(connection, claims: dict, tenant_id: UUID, profile: dict, request: Request):
+    if profile["user_id"] == UUID(claims["sub"]):
+        return
+    await _authorize(claims, tenant_id, "profile.manage", request, UUID(str(profile["id"])))
 
 @router.get("/passport")
 async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = claims_dependency):
@@ -651,3 +667,32 @@ async def get_workforce_history(profile_id: UUID,tenant_id: UUID,request: Reques
         await _profile(connection,tenant_id,profile_id)
         rows=await connection.execute(text("select * from public.workforce_lifecycle_events where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 200"),{"tenant":tenant_id,"profile":profile_id})
         return {"data":[dict(r) for r in rows.mappings().all()]}
+
+@router.post("/register", status_code=201)
+async def register_workforce(payload: SelfRegistrationInput, request: Request, claims: dict = claims_dependency):
+    actor = UUID(claims["sub"])
+    await _authorize(claims, payload.tenant_id, "identity.submit", request)
+    async with engine.begin() as connection:
+        membership = await connection.execute(text("""
+          select id from public.memberships
+          where tenant_id=:tenant and user_id=:actor and status='active'
+          order by joined_at desc nulls last limit 1
+        """), {"tenant": payload.tenant_id, "actor": actor})
+        membership_id = membership.scalar_one_or_none()
+        if not membership_id:
+            raise HTTPException(status_code=403, detail="Membership Workforce aktif diperlukan untuk registrasi.")
+        result = await connection.execute(text("""
+          insert into public.workforce_profiles(tenant_id,user_id,membership_id,worker_code,display_name,legal_name,job_family,job_title,timezone,experience_years,created_by,updated_by)
+          values(:tenant,:actor,:membership,:code,:name,:legal,:family,:title,:timezone,:experience,:actor,:actor)
+          returning *
+        """), {"tenant":payload.tenant_id,"actor":actor,"membership":membership_id,"code":payload.worker_code,
+               "name":payload.display_name,"legal":payload.legal_name,"family":payload.job_family,
+               "title":payload.job_title,"timezone":payload.timezone,"experience":payload.experience_years})
+        profile = dict(result.mappings().one())
+        await connection.execute(text("""
+          insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id)
+          values(:tenant,:profile,null,'registered',:actor,'Self registration','workforce.identity.submit',:request)
+        """), {"tenant":payload.tenant_id,"profile":profile["id"],"actor":actor,"request":getattr(request.state,"request_id",None)})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.self_registered","workforce_profile",profile["id"],request)
+        return {"data":profile}
+
