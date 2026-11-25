@@ -170,21 +170,21 @@ async def create_contract(
         ):
             if entity_id:
                 valid = await validation_connection.execute(
-                    text(f"select exists(select 1 from public.{table} where id=:id and tenant_id=:tenant)"),
+                    text(f"select exists(select 1 from public.{table} " "where id=:id and tenant_id=:tenant)"),
                     {"id": entity_id, "tenant": payload.tenant_id},
                 )
                 if not valid.scalar_one():
                     raise HTTPException(status_code=422, detail=f"{table} tidak dimiliki tenant ini.")
         if payload.provider_profile_id:
             provider = await validation_connection.execute(
-                text("select exists(select 1 from public.provider_profiles where id=:id and tenant_id=:tenant and status='active')"),
+                text("select exists(select 1 from public.provider_profiles " "where id=:id and tenant_id=:tenant and status='active')"),
                 {"id": payload.provider_profile_id, "tenant": payload.tenant_id},
             )
             if not provider.scalar_one():
                 raise HTTPException(status_code=422, detail="Provider profile tidak aktif atau bukan milik tenant.")
         if payload.parent_contract_id:
             parent = await validation_connection.execute(
-                text("select exists(select 1 from public.contracts where id=:id and tenant_id=:tenant and status in ('approved','active'))"),
+                text("select exists(select 1 from public.contracts " "where id=:id and tenant_id=:tenant and status in ('approved','active'))"),
                 {"id": payload.parent_contract_id, "tenant": payload.tenant_id},
             )
             if not parent.scalar_one():
