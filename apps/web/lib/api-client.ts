@@ -1267,3 +1267,10 @@ export const getContractOperationalMetrics = (accessToken:string,tenantId:string
     `/corporate/metrics/contracts?tenant_id=${encodeURIComponent(tenantId)}`,
     {method:'GET',accessToken},
   );
+
+export const activateCorporateContract = (
+  accessToken: string, tenantId: string, contractId: string,
+) => apiRequest<{ data: { id: string; status: string; replayed?: boolean } }>(
+  `/corporate/contracts/${encodeURIComponent(contractId)}/activate?${new URLSearchParams({tenant_id:tenantId}).toString()}`,
+  { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
+);
