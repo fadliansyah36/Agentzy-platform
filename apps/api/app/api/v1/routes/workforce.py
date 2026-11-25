@@ -351,6 +351,8 @@ async def decide_identity(verification_id: UUID,payload: VerificationDecision,re
         existing=await connection.execute(text("select * from public.workforce_identity_verifications where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":verification_id})
         verification=existing.mappings().first()
         if not verification: raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
+        profile=await _profile(connection,payload.tenant_id,verification["workforce_profile_id"])
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if verification["status"] in ("verified","rejected"): raise HTTPException(status_code=409,detail="Keputusan verifikasi sudah final.")
         reason=payload.reason if payload.decision=="rejected" else None
         result=await connection.execute(text("""
@@ -371,6 +373,11 @@ async def register_identity_document(verification_id: UUID,payload: DocumentMeta
     if not payload.storage_path.startswith(expected_prefix) or ".." in payload.storage_path:
         raise HTTPException(status_code=422,detail="Storage path tidak sesuai scope tenant/verifikasi.")
     async with engine.begin() as connection:
+        verification=await connection.execute(text("select workforce_profile_id from public.workforce_identity_verifications where tenant_id=:tenant and id=:id"),{"tenant":payload.tenant_id,"id":verification_id})
+        verification_row=verification.mappings().first()
+        if not verification_row: raise HTTPException(status_code=404,detail="Verifikasi tidak ditemukan.")
+        profile=await _profile(connection,payload.tenant_id,verification_row["workforce_profile_id"])
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         row=await connection.execute(text("""
           insert into public.workforce_identity_documents(tenant_id,verification_id,storage_path,document_type,original_filename,content_type,file_size_bytes,sha256,retention_until,uploaded_by)
           values(:tenant,:verification,:path,:type,:filename,:mime,:size,:sha,:retention,:actor) returning *
@@ -402,7 +409,8 @@ async def signed_document_download(document_id: UUID,tenant_id: UUID,request: Re
 async def list_engagements(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
     await _authorize(claims,tenant_id,"engagement.read",request,profile_id)
     async with engine.connect() as connection:
-        await _profile(connection,tenant_id,profile_id)
+        profile=await _profile(connection,tenant_id,profile_id)
+        await _assert_profile_scope(connection,claims,tenant_id,profile,request)
         rows=await connection.execute(text("select * from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile order by effective_from desc"),{"tenant":tenant_id,"profile":profile_id})
         return {"data":[dict(r) for r in rows.mappings().all()]}
 
@@ -557,11 +565,15 @@ async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,re
     await _authorize(claims,payload.tenant_id,"training.read",request,enrollment_id)
     async with engine.begin() as connection:
         existing=await connection.execute(text("""
-          select e.*,c.validity_days from public.workforce_training_enrollments e join public.workforce_training_courses c on c.id=e.course_id
+          select e.*,c.validity_days,p.id as profile_id,p.user_id from public.workforce_training_enrollments e
+          join public.workforce_training_courses c on c.id=e.course_id
+          join public.workforce_profiles p on p.id=e.workforce_profile_id and p.tenant_id=e.tenant_id
           where e.tenant_id=:tenant and e.id=:id for update
         """),{"tenant":payload.tenant_id,"id":enrollment_id})
         enrollment=existing.mappings().first()
         if not enrollment: raise HTTPException(status_code=404,detail="Enrollment tidak ditemukan.")
+        profile=await _profile(connection,payload.tenant_id,enrollment["profile_id"])
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if enrollment["status"] in ("completed","cancelled","expired"): raise HTTPException(status_code=409,detail="Enrollment sudah final.")
         complete=payload.progress_percent==100 and payload.assessment_score is not None and payload.assessment_score>=70
         if payload.progress_percent==100 and not complete: raise HTTPException(status_code=422,detail="Assessment score minimal 70 diperlukan untuk completion.")
