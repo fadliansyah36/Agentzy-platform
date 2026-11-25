@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from app.api.v1.routes.ai_workers import AIWorkerCreate
 from app.api.v1.routes.contracts import ContractCreate
 from app.api.v1.routes.corporate_contracts import InvoiceLineInput, ProviderProfileInput
+from app.services.notification_dispatcher import _message_for
 
 
 def test_invoice_line_rejects_client_supplied_unit_price():
@@ -62,3 +63,29 @@ def test_provider_profile_rejects_unknown_provider_type():
             provider_name="Provider Test",
             provider_type="unknown",
         )
+
+
+def test_contract_lifecycle_events_have_notification_templates():
+    for event_type in (
+        "contract.activated",
+        "contract.suspended",
+        "contract.terminated",
+        "contract.renewal.requested",
+        "contract.renewal.approved",
+        "contract.renewal.rejected",
+        "contract.expired",
+        "contract.renewal_reminder",
+    ):
+        subject, body = _message_for(
+            event_type,
+            {
+                "contract_id": str(uuid4()),
+                "contract_number": "CN-TEST-001",
+                "title": "Test contract",
+                "reason": "Deterministic test",
+                "requested_end": "2027-01-01",
+                "effective_end": "2027-01-01",
+            },
+        )
+        assert subject
+        assert body
