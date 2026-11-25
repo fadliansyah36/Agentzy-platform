@@ -3,7 +3,7 @@ name = "agentzy-api"
 version = "0.1.0"
 description = "Agentzy platform FastAPI modular monolith"
 requires-python = ">=3.12"
-dependencies = ["fastapi>=0.115,<1.0","uvicorn[standard]>=0.30,<1.0","pydantic-settings>=2.5,<3.0","sqlalchemy[asyncio]>=2.0,<3.0","asyncpg>=0.29,<1.0","PyJWT[crypto]>=2.9,<3.0","httpx>=0.27,<1.0","structlog>=24.4,<26.0","cryptography>=43,<47"]
+dependencies = ["fastapi>=0.115,<1.0","uvicorn[standard]>=0.30,<1.0","pydantic-settings>=2.5,<3.0","sqlalchemy[asyncio]>=2.0,<3.0","asyncpg>=0.29,<1.0","PyJWT[crypto]>=2.9,<3.0","httpx>=0.27,<1.0","structlog>=24.4,<26.0","cryptography>=43,<47","python-multipart>=0.0.9,<1.0"]
 
 [project.optional-dependencies]
 dev = ["ruff>=0.8,<1.0","mypy>=1.13,<2.0"]
