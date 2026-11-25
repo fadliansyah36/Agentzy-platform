@@ -23,7 +23,6 @@ from app.domain.workforce import (
     is_lifecycle_transition_allowed,
 )
 
-TRANSITIONS = WORKFORCE_LIFECYCLE_TRANSITIONS
 from app.repositories.workforce_repository import (
     append_workforce_audit,
     enqueue_workforce_notification,
@@ -33,6 +32,8 @@ from app.services.workforce_service import (
     assert_activation_prerequisites,
     assert_offboarding_ready,
 )
+
+TRANSITIONS = WORKFORCE_LIFECYCLE_TRANSITIONS
 
 router = APIRouter(prefix="/workforce", tags=["Human Workforce"])
 claims_dependency = Depends(current_claims)
