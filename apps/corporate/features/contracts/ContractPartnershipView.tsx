@@ -10,7 +10,7 @@ import {
   getContractDocumentDownload, getEffectiveContractEntitlements,
   listContractApprovalPolicies, listContractDocuments, listCorporateContracts,
   requestContractRenewal, listContractVersions, listContractRenewals, decideContractRenewal,
-  getPublicCatalogue, getContractOperationalMetrics, patchCorporateContract,
+  activateCorporateContract, getPublicCatalogue, getContractOperationalMetrics, patchCorporateContract,
   listCorporateProviderProfiles, createCorporateProviderProfile,
   updateCorporateProviderProfile, updateCorporateProviderProfileStatus,
   submitContractPolicyReview, updateContractSignatureStatus, updateCorporateProfileStatus,
@@ -393,6 +393,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
           {(detail.services ?? []).map((s)=><div key={s.service_key} className="border-b border-[#EAF2F6] py-3"><p className="text-sm font-semibold text-[#17324D]">{s.service_key}</p><p className="text-xs text-[#526675]">{s.service_scope}</p><p className="mt-1 text-[11px] text-[#718391]">Fee {s.monthly_fee ?? '—'} · qty {s.quantity}</p></div>)}
           <div className="mt-4 flex flex-wrap gap-2">
             {canManage && (detail.status==='draft' || (detail.status==='active' && detail.version_status==='draft')) && <button className={primary} disabled={saving} onClick={()=>void action(()=>submitContractPolicyReview(token,tenant.id,detail.id),'Kontrak diajukan berdasarkan approval policy.')}>Submit Approval</button>}
+            {canManage && detail.status==='approved' && <button className={primary} disabled={saving} onClick={()=>void action(()=>activateCorporateContract(token,tenant.id,detail.id),'Kontrak diaktifkan; entitlement service mulai berlaku.')}>Activate Contract</button>}
             {canLifecycle && detail.status==='active' && <button className={secondary} disabled={saving} onClick={()=>void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'suspend','Suspension requested from Corporate Portal'),'Kontrak disuspend dan entitlement dihentikan.')}>Suspend</button>}
             {canLifecycle && ['active','suspended','approved'].includes(detail.status) && <button className={secondary} disabled={saving} onClick={()=>{if(window.confirm('Hentikan kontrak ini?')) void action(()=>changeContractLifecycle(token,tenant.id,detail.id,'terminate','Termination requested from Corporate Portal'),'Kontrak dihentikan.')}}>Terminate</button>}
           </div>
