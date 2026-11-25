@@ -5,7 +5,7 @@ import hmac
 import json
 import os
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -14,7 +14,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 
-from app.adapters.provider_adapter import HttpJsonProviderAdapter
 from app.core.authorization import authorize_action
 from app.core.idempotency import request_fingerprint
 from app.core.pagination import decode_time_id_cursor, encode_time_id_cursor
@@ -26,7 +25,6 @@ from app.services.sales_service import SalesService
 
 router = APIRouter(prefix="/sales", tags=["Sales CRM & Orders"])
 claims_dependency = Depends(current_claims)
-adapter = HttpJsonProviderAdapter()
 
 PERMISSIONS = {
     "leads.read": ("sales.leads.read", "sales.lead", "read"),

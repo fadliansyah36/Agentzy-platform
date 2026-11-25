@@ -58,7 +58,7 @@ export function SalesCrmOrdersView({tenantId,accessToken,onBack}:{tenantId:strin
   const createLead=async(event:FormEvent)=>{
     event.preventDefault();setCreating(true);setError(null);setNotice(null);
     try {
-      const result=await createSalesLead(accessToken,{tenant_id:tenantId,...leadForm});
+      const result=await createSalesLead(accessToken,{tenant_id:tenantId,...leadForm,email:leadForm.email||null,phone:leadForm.phone||null,service_address:leadForm.service_address||null,region_code:leadForm.region_code||null});
       setSelectedLead(result.data.id);setLeadForm({customer_name:'',contact_name:'',email:'',phone:'',service_address:'',region_code:'',source:'corporate_portal'});
       setNotice('Lead tersimpan pada database Agentzy.');await load();
     } catch(e){setError(e instanceof ApiError?e.message:'Lead gagal disimpan.');}
