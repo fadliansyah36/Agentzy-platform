@@ -104,7 +104,7 @@ export function CorporatePortalClient({
         )}
 
         {portal.activeSection === 'human-workforce' && (
-          <HumanWorkforceView onBack={backToOverview} />
+          <HumanWorkforceView tenantId={portal.activeTenant.id} accessToken={portal.accessToken} onBack={backToOverview} />
         )}
 
         {portal.activeSection === 'ai-workforce' && (
