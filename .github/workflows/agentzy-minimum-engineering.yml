@@ -77,6 +77,21 @@ jobs:
           assert "/api/v1/corporate/contracts/{contract_id}/terminate" in paths
           assert "/api/v1/corporate/payment-references/{reference_id}/verify" in paths
           assert "/api/v1/corporate/metrics/contracts" in paths
+          assert "/api/v1/workforce/register" in paths
+          assert "/api/v1/workforce/passport" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/identity" in paths
+          assert "/api/v1/workforce/identity/{verification_id}/decision" in paths
+          assert "/api/v1/workforce/identity/{verification_id}/upload" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/engagements" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/skills" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/certifications" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/availability" in paths
+          assert "/api/v1/workforce/training/courses" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/training/enroll" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/onboarding" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/lifecycle" in paths
+          assert "/api/v1/workforce/profiles/{profile_id}/assignments" in paths
+          assert "/api/v1/workforce/documents/retention/purge" in paths
           print(f"OpenAPI paths: {len(paths)}")
           PY
 
