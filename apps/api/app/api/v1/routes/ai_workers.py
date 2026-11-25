@@ -236,7 +236,8 @@ async def activate_tenant_ai_worker(
         )
         result = await connection.execute(
             text("""
-                update public.tenant_ai_workers set status='active',updated_by=:actor,updated_at=now()
+                update public.tenant_ai_workers set
+                status='active',updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant and status in ('draft','suspended')
                 returning id,status
             """),
@@ -270,7 +271,8 @@ async def suspend_tenant_ai_worker(
     async with engine.begin() as connection:
         result = await connection.execute(
             text("""
-                update public.tenant_ai_workers set status='suspended',updated_by=:actor,updated_at=now()
+                update public.tenant_ai_workers set
+                status='suspended',updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant and status='active' returning id,status
             """),
             {"actor": actor, "id": worker_id, "tenant": tenant_id},
