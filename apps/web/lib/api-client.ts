@@ -1305,7 +1305,7 @@ export const updateWorkforceProfile=(accessToken:string,profileId:string,payload
   apiRequest<{data:WorkforceProfile}>(`/workforce/profiles/${encodeURIComponent(profileId)}`,{method:"PATCH",accessToken,
     headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const submitWorkforceIdentity=(accessToken:string,profileId:string,payload:{
-  tenant_id:string;verification_type?:string;document_metadata?:Record<string,unknown>[];
+  tenant_id:string;verification_type?:string;
 })=>apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/identity`,{
   method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const decideWorkforceIdentity=(accessToken:string,verificationId:string,payload:{
