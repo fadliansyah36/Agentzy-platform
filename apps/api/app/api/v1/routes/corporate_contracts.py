@@ -195,6 +195,8 @@ _PERMISSION_POLICY_TARGETS: dict[str, tuple[str, str]] = {
     "corporate.entitlements.read": ("corporate.workforce", "read"),
     "corporate.providers.read": ("corporate.providers", "read"),
     "corporate.providers.manage": ("corporate.providers", "manage"),
+    "corporate.ai_workers.read": ("corporate.ai", "read"),
+    "corporate.ai_workers.manage": ("corporate.ai", "manage"),
 }
 
 
