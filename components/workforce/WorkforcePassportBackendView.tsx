@@ -95,7 +95,7 @@ export function WorkforcePassportBackendView({
     try{
       let verificationId=pendingVerificationId;
       if(!verificationId){
-        const submitted=await submitWorkforceIdentity(accessToken,passport.id,{tenant_id:tenantId,verification_type:'identity',document_metadata:[]});
+        const submitted=await submitWorkforceIdentity(accessToken,passport.id,{tenant_id:tenantId,verification_type:'identity'});
         verificationId=String(submitted.data.id);
         setPendingVerificationId(verificationId);
       }
