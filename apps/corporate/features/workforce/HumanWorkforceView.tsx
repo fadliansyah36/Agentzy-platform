@@ -34,7 +34,7 @@ export function HumanWorkforceView({
   const [detailError,setDetailError]=useState<string|null>(null);
   const [engagementForm,setEngagementForm]=useState<{classification:WorkforceEngagementClassification;agreement_reference:string;contract_id:string;effective_from:string;effective_until:string;legal_review_reference:string;change_reason:string}>({classification:'employee',agreement_reference:'',contract_id:'',effective_from:'',effective_until:'',legal_review_reference:'',change_reason:''});
   const [factsAcknowledged,setFactsAcknowledged]=useState(false);
-  const [taskForm,setTaskForm]=useState<{task_key:string;title:string;task_type:WorkforceOnboardingTaskType;description:string}>({task_key:'',title:'',task_type:'approval',description:''});
+  const [taskForm,setTaskForm]=useState<{task_key:string;title:string;task_type:WorkforceOnboardingTaskType;description:string;assigned_to:string;due_at:string}>({task_key:'',title:'',task_type:'approval',description:'',assigned_to:'',due_at:''});
   const [lifecycleTarget,setLifecycleTarget]=useState<'onboarding'|'eligible'|'active'|'inactive'|'suspended'|'offboarded'>('onboarding');
   const [actionReason,setActionReason]=useState('');
 
@@ -119,10 +119,12 @@ export function HumanWorkforceView({
     setDetailError(null);
     try{
       await createWorkforceOnboardingTask(accessToken,selectedProfileId,{
-        tenant_id:tenantId,...taskForm,required:true,
+        tenant_id:tenantId,task_key:taskForm.task_key,title:taskForm.title,task_type:taskForm.task_type,
+        description:taskForm.description,required:true,assigned_to:taskForm.assigned_to||undefined,
+        due_at:taskForm.due_at?new Date(taskForm.due_at).toISOString():undefined,
       });
       const result=await listWorkforceOnboarding(accessToken,tenantId,selectedProfileId);setOnboarding(result.data);
-      setTaskForm({task_key:'',title:'',task_type:'approval',description:''});
+      setTaskForm({task_key:'',title:'',task_type:'approval',description:'',assigned_to:'',due_at:''});
     }catch(cause){setDetailError(cause instanceof Error?cause.message:'Onboarding task gagal dibuat.');}
   };
   const transition=async()=>{
@@ -237,7 +239,7 @@ export function HumanWorkforceView({
               </div>
               <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Onboarding Checklist</h4>
                 {onboarding.map((item,index)=><p key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-xs text-[#526675]">{String(item.title)} · {String(item.status)}</p>)}
-                <div className="mt-3 grid gap-2"><input value={taskForm.task_key} onChange={e=>setTaskForm(v=>({...v,task_key:e.target.value}))} placeholder="Task key" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input value={taskForm.title} onChange={e=>setTaskForm(v=>({...v,title:e.target.value}))} placeholder="Task title" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><select value={taskForm.task_type} onChange={e=>setTaskForm(v=>({...v,task_type:e.target.value as WorkforceOnboardingTaskType}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['document','agreement_acknowledgement','training','verification','approval','other'].map(x=><option key={x}>{x}</option>)}</select><textarea value={taskForm.description} onChange={e=>setTaskForm(v=>({...v,description:e.target.value}))} placeholder="Task description" className="rounded-md border border-[#D8E3E9] p-2 text-xs"/><button type="button" disabled={!taskForm.task_key||!taskForm.title} onClick={()=>void createTask()} className="h-9 rounded-md bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Add Task</button></div>
+                <div className="mt-3 grid gap-2"><input value={taskForm.task_key} onChange={e=>setTaskForm(v=>({...v,task_key:e.target.value}))} placeholder="Task key" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input value={taskForm.title} onChange={e=>setTaskForm(v=>({...v,title:e.target.value}))} placeholder="Task title" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><select value={taskForm.task_type} onChange={e=>setTaskForm(v=>({...v,task_type:e.target.value as WorkforceOnboardingTaskType}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['document','agreement_acknowledgement','training','verification','approval','other'].map(x=><option key={x}>{x}</option>)}</select><textarea value={taskForm.description} onChange={e=>setTaskForm(v=>({...v,description:e.target.value}))} placeholder="Task description" className="rounded-md border border-[#D8E3E9] p-2 text-xs"/><input value={taskForm.assigned_to} onChange={e=>setTaskForm(v=>({...v,assigned_to:e.target.value}))} placeholder="Assignee user UUID (optional)" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input type="datetime-local" value={taskForm.due_at} onChange={e=>setTaskForm(v=>({...v,due_at:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={!taskForm.task_key||!taskForm.title} onClick={()=>void createTask()} className="h-9 rounded-md bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Add Task</button></div>
               </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
