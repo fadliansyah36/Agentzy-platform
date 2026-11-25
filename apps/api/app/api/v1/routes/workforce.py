@@ -670,6 +670,14 @@ async def create_availability(profile_id: UUID,payload: AvailabilityInput,reques
         """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
         if payload.availability_type in ("working_hours","preferred_shift") and conflict.scalar_one():
             raise HTTPException(status_code=409,detail="Availability berbenturan dengan leave/unavailable period.")
+        if payload.availability_type in ("unavailable","leave"):
+            assignment_conflict=await connection.execute(text("""
+              select exists(select 1 from public.workforce_assignments
+                where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
+                  and :start < coalesce(ends_at,'infinity'::timestamptz) and :end > starts_at)
+            """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
+            if assignment_conflict.scalar_one():
+                raise HTTPException(status_code=409,detail="Leave/unavailable period berbenturan dengan assignment aktif/terjadwal.")
         row=await connection.execute(text("""
           insert into public.workforce_availability(tenant_id,workforce_profile_id,availability_type,starts_at,ends_at,timezone,recurrence_rule,reason,created_by)
           values(:tenant,:profile,:type,:start,:end,:timezone,:recurrence,:reason,:actor) returning *
@@ -815,7 +823,42 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
             engagement=await connection.execute(text("select exists(select 1 from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile and status='active' and effective_from<=current_date and (effective_until is null or effective_until>=current_date))"),{"tenant":payload.tenant_id,"profile":profile_id})
             if not engagement.scalar_one(): raise HTTPException(status_code=409,detail="Engagement agreement aktif belum tersedia.")
         if target=="active" and old!="eligible": raise HTTPException(status_code=409,detail="Activation hanya dapat dilakukan dari status eligible.")
+        if target in ("eligible","active"):
+            required_training=await connection.execute(text("""
+              select count(*) from public.workforce_training_courses c
+              where c.status='published' and (c.tenant_id is null or c.tenant_id=:tenant)
+                and coalesce((c.eligibility_rules->>'required_for_activation')::boolean,false)
+                and not exists(
+                  select 1 from public.workforce_training_enrollments e
+                  where e.tenant_id=:tenant and e.workforce_profile_id=:profile and e.course_id=c.id
+                    and e.status='completed' and (e.certificate_expires_at is null or e.certificate_expires_at>=now())
+                )
+            """),{"tenant":payload.tenant_id,"profile":profile_id})
+            if required_training.scalar_one()>0:
+                raise HTTPException(status_code=409,detail="Training wajib untuk eligibility belum selesai atau sudah kedaluwarsa.")
+        if target=="offboarded":
+            active_assignments=await connection.execute(text("""
+              select count(*) from public.workforce_assignments
+              where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
+            """),{"tenant":payload.tenant_id,"profile":profile_id})
+            active_engagements=await connection.execute(text("""
+              select count(*) from public.workforce_engagements
+              where tenant_id=:tenant and workforce_profile_id=:profile and status in ('active','suspended','pending')
+            """),{"tenant":payload.tenant_id,"profile":profile_id})
+            if active_assignments.scalar_one()>0 or active_engagements.scalar_one()>0:
+                raise HTTPException(status_code=409,detail="Offboarding readiness gagal: assignment dan engagement harus ditutup terlebih dahulu.")
         updated=await connection.execute(text("update public.workforce_profiles set lifecycle_status=:target,engagement_status=case when :target='active' then 'active' when :target in ('inactive','suspended','offboarded') then :target else engagement_status end,updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant returning *"),{"target":target,"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
+        if target == "suspended":
+            rows=await connection.execute(text("""
+              update public.workforce_engagements set status='suspended',updated_at=now()
+              where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
+              returning id
+            """),{"tenant":payload.tenant_id,"profile":profile_id})
+            for row in rows.mappings().all():
+                await connection.execute(text("""
+                  insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason)
+                  values(:tenant,:engagement,:profile,'suspended','active','suspended',:actor,:reason)
+                """),{"tenant":payload.tenant_id,"engagement":row["id"],"profile":profile_id,"actor":actor,"reason":payload.reason})
         await connection.execute(text("""
           insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id,metadata)
           values(:tenant,:profile,:old,:new,:actor,:reason,'workforce.lifecycle.transition',:request,cast(:metadata as jsonb))
@@ -846,12 +889,22 @@ async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: R
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
-        if payload.ends_at:
-            conflicts=await connection.execute(text("""
-              select exists(select 1 from public.workforce_assignments where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
-              and :start < coalesce(ends_at,'infinity'::timestamptz) and :end > starts_at)
-            """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
-            if conflicts.scalar_one(): raise HTTPException(status_code=409,detail="Assignment berbenturan dengan penugasan yang sudah terjadwal.")
+        conflicts=await connection.execute(text("""
+          select exists(select 1 from public.workforce_assignments
+            where tenant_id=:tenant and workforce_profile_id=:profile and status in ('scheduled','active')
+              and :start < coalesce(ends_at,'infinity'::timestamptz)
+              and coalesce(:end,'infinity'::timestamptz) > starts_at)
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
+        if conflicts.scalar_one():
+            raise HTTPException(status_code=409,detail="Assignment berbenturan dengan penugasan yang sudah terjadwal.")
+        availability_conflict=await connection.execute(text("""
+          select exists(select 1 from public.workforce_availability
+            where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
+              and availability_type in ('leave','unavailable')
+              and :start < ends_at and coalesce(:end,'infinity'::timestamptz) > starts_at)
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"start":payload.starts_at,"end":payload.ends_at})
+        if availability_conflict.scalar_one():
+            raise HTTPException(status_code=409,detail="Assignment berbenturan dengan leave/unavailable period.")
         row=await connection.execute(text("""
           insert into public.workforce_assignments(tenant_id,workforce_profile_id,assignment_reference,assignment_type,starts_at,ends_at,workload_units,created_by)
           values(:tenant,:profile,:reference,:type,:start,:end,:load,:actor) returning *
