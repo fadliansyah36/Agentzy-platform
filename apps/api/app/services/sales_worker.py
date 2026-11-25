@@ -82,10 +82,41 @@ async def process_sales_outbox_batch(batch_size: int = 20) -> int:
                 """), {
                     "tenant": event["tenant_id"], "order": event["aggregate_id"],
                     "provider": order["provider_profile_id"], "attempt": attempt_number,
-                    "status": "succeeded" if result.accepted else ("blocked_configuration" if result.error_code and ("CONFIG" in result.error_code or "ALLOWLIST" in result.error_code or "REFERENCE" in result.error_code or "ENABLED" in result.error_code) else "retry"),
+                    "status": "succeeded" if result.accepted or result.error_code=="PROVIDER_SUBMISSION_REJECTED" else ("blocked_configuration" if result.error_code and any(marker in result.error_code for marker in ("CONFIG","ALLOWLIST","REFERENCE","ENABLED","ENDPOINT","INVALID","UNMAPPED","REQUEST_REJECTED")) else "retry"),
                     "request_hash": request_hash, "response_hash": result.response_hash,
                     "reference": result.provider_reference, "error": result.error_code,
                 })
+                if result.error_code=="PROVIDER_SUBMISSION_REJECTED":
+                    rejected=await connection.execute(text("""
+                      update public.sales_orders set status='provider_rejected',updated_at=now()
+                      where id=:order and tenant_id=:tenant and status='submitted'
+                    """),{"order":event["aggregate_id"],"tenant":event["tenant_id"]})
+                    if rejected.rowcount:
+                        await connection.execute(text("""
+                          update public.order_attributions set attribution_status='reversed',reason='Provider rejected order submission'
+                          where tenant_id=:tenant and sales_order_id=:order and attribution_status='provisional'
+                        """),{"tenant":event["tenant_id"],"order":event["aggregate_id"]})
+                        await connection.execute(text("""
+                          update public.sales_leads set stage='closed',last_activity_at=now(),updated_at=now()
+                          where tenant_id=:tenant and id=(select lead_id from public.sales_orders where tenant_id=:tenant and id=:order)
+                            and stage='order_submitted'
+                        """),{"tenant":event["tenant_id"],"order":event["aggregate_id"]})
+                        await connection.execute(text("""
+                          insert into public.sales_order_events(tenant_id,order_id,event_type,from_status,to_status,
+                            source,reason,evidence,idempotency_key)
+                          values(:tenant,:order,'provider.submission.rejected','submitted','provider_rejected',
+                            'provider_adapter','Provider rejected the order submission.',
+                            cast(:evidence as jsonb),:key)
+                          on conflict(tenant_id,order_id,idempotency_key) do nothing
+                        """),{"tenant":event["tenant_id"],"order":event["aggregate_id"],
+                              "evidence":json.dumps({"response_hash":result.response_hash,"provider_reference":result.provider_reference}),
+                              "key":"provider-rejected-"+str(event["id"])})
+                    await connection.execute(text("""
+                      update public.sales_outbox set status='done',attempts=:attempts,processed_at=now(),locked_at=null,
+                        last_error_code='PROVIDER_SUBMISSION_REJECTED',updated_at=now() where id=:id
+                    """),{"id":event["id"],"attempts":outbox_attempt})
+                    processed += 1
+                    continue
                 if result.accepted:
                     await connection.execute(text("""
                       update public.sales_orders set status='provider_pending',
@@ -107,7 +138,7 @@ async def process_sales_outbox_batch(batch_size: int = 20) -> int:
                       where id=:id
                     """), {"id": event["id"],"attempts":outbox_attempt})
                 else:
-                    blocked = result.error_code and ("CONFIG" in result.error_code or "ALLOWLIST" in result.error_code or "REFERENCE" in result.error_code or "ENABLED" in result.error_code)
+                    blocked = result.error_code and any(marker in result.error_code for marker in ("CONFIG","ALLOWLIST","REFERENCE","ENABLED","ENDPOINT","INVALID","UNMAPPED","REQUEST_REJECTED"))
                     next_attempt = outbox_attempt >= 6
                     await connection.execute(text("""
                       update public.sales_outbox set status=:status,attempts=:attempts,

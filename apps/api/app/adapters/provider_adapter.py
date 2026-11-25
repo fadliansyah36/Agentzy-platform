@@ -112,6 +112,9 @@ class HttpJsonProviderAdapter:
                 body = response.json() if response.content else {}
         except httpx.TimeoutException:
             return {"result_status": "failed", "error_code": "PROVIDER_TIMEOUT"}
+        except httpx.HTTPStatusError as exc:
+            code = "PROVIDER_COVERAGE_REJECTED" if 400 <= exc.response.status_code < 500 else "PROVIDER_REQUEST_FAILED"
+            return {"result_status": "failed", "error_code": code}
         except (httpx.HTTPError, ValueError):
             return {"result_status": "failed", "error_code": "PROVIDER_REQUEST_FAILED"}
         if not isinstance(body, dict):
@@ -143,6 +146,9 @@ class HttpJsonProviderAdapter:
                 body = response.json() if response.content else {}
         except httpx.TimeoutException:
             return ProviderSubmission(False, None, None, "PROVIDER_TIMEOUT")
+        except httpx.HTTPStatusError as exc:
+            code = "PROVIDER_REQUEST_REJECTED" if 400 <= exc.response.status_code < 500 else "PROVIDER_REQUEST_FAILED"
+            return ProviderSubmission(False, None, None, code)
         except (httpx.HTTPError, ValueError):
             return ProviderSubmission(False, None, None, "PROVIDER_REQUEST_FAILED")
         if not isinstance(body, dict):
@@ -162,6 +168,8 @@ class HttpJsonProviderAdapter:
         return ProviderSubmission(True, str(reference)[:160] if reference else None, digest, None)
 
     async def check_health(self, config: dict[str, Any]) -> str:
+        if not config.get("enabled"):
+            return "pending_external_configuration"
         endpoint = str(config.get("health_url") or "")
         try:
             _assert_authorized_endpoint(endpoint)

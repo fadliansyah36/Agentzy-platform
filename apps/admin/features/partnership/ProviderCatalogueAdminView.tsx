@@ -107,7 +107,7 @@ export function ProviderCatalogueAdminView({accessToken,tenants}:{accessToken:st
         {([['requestMappingJson','Request mapping JSON'],['responseMappingJson','Response mapping JSON'],['statusMappingJson','Webhook status mapping JSON']] as const).map(([key,label])=><label key={key} className="block text-xs font-semibold text-[#526675]">{label}<textarea value={integration[key]} onChange={e=>setIntegration(v=>({...v,[key]:e.target.value}))} rows={3} className="mt-1 w-full rounded-lg border border-[#D8E3E9] px-3 py-2 font-mono text-xs font-normal"/></label>)}
         <label className="flex items-center gap-2 text-xs text-[#526675]"><input type="checkbox" checked={integration.enabled} onChange={e=>setIntegration(v=>({...v,enabled:e.target.checked}))}/>Enable adapter (requires official access, allowlisted host and deployment secret)</label>
         <button disabled={busy||!providerId} onClick={()=>void saveIntegration()} className="w-full rounded-lg border border-[#B9DCEB] px-3 py-2 text-sm font-semibold text-[#245477] disabled:opacity-50">Simpan Adapter Contract</button>
-        <button disabled={busy||!providerId} onClick={()=>void retry()} className="w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-xs font-semibold text-[#526675] disabled:opacity-50">Retry blocked submissions</button>
+        <button disabled={busy||!providerId} onClick={()=>void retry()} className="w-full rounded-lg border border-[#D8E3E9] px-3 py-2 text-xs font-semibold text-[#526675] disabled:opacity-50">Retry blocked / dead-letter submissions</button>
       </div>
     </div>
     <div><h3 className="mb-2 flex items-center gap-2 font-semibold text-[#17324D]"><PackageCheck className="h-4 w-4"/>Catalogue ({products.length})</h3>

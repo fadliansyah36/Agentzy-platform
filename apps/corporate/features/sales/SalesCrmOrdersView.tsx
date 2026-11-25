@@ -30,10 +30,10 @@ export function SalesCrmOrdersView({tenantId,accessToken,onBack}:{tenantId:strin
   const [orderAttributions,setOrderAttributions]=useState<SalesOrderAttribution[]>([]);
   const [correctionWorkerId,setCorrectionWorkerId]=useState('');
   const [correctionReason,setCorrectionReason]=useState('Correct lead assignment before provider submission.');
-  const [leadNote,setLeadNote]=useState('');
-  const [qualificationJson,setQualificationJson]=useState('{}');
-  const [followUpAt,setFollowUpAt]=useState('');
-  const [customerForm,setCustomerForm]=useState({customer_name:'',contact_name:'',email:'',phone:'',service_address:'',region_code:''});
+  const [customerFormState,setCustomerFormState]=useState<{leadId:string;value:{customer_name:string;contact_name:string;email:string;phone:string;service_address:string;region_code:string}}|null>(null);
+  const [followUpState,setFollowUpState]=useState<{leadId:string;value:string}|null>(null);
+  const [leadNoteState,setLeadNoteState]=useState<{leadId:string;value:string}|null>(null);
+  const [qualificationState,setQualificationState]=useState<{leadId:string;value:string}|null>(null);
   const [selectedWorker,setSelectedWorker]=useState('');
   const [selectedLead,setSelectedLead]=useState<string>('');
   const [selectedProduct,setSelectedProduct]=useState<string>('');
@@ -75,7 +75,17 @@ export function SalesCrmOrdersView({tenantId,accessToken,onBack}:{tenantId:strin
 
   const activeLead=leads.find(item=>item.id===selectedLead)??null;
   const selectedProductRow=products.find(item=>item.id===selectedProduct)??null;
-  useEffect(()=>{if(activeLead){setCustomerForm({customer_name:activeLead.customer_name,contact_name:activeLead.contact_name,email:activeLead.email??'',phone:activeLead.phone??'',service_address:activeLead.service_address??'',region_code:activeLead.region_code??''});setFollowUpAt(activeLead.follow_up_at?new Date(activeLead.follow_up_at).toISOString().slice(0,16):'');setLeadNote('');setQualificationJson(JSON.stringify((activeLead as SalesLead & {qualification?:Record<string,unknown>}).qualification??{},null,2));}},[activeLead]);
+  const defaultCustomerForm={customer_name:activeLead?.customer_name??'',contact_name:activeLead?.contact_name??'',email:activeLead?.email??'',phone:activeLead?.phone??'',service_address:activeLead?.service_address??'',region_code:activeLead?.region_code??''};
+  const customerForm=customerFormState?.leadId===activeLead?.id?customerFormState.value:defaultCustomerForm;
+  const setCustomerForm=(next:typeof defaultCustomerForm|((previous:typeof defaultCustomerForm)=>typeof defaultCustomerForm))=>{if(!activeLead)return;setCustomerFormState(current=>({leadId:activeLead.id,value:typeof next==='function'?next(current?.leadId===activeLead.id?current.value:defaultCustomerForm):next}));};
+  const defaultFollowUpAt=activeLead?.follow_up_at?new Date(activeLead.follow_up_at).toISOString().slice(0,16):'';
+  const followUpAt=followUpState?.leadId===activeLead?.id?followUpState.value:defaultFollowUpAt;
+  const setFollowUpAt=(value:string)=>{if(activeLead)setFollowUpState({leadId:activeLead.id,value});};
+  const leadNote=leadNoteState?.leadId===activeLead?.id?leadNoteState.value:'';
+  const setLeadNote=(value:string)=>{if(activeLead)setLeadNoteState({leadId:activeLead.id,value});};
+  const defaultQualificationJson=JSON.stringify(activeLead?.qualification??{},null,2);
+  const qualificationJson=qualificationState?.leadId===activeLead?.id?qualificationState.value:defaultQualificationJson;
+  const setQualificationJson=(value:string)=>{if(activeLead)setQualificationState({leadId:activeLead.id,value});};
   const assignLead=async()=>{if(!activeLead||!selectedWorker)return;setBusy(true);setError(null);try{await assignSalesLead(accessToken,activeLead.id,{tenant_id:tenantId,workforce_profile_id:selectedWorker,reason:'Lead assigned through Corporate Sales Portal.'});setNotice('Lead berhasil di-assign ke workforce Phase 04.');await load();}catch(e){setError(e instanceof ApiError?e.message:'Assignment gagal.');}finally{setBusy(false);}};
   const advanceLead=async()=>{if(!activeLead)return;setBusy(true);setError(null);try{await transitionSalesLead(accessToken,activeLead.id,tenantId,nextStage,stageReason);setNotice('Lead stage diperbarui melalui FastAPI.');await load();}catch(e){setError(e instanceof ApiError?e.message:'Lead stage gagal diperbarui.');}finally{setBusy(false);}};
   const saveLeadDetails=async()=>{if(!activeLead)return;setBusy(true);setError(null);try{await updateSalesLead(accessToken,activeLead.id,{tenant_id:tenantId,follow_up_at:followUpAt?new Date(followUpAt).toISOString():null,note:leadNote||null,qualification:JSON.parse(qualificationJson)});setLeadNote('');setNotice('Follow-up dan catatan tersimpan pada activity timeline.');await load();}catch(e){setError(e instanceof ApiError?e.message:'Lead details gagal diperbarui.');}finally{setBusy(false);}};

@@ -278,6 +278,8 @@ async def create_sales_lead(payload: LeadCreate,request: Request,claims: dict = 
                             idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     context=await _authorize(claims,payload.tenant_id,"leads.manage",request)
     actor=UUID(claims["sub"])
+    if payload.source_prospect_id and context is not None:
+        raise HTTPException(status_code=403,detail="Import prospect Phase 02 hanya dapat dilakukan oleh operator platform yang berwenang.")
     if not idempotency_key or not 8<=len(idempotency_key)<=128:
         raise HTTPException(status_code=428,detail="Idempotency-Key wajib dikirim.")
     fingerprint=request_fingerprint(payload.model_dump(mode="json"))
@@ -301,8 +303,6 @@ async def create_sales_lead(payload: LeadCreate,request: Request,claims: dict = 
             if existing_prospect:
                 return {"data":{"id":str(existing_prospect),"replayed":True}}
         if payload.source_prospect_id:
-            if context is not None:
-                raise HTTPException(status_code=403,detail="Import prospect Phase 02 hanya dapat dilakukan oleh operator platform yang berwenang.")
             source=await connection.execute(text("""
               select p.id,p.company_name,p.contact_name,p.business_email,p.business_phone
               from public.crm_prospects p where p.id=:id
@@ -786,11 +786,13 @@ async def create_sales_order(payload: OrderCreate,request: Request,claims: dict 
     fingerprint=request_fingerprint(payload.model_dump(mode="json"))
     async with engine.begin() as connection:
         prior=await connection.execute(text("""
-          select id,request_fingerprint,status from public.sales_orders
+          select id,created_by,request_fingerprint,status from public.sales_orders
           where tenant_id=:tenant and idempotency_key=:key
         """),{"tenant":payload.tenant_id,"key":idempotency_key})
         existing=prior.mappings().first()
         if existing:
+            if existing["created_by"]!=actor:
+                raise HTTPException(status_code=409,detail="Idempotency-Key sudah digunakan oleh identity lain.")
             if existing["request_fingerprint"]!=fingerprint:
                 raise HTTPException(status_code=409,detail="Idempotency-Key digunakan dengan payload berbeda.")
             return {"data":{"id":str(existing["id"]),"status":existing["status"],"replayed":True}}
@@ -1127,7 +1129,9 @@ async def list_sales_order_attempts(order_id: UUID,tenant_id: UUID,request: Requ
 
 @router.get("/webhooks/unmatched")
 async def list_unmatched_provider_webhooks(tenant_id: UUID,request: Request,claims: dict = claims_dependency):
-    await _authorize(claims,tenant_id,"orders.read",request)
+    context=await _authorize(claims,tenant_id,"orders.read",request)
+    if context and "sales_official" in context.role_keys:
+        return {"data":[]}
     async with engine.connect() as connection:
         rows=await connection.execute(text("""
           select e.id,e.external_event_id,e.event_type,e.payload_hash,e.processing_status,e.error_code,
