@@ -658,7 +658,7 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
                 raise HTTPException(status_code=422,detail="Agreement reference harus cocok dengan contract number atau ID.")
         superseded=await connection.execute(text("""
           update public.workforce_engagements set status='superseded',updated_at=now()
-          where tenant_id=:tenant and workforce_profile_id=:profile and status in ('pending','active')
+          where tenant_id=:tenant and workforce_profile_id=:profile and status='pending'
           returning id,status
         """),{"tenant":payload.tenant_id,"profile":profile_id})
         for previous in superseded.mappings().all():
@@ -671,7 +671,9 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
           values(:tenant,:profile,:contract,:classification,:agreement,:start,:end,:legal,:facts,:reason,:actor) returning *
         """),{"tenant":payload.tenant_id,"profile":profile_id,"contract":payload.contract_id,"classification":payload.classification,"agreement":payload.agreement_reference,"start":payload.effective_from,"end":payload.effective_until,"legal":payload.legal_review_reference,"facts":payload.facts_acknowledged,"reason":payload.change_reason,"actor":actor})
         engagement=dict(row.mappings().one())
-        await connection.execute(text("update public.workforce_profiles set engagement_status='pending',updated_at=now() where tenant_id=:tenant and id=:profile"),{"tenant":payload.tenant_id,"profile":profile_id})
+        active_engagement=await connection.execute(text("select exists(select 1 from public.workforce_engagements where tenant_id=:tenant and workforce_profile_id=:profile and status='active')"),{"tenant":payload.tenant_id,"profile":profile_id})
+        profile_engagement_status="active" if active_engagement.scalar_one() else "pending"
+        await connection.execute(text("update public.workforce_profiles set engagement_status=:status,updated_at=now() where tenant_id=:tenant and id=:profile"),{"status":profile_engagement_status,"tenant":payload.tenant_id,"profile":profile_id})
         await connection.execute(text("""
           insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason,metadata)
           values(:tenant,:engagement,:profile,'created',null,'pending',:actor,:reason,cast(:metadata as jsonb))
@@ -1247,6 +1249,19 @@ async def activate_engagement(
         if engagement["status"] not in ("pending","suspended"):
             raise HTTPException(status_code=409,detail="Engagement harus pending atau suspended untuk aktivasi/resume.")
         previous_status=engagement["status"]
+        superseded=await connection.execute(text("""
+          update public.workforce_engagements set status='superseded',updated_at=now()
+          where tenant_id=:tenant and workforce_profile_id=:profile and id<>:current and status='active'
+          returning id
+        """),{"tenant":payload.tenant_id,"profile":engagement["workforce_profile_id"],"current":engagement_id})
+        for previous in superseded.mappings().all():
+            await connection.execute(text("""
+              insert into public.workforce_engagement_events(
+                tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,
+                actor_user_id,reason,metadata
+              ) values(:tenant,:engagement,:profile,'superseded','active','superseded',:actor,:reason,
+                cast(:metadata as jsonb))
+            """),{"tenant":payload.tenant_id,"engagement":previous["id"],"profile":engagement["workforce_profile_id"],"actor":actor,"reason":payload.reason,"metadata":json.dumps({"replacement_engagement_id":str(engagement_id)})})
         if engagement["effective_from"]>date.today() or (engagement["effective_until"] and engagement["effective_until"]<date.today()):
             raise HTTPException(status_code=409,detail="Engagement belum atau tidak lagi berada dalam periode efektif.")
         if not engagement["facts_acknowledged"] or not engagement["legal_review_reference"]:
