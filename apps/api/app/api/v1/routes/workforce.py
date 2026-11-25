@@ -296,8 +296,75 @@ async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = clai
         if not row:
             raise HTTPException(status_code=404,detail="Workforce Passport belum tersedia.")
         profile=dict(row)
-        for key,table in [("engagements","workforce_engagements"),("engagement_history","workforce_engagement_events"),("skills","workforce_worker_skills"),("certifications","workforce_certifications"),("availability","workforce_availability"),("training","workforce_training_enrollments"),("assignments","workforce_assignments"),("onboarding","workforce_onboarding_tasks"),("history","workforce_lifecycle_events")]:
-            rows=await connection.execute(text(f"select * from public.{table} where tenant_id=:tenant and workforce_profile_id=:profile order by created_at desc limit 100" if key not in ("history",) else "select * from public.workforce_lifecycle_events where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 100"),{"tenant":tenant_id,"profile":profile["id"]})
+        queries = {
+            "identity_verifications": """
+              select id,status,verification_type,submitted_at,reviewed_at,rejection_reason,expires_at
+              from public.workforce_identity_verifications
+              where tenant_id=:tenant and workforce_profile_id=:profile order by submitted_at desc limit 50
+            """,
+            "identity_documents": """
+              select d.id,d.verification_id,d.document_type,d.original_filename,d.content_type,
+                     d.file_size_bytes,d.scan_status,d.retention_until,d.redacted_at,d.created_at
+              from public.workforce_identity_documents d
+              join public.workforce_identity_verifications v on v.id=d.verification_id and v.tenant_id=d.tenant_id
+              where d.tenant_id=:tenant and v.workforce_profile_id=:profile
+              order by d.created_at desc limit 50
+            """,
+            "engagements": """
+              select e.*,c.contract_number,c.title as contract_title,c.status as contract_status
+              from public.workforce_engagements e
+              left join public.contracts c on c.id=e.contract_id and c.tenant_id=e.tenant_id
+              where e.tenant_id=:tenant and e.workforce_profile_id=:profile
+              order by e.effective_from desc
+            """,
+            "engagement_history": """
+              select * from public.workforce_engagement_events
+              where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 100
+            """,
+            "skills": """
+              select ws.*,s.skill_key,s.name as skill_name,s.category
+              from public.workforce_worker_skills ws
+              join public.workforce_skill_registry s on s.id=ws.skill_id
+              where ws.tenant_id=:tenant and ws.workforce_profile_id=:profile
+              order by s.category,s.name
+            """,
+            "certifications": """
+              select c.*,s.skill_key,s.name as skill_name
+              from public.workforce_certifications c
+              left join public.workforce_skill_registry s on s.id=c.skill_id
+              where c.tenant_id=:tenant and c.workforce_profile_id=:profile
+              order by c.expires_at nulls last,c.name
+            """,
+            "availability": """
+              select * from public.workforce_availability
+              where tenant_id=:tenant and workforce_profile_id=:profile
+              order by starts_at desc limit 100
+            """,
+            "training": """
+              select e.*,c.course_key,c.title as course_title,c.validity_days
+              from public.workforce_training_enrollments e
+              join public.workforce_training_courses c on c.id=e.course_id
+              where e.tenant_id=:tenant and e.workforce_profile_id=:profile
+              order by e.enrolled_at desc
+            """,
+            "assignments": """
+              select * from public.workforce_assignments
+              where tenant_id=:tenant and workforce_profile_id=:profile
+              order by starts_at desc limit 100
+            """,
+            "onboarding": """
+              select * from public.workforce_onboarding_tasks
+              where tenant_id=:tenant and workforce_profile_id=:profile
+              order by created_at
+            """,
+            "history": """
+              select * from public.workforce_lifecycle_events
+              where tenant_id=:tenant and workforce_profile_id=:profile
+              order by occurred_at desc limit 100
+            """,
+        }
+        for key, query in queries.items():
+            rows=await connection.execute(text(query),{"tenant":tenant_id,"profile":profile["id"]})
             profile[key]=[dict(item) for item in rows.mappings().all()]
         return {"data":profile}
 
