@@ -32,7 +32,7 @@ export function HumanWorkforceView({
   const [availability,setAvailability]=useState<Record<string,unknown>[]>([]);
   const [assignmentForm,setAssignmentForm]=useState({assignment_reference:'',assignment_type:'project',starts_at:'',ends_at:'',workload_units:'1'});
   const [detailError,setDetailError]=useState<string|null>(null);
-  const [engagementForm,setEngagementForm]=useState({classification:'employee',agreement_reference:'',contract_id:'',effective_from:'',legal_review_reference:'',change_reason:''});
+  const [engagementForm,setEngagementForm]=useState({classification:'employee',agreement_reference:'',contract_id:'',effective_from:'',effective_until:'',legal_review_reference:'',change_reason:''});
   const [factsAcknowledged,setFactsAcknowledged]=useState(false);
   const [taskForm,setTaskForm]=useState({task_key:'',title:'',task_type:'approval',description:''});
   const [lifecycleTarget,setLifecycleTarget]=useState<'onboarding'|'eligible'|'active'|'inactive'|'suspended'|'offboarded'>('onboarding');
@@ -90,7 +90,7 @@ export function HumanWorkforceView({
       await createWorkforceEngagement(accessToken,selectedProfileId,{
         tenant_id:tenantId,classification:engagementForm.classification,
         agreement_reference:engagementForm.agreement_reference,contract_id:engagementForm.contract_id||null,
-        effective_from:engagementForm.effective_from,legal_review_reference:engagementForm.legal_review_reference||null,
+        effective_from:engagementForm.effective_from,effective_until:engagementForm.effective_until||null,legal_review_reference:engagementForm.legal_review_reference||null,
         facts_acknowledged:factsAcknowledged,change_reason:engagementForm.change_reason,
       });
       const result=await listWorkforceEngagements(accessToken,tenantId,selectedProfileId);setEngagements(result.data);
@@ -228,10 +228,10 @@ export function HumanWorkforceView({
                   <select value={engagementForm.classification} onChange={e=>setEngagementForm(v=>({...v,classification:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['employee','outsourced_worker','independent_contractor','freelance','affiliate','technical_partner','project_based_worker'].map(x=><option key={x}>{x}</option>)}</select>
                   <input value={engagementForm.agreement_reference} onChange={e=>setEngagementForm(v=>({...v,agreement_reference:e.target.value}))} placeholder="Agreement / Contract number" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
                   <input value={engagementForm.contract_id} onChange={e=>setEngagementForm(v=>({...v,contract_id:e.target.value}))} placeholder="Contract UUID (optional)" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
-                  <input type="date" value={engagementForm.effective_from} onChange={e=>setEngagementForm(v=>({...v,effective_from:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
+                  <input type="date" value={engagementForm.effective_from} onChange={e=>setEngagementForm(v=>({...v,effective_from:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={engagementForm.effective_until} onChange={e=>setEngagementForm(v=>({...v,effective_until:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs" aria-label="Effective until (optional)"/>
                   <input value={engagementForm.legal_review_reference} onChange={e=>setEngagementForm(v=>({...v,legal_review_reference:e.target.value}))} placeholder="Legal review reference" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
                   <input value={engagementForm.change_reason} onChange={e=>setEngagementForm(v=>({...v,change_reason:e.target.value}))} placeholder="Reason for classification change" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
-                  <label className="flex items-center gap-2 text-[11px] text-[#526675]"><input type="checkbox" checked={factsAcknowledged} onChange={e=>setFactsAcknowledged(e.target.checked)}/> Acknowledged actual engagement facts</label>
+                  <p className="text-[10px] leading-relaxed text-[#718391]">Classification harus mencerminkan hubungan kerja dan fakta pelaksanaan yang sebenarnya; label ini tidak mengubah atau menghindari kewajiban hukum.</p><label className="flex items-center gap-2 text-[11px] text-[#526675]"><input type="checkbox" checked={factsAcknowledged} onChange={e=>setFactsAcknowledged(e.target.checked)}/> Acknowledged actual engagement facts</label>
                   <button type="button" disabled={!engagementForm.agreement_reference||!engagementForm.effective_from||engagementForm.change_reason.length<3||!factsAcknowledged} onClick={()=>void createEngagement()} className="h-9 rounded-md bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Save Engagement</button>
                 </div>
               </div>
