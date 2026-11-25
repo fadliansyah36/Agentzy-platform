@@ -393,7 +393,8 @@ async def update_corporate_profile_status(
                 set profile_status=:status,status_reason=:reason,
                     archived_at=case when :status='archived' then now() else null end,
                     updated_by=:actor,updated_at=now()
-                where tenant_id=:tenant_id returning tenant_id,profile_status,status_reason,archived_at
+                where tenant_id=:tenant_id returning
+                tenant_id,profile_status,status_reason,archived_at
             """),
             {
                 "status": payload.status, "reason": payload.reason,
@@ -428,14 +429,14 @@ async def patch_contract(
     async with engine.begin() as connection:
         if payload.organization_id:
             result = await connection.execute(
-                text("select exists(select 1 from public.organizations where id=:id and tenant_id=:tenant)"),
+                text("select exists(select 1 from public.organizations " "where id=:id and tenant_id=:tenant)"),
                 {"id": payload.organization_id, "tenant": payload.tenant_id},
             )
             if not result.scalar_one():
                 raise HTTPException(status_code=422, detail="Organisasi kontrak tidak valid.")
         if payload.branch_id:
             result = await connection.execute(
-                text("select exists(select 1 from public.branches where id=:id and tenant_id=:tenant)"),
+                text("select exists(select 1 from public.branches " "where id=:id and tenant_id=:tenant)"),
                 {"id": payload.branch_id, "tenant": payload.tenant_id},
             )
             if not result.scalar_one():
@@ -618,7 +619,7 @@ async def create_approval_policy(
                 raise HTTPException(status_code=422, detail="Permission key approval tidak terdaftar.")
             if step.required_role_key:
                 valid_role = await connection.execute(
-                    text("select exists(select 1 from public.roles where key=:key and scope_type='tenant')"),
+                    text("select exists(select 1 from public.roles " "where key=:key and scope_type='tenant')"),
                     {"key": step.required_role_key},
                 )
                 if not valid_role.scalar_one():
@@ -722,7 +723,8 @@ async def submit_policy_review(
                 select coalesce(sum(coalesce(monthly_fee,0)*quantity),0)
                 from public.contract_services
                 where contract_id=:id and contract_version_id=(
-                  select id from public.contract_versions where contract_id=:id and version_number=:version
+                  select id from public.contract_versions where contract_id=:id and
+                  version_number=:version
                 )
             """),
             {"id": contract_id, "version": contract["current_version"]},
@@ -755,7 +757,7 @@ async def submit_policy_review(
         if not steps:
             raise HTTPException(status_code=409, detail="Approval policy belum memiliki tahapan.")
         version_result = await connection.execute(
-            text("select id from public.contract_versions where contract_id=:id and version_number=:version"),
+            text("select id from public.contract_versions " "where contract_id=:id and version_number=:version"),
             {"id": contract_id, "version": contract["current_version"]},
         )
         version_id = version_result.scalar_one()
@@ -961,7 +963,8 @@ async def decide_policy_approval(
             text("""
                 update public.contract_approvals set status=:decision,decision_reason=:reason,
                   decided_at=now(),decision_idempotency_key=:key,decision_fingerprint=:fingerprint,
-                  delegated_from_user_id=case when approver_user_id<>:actor then approver_user_id else null end
+                  delegated_from_user_id=case when approver_user_id<>:actor then
+                  approver_user_id else null end
                 where id=:id
             """),
             {
@@ -1032,7 +1035,8 @@ async def decide_policy_approval(
         if approval["status"] == "active" and version_next_status == "approved":
                 await connection.execute(
                     text("""
-                        update public.contract_entitlement_grants set status='revoked',updated_at=now()
+                        update public.contract_entitlement_grants set
+                        status='revoked',updated_at=now()
                         where tenant_id=:tenant and contract_id=:contract
                           and contract_version_id<>:version_id and status='active'
                     """),
@@ -1362,7 +1366,8 @@ async def decide_contract_renewal(
             raise HTTPException(status_code=409, detail="Renewal tidak tersedia untuk keputusan.")
         await connection.execute(
             text("""
-                update public.contract_renewals set status=:decision,decided_by=:actor,decided_at=now()
+                update public.contract_renewals set
+                status=:decision,decided_by=:actor,decided_at=now()
                 where id=:id and tenant_id=:tenant
             """),
             {"decision": decision, "actor": actor, "id": renewal_id, "tenant": tenant_id},
@@ -1449,7 +1454,8 @@ async def terminate_contract(
         await connection.execute(
             text("""
                 update public.contract_entitlement_grants set status='revoked',updated_at=now()
-                where tenant_id=:tenant and contract_id=:contract and status in ('active','suspended','pending')
+                where tenant_id=:tenant and contract_id=:contract and status in
+                ('active','suspended','pending')
             """),
             {"tenant": payload.tenant_id, "contract": contract_id},
         )
@@ -1473,7 +1479,8 @@ async def process_due_contracts(tenant_id: UUID, request: Request, claims: dict 
     async with engine.begin() as connection:
         rows = await connection.execute(
             text("""
-                update public.contracts set status='expired',updated_at=now(),row_version=row_version+1
+                update public.contracts set
+                status='expired',updated_at=now(),row_version=row_version+1
                 where tenant_id=:tenant and status='active'
                   and effective_end is not null and effective_end<current_date
                 returning id
@@ -1588,12 +1595,12 @@ async def create_contract_invoice(
             if service["monthly_fee"] is None:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Service {service['service_key']} belum memiliki monthly fee pada kontrak.",
+                    detail=(f"Service {service['service_key']} belum memiliki " "monthly fee pada kontrak."),
                 )
             if line.quantity > service["quantity"]:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Quantity invoice melebihi contracted quantity untuk {service['service_key']}.",
+                    detail=(f"Quantity invoice melebihi contracted quantity " f"untuk {service['service_key']}."),
                 )
             unit_amount = service["monthly_fee"]
             line_amount = (line.quantity * unit_amount).quantize(Decimal("0.01"))
@@ -2251,7 +2258,8 @@ async def update_contract_signature_status(
                   signature_status=:status,
                   signature_provider=coalesce(:provider,signature_provider),
                   signature_reference=coalesce(:reference,signature_reference),
-                  signature_requested_at=case when :status='pending' then now() else signature_requested_at end,
+                  signature_requested_at=case when :status='pending' then now() else
+                  signature_requested_at end,
                   signed_at=case when :status='signed' then now() else signed_at end,
                   signature_failure_reason=:reason,
                   updated_by=:actor,updated_at=now(),row_version=row_version+1
@@ -2263,7 +2271,7 @@ async def update_contract_signature_status(
                 "actor": actor, "id": contract_id, "tenant": payload.tenant_id,
             },
         )
-        await _audit_contract_event(
+        await audit_contract_event(
             connection, tenant_id=payload.tenant_id, actor=actor,
             contract_id=contract_id, event_type=f"contract.signature.{payload.status}",
             from_status=current, to_status=payload.status, request_id=_request_id(request),
@@ -2428,7 +2436,8 @@ async def update_provider_profile_status(
     async with engine.begin() as connection:
         result = await connection.execute(
             text("""
-                update public.provider_profiles set status=:status,updated_by=:actor,updated_at=now()
+                update public.provider_profiles set
+                status=:status,updated_by=:actor,updated_at=now()
                 where id=:id and tenant_id=:tenant and status<>'archived'
                 returning status
             """),
@@ -2490,10 +2499,12 @@ async def get_contract_operational_metrics(tenant_id: UUID, claims: dict = claim
         )
         invoices = await connection.execute(
             text("""
-                select count(*) filter (where i.status in ('issued','partially_paid','overdue')) as outstanding_invoices,
+                select count(*) filter (where i.status in ('issued','partially_paid','overdue'))
+                as outstanding_invoices,
                        coalesce(sum(i.total_amount-coalesce((
                          select sum(p.amount) from public.contract_payment_references p
-                         where p.invoice_id=i.id and p.tenant_id=i.tenant_id and p.status='reconciled'
+                         where p.invoice_id=i.id and p.tenant_id=i.tenant_id and
+                         p.status='reconciled'
                        ),0)) filter (
                          where i.status in ('issued','partially_paid','overdue')
                        ),0) as outstanding_amount
