@@ -60,13 +60,13 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | `AGZ-P02-INT-001` | 02 — Public Landing & Partnership Acquisition | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete |
 | `AGZ-P02-OBS-001` | 02 — Public Landing & Partnership Acquisition | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE |
 | `AGZ-P02-DOC-001` | 02 — Public Landing & Partnership Acquisition | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE |
-| `AGZ-P03-FE-001` | 03 — Corporate & Contract Management | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
+| `AGZ-P03-FE-001` | 03 — Corporate & Contract Management | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | IN PROGRESS |
 | `AGZ-P03-BE-001` | 03 — Corporate & Contract Management | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | IN PROGRESS |
-| `AGZ-P03-DB-001` | 03 — Corporate & Contract Management | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | IN PROGRESS |
-| `AGZ-P03-API-001` | 03 — Corporate & Contract Management | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | IN PROGRESS |
-| `AGZ-P03-PERM-001` | 03 — Corporate & Contract Management | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | IN PROGRESS |
-| `AGZ-P03-INT-001` | 03 — Corporate & Contract Management | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | BLOCKED / NOT STARTED |
-| `AGZ-P03-OBS-001` | 03 — Corporate & Contract Management | Observability | Structured logs, metrics, traces, audit events and operational alerts. | BLOCKED / NOT STARTED |
+| `AGZ-P03-DB-001` | 03 — Corporate & Contract Management | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE — applied and live |
+| `AGZ-P03-API-001` | 03 — Corporate & Contract Management | API contract | Implement /api/v1 routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE — implementation complete |
+| `AGZ-P03-PERM-001` | 03 — Corporate & Contract Management | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE — implementation complete |
+| `AGZ-P03-INT-001` | 03 — Corporate & Contract Management | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | IN PROGRESS |
+| `AGZ-P03-OBS-001` | 03 — Corporate & Contract Management | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete |
 | `AGZ-P03-DOC-001` | 03 — Corporate & Contract Management | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | IN PROGRESS |
 | `AGZ-P04-FE-001` | 04 — Human Workforce Passport & Onboarding | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P04-BE-001` | 04 — Human Workforce Passport & Onboarding | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
@@ -1052,3 +1052,38 @@ Phase 03 is IN PROGRESS:
 - Task IDs AGZ-P03-BE-001, DB-001, API-001, PERM-001 and DOC-001 are IN PROGRESS. Frontend wiring, remaining lifecycle, documents, renewals and finance integration remain open.
 
 Latest code commit at this checkpoint: `e09d15a307afaa98b6e092ae930bf044ba0e65b9`. Minimum engineering workflow: `.github/workflows/agentzy-minimum-engineering.yml`.
+
+## 24. Phase 02 gate closure and Phase 03 implementation continuation — 2026-11-25
+
+### Phase 02 — DONE (implementation complete)
+
+- All eight Phase 02 migration versions, including the Google OAuth connection lifecycle migration, are present in the live Supabase migration ledger.
+- Public landing/application, CRM prospect flow, private attachment quarantine/scanning lifecycle, outbox notification delivery adapter, and tenant-scoped Google OAuth authorization/callback/refresh/revoke code are implemented.
+- SMTP, Turnstile, ClamAV/Storage service-role, Google OAuth client credentials/encryption key, and deployed API/CORS values remain blank deployment configuration. Their absence does not block source implementation or this gate closure.
+- No provider credentials were invented, and no external provider is claimed active without deployment evidence.
+
+### Phase 03 — IN PROGRESS (do not close yet)
+
+Implemented in the current main branch:
+- Corporate profile CRUD/status and organization/branch association; provider profile CRUD/status and contract association.
+- Contract create/list/detail/draft update, SOW with multiple service scopes, per-service fee/quantity, SLA/KPI/entitlement JSON, workforce and AI Worker limits.
+- Immutable amendment/version snapshots, effective dates, content hash, approval policies, assigned approvers, approval decisions, delegation and approval history.
+- Private contract document upload, metadata, version linkage, signed download and archive lifecycle.
+- Renewal request/decision, expiry worker/reminder events, suspension, termination and contract activation.
+- Invoice creation derives prices and tax from persisted contract services/corporate tax profile; payment references remain unconfirmed until evidence is submitted and finance verifies them.
+- Contract entitlement enforcement for Human Workforce membership capacity and AI Worker activation; tenant-scoped operational metrics.
+- Corporate Portal contract, SOW, approvals, documents, entitlement, renewal, invoice and payment reconciliation screens use typed API clients and FastAPI.
+- Lifecycle notifications route to the corporate billing contact when configured; missing contact leaves the durable contract event/audit trail intact without creating an undeliverable outbox row.
+- Approval, amendment, renewal, activation, suspension, termination, invoice and payment-reference operations use aggregate-bound idempotency fingerprints; lifecycle keys are serialized with PostgreSQL transaction advisory locks.
+
+### Live database and security evidence
+
+- Phase 03 migration versions 20261119152730, 20261119152821, 20261119153845, 20261119154914, 20261119155605, 20261119160737, 20261119160842, 20261119161100, 20261119161325, and 20261119161337 are recorded in the live Supabase migration ledger.
+- Corporate/contract/provider/approval/document/renewal/invoice/payment/entitlement/AI-worker tables have RLS enabled; direct anon and authenticated client business grants are absent on the inspected Phase 03 tables.
+- Corporate role mappings include Owner, Admin, Finance Manager, AI Manager, Auditor, and Director Viewer permissions.
+
+### Remaining closure evidence
+
+- Phase 03 remains IN PROGRESS until the current main-branch minimum engineering workflow (frontend lint/type-check, Python compile/import, Ruff, focused deterministic tests, OpenAPI assertions and migration source consistency) completes successfully on the final implementation commit.
+- No staging, UAT, load test, penetration test, production deployment, real payment transaction, or external SMTP/Google OAuth activation was performed.
+- Phase 04 — Human Workforce Passport & Onboarding is next in backlog order; do not begin until Phase 03 is closed.
