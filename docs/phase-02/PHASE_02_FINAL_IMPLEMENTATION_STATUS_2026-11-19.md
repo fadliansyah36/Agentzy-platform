@@ -67,7 +67,7 @@ The safe `.env.example` contains blank placeholders and no secret values. Provid
 
 ## Engineering verification
 
-<badge>DONE</badge>
+**Result: SUCCESS**
 
 GitHub Actions: [Agentzy Minimum Engineering Checks — run 45590318180](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45590318180)
 
