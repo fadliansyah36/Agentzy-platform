@@ -11,6 +11,7 @@ from app.api.v1.routes.workforce import (
     AvailabilityInput,
     EngagementInput,
     ProfileCreate,
+    router,
 )
 
 
@@ -96,3 +97,30 @@ def test_profile_metadata_rejects_sensitive_identifier_fields():
             display_name="Workforce Member",
             profile_metadata={"national_id_number": "should-not-be-stored"},
         )
+
+
+def test_workforce_router_exposes_phase04_end_to_end_commands():
+    operations = {
+        (route.path, method)
+        for route in router.routes
+        for method in getattr(route, "methods", set())
+    }
+    required = {
+        ("/workforce/register", "POST"),
+        ("/workforce/passport", "GET"),
+        ("/workforce/profiles/{profile_id}/identity", "POST"),
+        ("/workforce/identity/{verification_id}/decision", "POST"),
+        ("/workforce/identity/{verification_id}/upload", "POST"),
+        ("/workforce/profiles/{profile_id}/engagements", "POST"),
+        ("/workforce/profiles/{profile_id}/skills", "POST"),
+        ("/workforce/profiles/{profile_id}/certifications", "POST"),
+        ("/workforce/profiles/{profile_id}/availability", "POST"),
+        ("/workforce/training/courses", "POST"),
+        ("/workforce/profiles/{profile_id}/training/enroll", "POST"),
+        ("/workforce/profiles/{profile_id}/onboarding", "POST"),
+        ("/workforce/profiles/{profile_id}/lifecycle", "POST"),
+        ("/workforce/profiles/{profile_id}/assignments", "POST"),
+        ("/workforce/certifications/queue", "GET"),
+        ("/workforce/documents/retention/purge", "POST"),
+    }
+    assert required.issubset(operations)
