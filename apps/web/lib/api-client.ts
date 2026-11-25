@@ -1274,3 +1274,90 @@ export const activateCorporateContract = (
   `/corporate/contracts/${encodeURIComponent(contractId)}/activate?${new URLSearchParams({tenant_id:tenantId}).toString()}`,
   { method: 'POST', accessToken, headers: { 'Idempotency-Key': createIdempotencyKey() } },
 );
+
+
+// Human Workforce Passport & Onboarding — Phase 04 typed API contracts.
+export type WorkforceLifecycleStatus = "invited"|"registered"|"identity_pending"|"verified"|"onboarding"|"eligible"|"active"|"inactive"|"suspended"|"offboarded";
+export type WorkforceProfile = {
+  id:string; tenant_id:string; user_id:string; membership_id:string|null; worker_code:string;
+  display_name:string; legal_name:string|null; job_family:string|null; job_title:string|null;
+  lifecycle_status:WorkforceLifecycleStatus; engagement_status:string; timezone:string; locale:string;
+  experience_years:number; profile_metadata:Record<string,unknown>; created_at:string; updated_at:string;
+};
+export type WorkforcePassport = WorkforceProfile & {
+  engagements:Record<string,unknown>[]; skills:Record<string,unknown>[]; certifications:Record<string,unknown>[];
+  availability:Record<string,unknown>[]; training:Record<string,unknown>[]; assignments:Record<string,unknown>[];
+  onboarding:Record<string,unknown>[]; history:Record<string,unknown>[];
+};
+export type WorkforcePage<T> = {data:T[]};
+const workforcePath=(path:string,tenantId:string)=>`/workforce/${path}${path.includes("?")?"&":"?"}tenant_id=${encodeURIComponent(tenantId)}`;
+export const getMyWorkforcePassport=(accessToken:string,tenantId:string)=>
+  apiRequest<{data:WorkforcePassport}>(workforcePath("passport",tenantId),{method:"GET",accessToken});
+export const listWorkforceProfiles=(accessToken:string,tenantId:string,status?:WorkforceLifecycleStatus)=>
+  apiRequest<WorkforcePage<WorkforceProfile>>(workforcePath(`profiles${status?`?status=${encodeURIComponent(status)}`:""}`,tenantId),{method:"GET",accessToken});
+export const createWorkforceProfile=(accessToken:string,payload:{
+  tenant_id:string;user_id:string;membership_id?:string|null;worker_code:string;display_name:string;
+  legal_name?:string|null;job_family?:string|null;job_title?:string|null;timezone?:string;locale?:string;
+  experience_years?:number;profile_metadata?:Record<string,unknown>;
+})=>apiRequest<{data:WorkforceProfile}>("/workforce/profiles",{method:"POST",accessToken,
+  headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const updateWorkforceProfile=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:WorkforceProfile}>(`/workforce/profiles/${encodeURIComponent(profileId)}`,{method:"PATCH",accessToken,
+    headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const submitWorkforceIdentity=(accessToken:string,profileId:string,payload:{
+  tenant_id:string;verification_type?:string;document_metadata?:Record<string,unknown>[];
+})=>apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/identity`,{
+  method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const decideWorkforceIdentity=(accessToken:string,verificationId:string,payload:{
+  tenant_id:string;decision:"verified"|"rejected"|"in_review";reason:string;reviewer_notes?:string;expires_at?:string|null;
+})=>apiRequest<{data:Record<string,unknown>}>(`/workforce/identity/${encodeURIComponent(verificationId)}/decision`,{
+  method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const registerWorkforceIdentityDocument=(accessToken:string,verificationId:string,payload:{
+  tenant_id:string;verification_id:string;storage_path:string;document_type:string;original_filename:string;
+  content_type:"application/pdf"|"image/jpeg"|"image/png";file_size_bytes:number;sha256:string;retention_until?:string|null;
+})=>apiRequest<{data:Record<string,unknown>}>(`/workforce/identity/${encodeURIComponent(verificationId)}/documents`,{
+  method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const getWorkforceDocumentDownload=(accessToken:string,tenantId:string,documentId:string)=>
+  apiRequest<{data:{document_id:string;filename:string;signed_url:string;expires_in_seconds:number}}>(
+    `/workforce/documents/${encodeURIComponent(documentId)}/download?tenant_id=${encodeURIComponent(tenantId)}`,{method:"POST",accessToken});
+export const listWorkforceEngagements=(accessToken:string,tenantId:string,profileId:string)=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/engagements?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const createWorkforceEngagement=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/engagements`,{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const listWorkforceSkills=(accessToken:string,tenantId:string)=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/skills?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const createWorkforceSkill=(accessToken:string,payload:{tenant_id:string;skill_key:string;name:string;category:string;description?:string})=>
+  apiRequest<{data:Record<string,unknown>}>("/workforce/skills",{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const addWorkforceSkill=(accessToken:string,profileId:string,payload:{tenant_id:string;skill_id:string;proficiency:string;experience_months:number;evidence_reference?:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/skills`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const addWorkforceCertification=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/certifications`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const verifyWorkforceCertification=(accessToken:string,tenantId:string,certificationId:string,decision:"verified"|"rejected",reason:string)=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/certifications/${encodeURIComponent(certificationId)}/verify?${new URLSearchParams({tenant_id:tenantId,decision,reason})}`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()}});
+export const listWorkforceAvailability=(accessToken:string,tenantId:string,profileId:string,startsAt?:string,endsAt?:string)=>{
+  const q=new URLSearchParams({tenant_id:tenantId});if(startsAt)q.set("starts_at",startsAt);if(endsAt)q.set("ends_at",endsAt);
+  return apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/availability?${q}`,{method:"GET",accessToken});
+};
+export const createWorkforceAvailability=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/availability`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const listWorkforceCourses=(accessToken:string,tenantId:string)=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/training/courses?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const createWorkforceCourse=(accessToken:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>("/workforce/training/courses",{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const enrollWorkforceTraining=(accessToken:string,profileId:string,payload:{tenant_id:string;course_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/training/enroll`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const updateWorkforceTrainingProgress=(accessToken:string,enrollmentId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/training/enrollments/${encodeURIComponent(enrollmentId)}`,{method:"PATCH",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const listWorkforceOnboarding=(accessToken:string,tenantId:string,profileId:string)=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/onboarding?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const createWorkforceOnboardingTask=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/onboarding`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const updateWorkforceOnboardingTask=(accessToken:string,taskId:string,payload:{tenant_id:string;status:"in_progress"|"completed"|"waived"|"blocked";reason:string;completion_reference?:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/onboarding/tasks/${encodeURIComponent(taskId)}`,{method:"PATCH",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const transitionWorkforceLifecycle=(accessToken:string,profileId:string,payload:{tenant_id:string;to_status:WorkforceLifecycleStatus;reason:string;metadata?:Record<string,unknown>})=>
+  apiRequest<{data:WorkforceProfile}>(`/workforce/profiles/${encodeURIComponent(profileId)}/lifecycle`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const listWorkforceAssignments=(accessToken:string,tenantId:string,profileId:string)=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/assignments?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+export const createWorkforceAssignment=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/assignments`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
