@@ -1361,3 +1361,11 @@ export const listWorkforceAssignments=(accessToken:string,tenantId:string,profil
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/assignments?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
 export const createWorkforceAssignment=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/assignments`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+
+export const registerMyWorkforceProfile=(accessToken:string,payload:{
+  tenant_id:string;worker_code:string;display_name:string;legal_name?:string|null;
+  job_family?:string|null;job_title?:string|null;timezone?:string;experience_years?:number;
+})=>apiRequest<{data:WorkforceProfile}>("/workforce/register",{method:"POST",accessToken,
+  headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const listWorkforceIdentityVerifications=(accessToken:string,tenantId:string,status:"pending"|"in_review"|"verified"|"rejected"|"expired"|"all"="pending")=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/identity/verifications?tenant_id=${encodeURIComponent(tenantId)}&status=${status}`,{method:"GET",accessToken});
