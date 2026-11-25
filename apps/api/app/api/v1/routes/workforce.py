@@ -789,7 +789,7 @@ async def upload_identity_document(
     if not raw or len(raw) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Ukuran dokumen maksimal 10 MB.")
     try:
-        scan_status, scan_message = await scan_bytes(raw)
+        scan_status, _ = await scan_bytes(raw)
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Pemindaian antivirus dokumen belum tersedia.") from exc
     if scan_status != "clean":
