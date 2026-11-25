@@ -72,7 +72,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
   const [newContract,setNewContract] = useState({contract_number:'',title:'',contract_type:'master' as 'master'|'statement_of_work',parent_contract_id:'',provider_profile_id:'',scope_summary:'',terms:'',service_key:'',service_scope:'',quantity:'1',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'{}',kpi_json:'{}',entitlement_json:'{}',effective_start:'',effective_end:''});
-  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'',kpi_json:'',entitlement_json:''});
+  const [amendment,setAmendment] = useState({change_summary:'',scope_summary:'',effective_from:'',service_scope:'',monthly_fee:'',human_limit:'',ai_limit:'',sla_json:'',kpi_json:'',entitlement_json:'',services_json:''});
   const [policyName,setPolicyName] = useState('');
   const [policyType,setPolicyType] = useState<'master'|'statement_of_work'|'amendment'>('master');
   const [policySteps,setPolicySteps] = useState(1);
@@ -286,17 +286,19 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
     return action(() => createCorporateAmendment(token,detail.id,{
       tenant_id:tenant.id,change_summary:amendment.change_summary,
       scope_summary:amendment.scope_summary,effective_from:amendment.effective_from,
-      services:(detail.services ?? []).map((s,index) => ({
-        service_key:s.service_key,
-        service_scope:index===0 && amendment.service_scope ? amendment.service_scope : s.service_scope,
-        quantity:s.quantity,
-        monthly_fee:index===0 && amendment.monthly_fee ? amendment.monthly_fee : s.monthly_fee,
-        sla:index===0 && amendment.sla_json ? JSON.parse(amendment.sla_json) : (s.sla ?? {}),
-        kpi:index===0 && amendment.kpi_json ? JSON.parse(amendment.kpi_json) : (s.kpi ?? {}),
-        entitlement:index===0 && amendment.entitlement_json ? JSON.parse(amendment.entitlement_json) : (s.entitlement ?? {}),
-        human_workforce_limit:index===0 && amendment.human_limit ? Number(amendment.human_limit) : s.human_workforce_limit,
-        ai_worker_limit:index===0 && amendment.ai_limit ? Number(amendment.ai_limit) : s.ai_worker_limit,
-      })),
+      services:amendment.services_json.trim()
+        ? JSON.parse(amendment.services_json)
+        : (detail.services ?? []).map((s,index) => ({
+            service_key:s.service_key,
+            service_scope:index===0 && amendment.service_scope ? amendment.service_scope : s.service_scope,
+            quantity:s.quantity,
+            monthly_fee:index===0 && amendment.monthly_fee ? amendment.monthly_fee : s.monthly_fee,
+            sla:index===0 && amendment.sla_json ? JSON.parse(amendment.sla_json) : (s.sla ?? {}),
+            kpi:index===0 && amendment.kpi_json ? JSON.parse(amendment.kpi_json) : (s.kpi ?? {}),
+            entitlement:index===0 && amendment.entitlement_json ? JSON.parse(amendment.entitlement_json) : (s.entitlement ?? {}),
+            human_workforce_limit:index===0 && amendment.human_limit ? Number(amendment.human_limit) : s.human_workforce_limit,
+            ai_worker_limit:index===0 && amendment.ai_limit ? Number(amendment.ai_limit) : s.ai_worker_limit,
+          })),
     }), 'Amendment version baru tersimpan sebagai draft.');
   };
 
@@ -493,6 +495,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
           <label><span className={label}>SLA amendment (JSON object)</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.sla_json} onChange={e=>setAmendment(p=>({...p,sla_json:e.target.value}))}/></label>
           <label><span className={label}>KPI amendment (JSON object)</span><textarea className="min-h-16 rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.kpi_json} onChange={e=>setAmendment(p=>({...p,kpi_json:e.target.value}))}/></label>
           <label className="md:col-span-2"><span className={label}>Entitlement amendment (JSON object)</span><textarea className="min-h-16 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.entitlement_json} onChange={e=>setAmendment(p=>({...p,entitlement_json:e.target.value}))}/></label>
+          <label className="md:col-span-3"><span className={label}>Full service scope replacement (JSON array, optional)</span><textarea className="min-h-24 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" value={amendment.services_json} onChange={e=>setAmendment(p=>({...p,services_json:e.target.value}))} placeholder='[{"service_key":"...","service_scope":"...","quantity":1,"monthly_fee":"0","sla":{},"kpi":{},"entitlement":{}}]'/></label>
         </div>
         {canManage && detail && ['active','approved'].includes(detail.status) && <button className={primary+' mt-3'} disabled={saving || !amendment.change_summary || !amendment.scope_summary || !amendment.effective_from} onClick={()=>void createAmendment()}>Buat Amendment Version</button>}
         {detail && <p className="mt-4 text-xs text-[#526675]">Selected {detail.contract_number} · current v{detail.current_version}</p>}
