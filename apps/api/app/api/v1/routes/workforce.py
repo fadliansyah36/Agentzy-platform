@@ -708,3 +708,18 @@ async def register_workforce(payload: SelfRegistrationInput, request: Request, c
         await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.self_registered","workforce_profile",profile["id"],request)
         return {"data":profile}
 
+
+@router.get("/identity/verifications")
+async def list_identity_verifications(tenant_id: UUID, request: Request, status: str = Query(default="pending",pattern="^(pending|in_review|verified|rejected|expired|all)$"), claims: dict = claims_dependency):
+    await _authorize(claims,tenant_id,"identity.review",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("""
+          select v.id,v.tenant_id,v.workforce_profile_id,v.status,v.verification_type,v.submitted_at,v.reviewed_by,v.reviewed_at,v.rejection_reason,
+                 p.worker_code,p.display_name,p.job_title
+          from public.workforce_identity_verifications v
+          join public.workforce_profiles p on p.id=v.workforce_profile_id and p.tenant_id=v.tenant_id
+          where v.tenant_id=:tenant and (:status='all' or v.status=:status)
+          order by v.submitted_at asc limit 200
+        """),{"tenant":tenant_id,"status":status})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
+
