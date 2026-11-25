@@ -68,14 +68,14 @@ Supabase project: `Agentzy-db` (`cwhjdnkotuhueeudpgeu`), connected and `ACTIVE_H
 | `AGZ-P03-INT-001` | 03 — Corporate & Contract Management | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete | DONE — implementation complete |
 | `AGZ-P03-OBS-001` | 03 — Corporate & Contract Management | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete | DONE — implementation complete |
 | `AGZ-P03-DOC-001` | 03 — Corporate & Contract Management | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE — implementation complete | DONE — implementation complete |
-| `AGZ-P04-FE-001` | 04 — Human Workforce Passport & Onboarding | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
-| `AGZ-P04-BE-001` | 04 — Human Workforce Passport & Onboarding | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
-| `AGZ-P04-DB-001` | 04 — Human Workforce Passport & Onboarding | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
-| `AGZ-P04-API-001` | 04 — Human Workforce Passport & Onboarding | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | BLOCKED / NOT STARTED |
-| `AGZ-P04-PERM-001` | 04 — Human Workforce Passport & Onboarding | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | BLOCKED / NOT STARTED |
-| `AGZ-P04-INT-001` | 04 — Human Workforce Passport & Onboarding | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | BLOCKED / NOT STARTED |
-| `AGZ-P04-OBS-001` | 04 — Human Workforce Passport & Onboarding | Observability | Structured logs, metrics, traces, audit events and operational alerts. | BLOCKED / NOT STARTED |
-| `AGZ-P04-DOC-001` | 04 — Human Workforce Passport & Onboarding | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | BLOCKED / NOT STARTED |
+| `AGZ-P04-FE-001` | 04 — Human Workforce Passport & Onboarding | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | DONE — implementation complete |
+| `AGZ-P04-BE-001` | 04 — Human Workforce Passport & Onboarding | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | DONE — implementation complete |
+| `AGZ-P04-DB-001` | 04 — Human Workforce Passport & Onboarding | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | DONE — implementation complete |
+| `AGZ-P04-API-001` | 04 — Human Workforce Passport & Onboarding | API contract | Implement `/api/v1` routes, Pydantic schemas, OpenAPI, pagination, standard errors, trace IDs and idempotency. | DONE — implementation complete |
+| `AGZ-P04-PERM-001` | 04 — Human Workforce Passport & Onboarding | Permission | Define permission keys, RBAC/ABAC, object-level authorization, RLS, Storage and Realtime policies. | DONE — implementation complete |
+| `AGZ-P04-INT-001` | 04 — Human Workforce Passport & Onboarding | Integration/events | Implement outbox/events, authorized provider adapters, retries, replay protection and idempotent consumers. | DONE — implementation complete |
+| `AGZ-P04-OBS-001` | 04 — Human Workforce Passport & Onboarding | Observability | Structured logs, metrics, traces, audit events and operational alerts. | DONE — implementation complete |
+| `AGZ-P04-DOC-001` | 04 — Human Workforce Passport & Onboarding | Documentation | Update domain README, API contract, migration ledger, phase evidence and known limitations. | DONE — implementation complete |
 | `AGZ-P05-FE-001` | 05 — Sales CRM, Provider Catalogue & Order | Frontend integration | Wire existing UI to typed API clients; preserve design; implement loading/empty/error/denied/stale/offline states. | BLOCKED / NOT STARTED |
 | `AGZ-P05-BE-001` | 05 — Sales CRM, Provider Catalogue & Order | Backend | Implement domain entities, application services/use cases, repositories/adapters and state transitions. | BLOCKED / NOT STARTED |
 | `AGZ-P05-DB-001` | 05 — Sales CRM, Provider Catalogue & Order | Migration | Add phase-scoped Supabase migration after live-schema diff; include constraints, indexes, RLS/grants and recovery notes. | BLOCKED / NOT STARTED |
@@ -1100,3 +1100,20 @@ Implemented in the current main branch:
 - Live verification: 17/17 Phase 03 tables exist with RLS enabled; direct anon/authenticated business grants are absent. All 15 route permission keys are registered and mapped to one or more roles.
 - Final hardening code commit: `7329be889ae779a80e263b07195e3892cc24e57a`. Agentzy Minimum Engineering Checks run [45592736547](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45592736547) — SUCCESS; lint, type-check, Python compile, Ruff, focused deterministic checks, FastAPI/OpenAPI and migration consistency all passed.
 - Phase 04 — Human Workforce Passport & Onboarding remains the next backlog phase; do not infer its implementation has started from this closure update.
+
+
+## 26. Phase 04 implementation closure — 2026-11-25
+
+**Phase 04 — Human Workforce Passport & Onboarding: DONE — Implementation Complete.**
+
+Evidence: `docs/phase-04/PHASE_04_IMPLEMENTATION_REPORT_2026-11-25.md`.
+
+- Workforce Portal self-registration, Passport, identity history/private documents, skill and certification submission, training enrollment/progress, availability, onboarding and activity history are wired to FastAPI.
+- Corporate Portal is wired for workforce directory, engagement/classification and agreement lifecycle, onboarding task assignment/due dates, availability and assignment scheduling/conflict handling.
+- Super Admin is wired for workforce directory, identity document review/secure download/redaction, skill and certification verification, training catalogue governance, retention purge and lifecycle metrics.
+- FastAPI exposes 41 Workforce endpoints with Pydantic request validation, tenant-scoped RBAC/ABAC authorization, object scope, audit events, notification outbox hooks and lifecycle/eligibility services.
+- 13 additive Phase 04 migrations are present and applied; 14/14 workforce base tables have RLS enabled, 19/19 workforce permission keys have active ABAC policies, and browser roles have zero direct workforce-table grants. Workforce Storage is private and service-role-only.
+- Supabase evidence contains no seeded workforce records or fake business data.
+- Engineering evidence: Agentzy Minimum Engineering Checks run [45602180669](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45602180669) on implementation commit `a710163a19036aeb6d070c988e6ab5df7a3b5097` — SUCCESS (frontend lint, TypeScript, Python compile, Ruff, focused deterministic checks, FastAPI/OpenAPI and migration consistency).
+- Deployment limitations: document operations require `SUPABASE_SERVICE_ROLE_KEY` and `CLAMAV_HOST`; notification dispatch requires SMTP. SMTP/Google OAuth credentials remain deferred and are not claimed active. Phase 00 remains separately IN PROGRESS; this update does not close Phase 00.
+- **Next phase:** Phase 05 — Sales CRM, Provider Catalogue & Order. No Phase 05 implementation has been started.
