@@ -478,7 +478,7 @@ export function ContractPartnershipView({ tenant, onBack, organizations, branche
               </div>
             </div>)}
           </div>
-          {canManage && <button className={primary} disabled={saving || !newContract.contract_number || !newContract.title || !newContract.scope_summary || !newContract.service_key || !newContract.service_scope || (newContract.contract_type==='statement_of_work' && !newContract.parent_contract_id)} onClick={()=>void createContract()}>Simpan Draft ke Backend</button>}
+          {canManage && <button className={primary} disabled={saving || !newContract.contract_number || !newContract.title || !newContract.scope_summary || !newContract.service_key || !newContract.service_scope || Number(newContract.quantity)<=0 || additionalServices.some(s=>!s.service_key || !s.service_scope || Number(s.quantity)<=0) || (newContract.contract_type==='statement_of_work' && !newContract.parent_contract_id)} onClick={()=>void createContract()}>Simpan Draft ke Backend</button>}
         </div>
       </section>
       <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h2 className="text-sm font-bold text-[#17324D]">Amendment / Versioning</h2><p className="mt-1 text-xs text-[#718391]">Snapshot immutable dan hash konten disimpan untuk setiap versi.</p>
