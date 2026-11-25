@@ -64,14 +64,13 @@ import {
 import {
   AttendanceView,
   PerformanceKPIView,
-  TrainingCertView,
   NotificationsView,
-  ProfilePassportView,
   WorkspaceCenterView,
   HelpFAQView,
   SettingsView,
 } from '@/components/workforce/SharedWorkforceViews';
 import { AICollaborationView } from '@/components/workforce/AICollaborationView';
+import { WorkforcePassportBackendView } from '@/components/workforce/WorkforcePassportBackendView';
 import {
   INITIAL_TASKS,
   INITIAL_LEADS,
@@ -1290,7 +1289,7 @@ export function WorkforcePortalClient() {
                 )}
 
                 {activeTab === 'training' && (
-                  <TrainingCertView roleMode={roleMode} />
+                  <WorkforcePassportBackendView accessToken={accessToken ?? null} tenantContexts={workforceTenantContexts} userName={currentUser.name} initialTab="training" />
                 )}
 
                 {activeTab === 'workspace' && roleMode !== 'affiliate' && (
@@ -1318,11 +1317,7 @@ export function WorkforcePortalClient() {
                 )}
 
                 {activeTab === 'profile' && (
-                  <ProfilePassportView
-                    roleMode={roleMode}
-                    userName={currentUser.name}
-                    sponsorInfo={boundSponsor}
-                  />
+                  <WorkforcePassportBackendView accessToken={accessToken ?? null} tenantContexts={workforceTenantContexts} userName={currentUser.name} initialTab="passport" />
                 )}
 
                 {activeTab === 'help' && <HelpFAQView roleMode={roleMode} />}
