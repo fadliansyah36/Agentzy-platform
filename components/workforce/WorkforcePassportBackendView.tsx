@@ -8,6 +8,7 @@ import {
   listWorkforceSkills, addWorkforceSkill, addWorkforceCertification, renewWorkforceCertification,
   getWorkforceDocumentDownload,
   type AgentzyWorkforceTenantContext, type WorkforcePassport,
+  type WorkforceAvailabilityType, type WorkforceOnboardingTaskType,
 } from '@/apps/web/lib/api-client';
 
 type Course = Record<string, unknown> & { id:string; title:string; description?:string|null; course_key:string };
@@ -43,7 +44,7 @@ export function WorkforcePassportBackendView({
   const [taskReason,setTaskReason]=useState('');
   const [identityFile,setIdentityFile]=useState<File|null>(null);
   const [pendingVerificationId,setPendingVerificationId]=useState<string|null>(null);
-  const [availability,setAvailability]=useState({type:'leave',starts_at:'',ends_at:'',timezone:'Asia/Jakarta',recurrence_rule:'',reason:''});
+  const [availability,setAvailability]=useState<{type:WorkforceAvailabilityType;starts_at:string;ends_at:string;timezone:string;recurrence_rule:string;reason:string}>({type:'leave',starts_at:'',ends_at:'',timezone:'Asia/Jakarta',recurrence_rule:'',reason:''});
 
   const load=useCallback(async()=>{
     if(!accessToken||!tenantId){setLoading(false);setError('Tenant Workforce belum dipilih.');return;}
