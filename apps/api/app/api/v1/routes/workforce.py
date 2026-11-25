@@ -1314,3 +1314,24 @@ async def renew_certification(certification_id: UUID,payload: CertificationRenew
         await _write_audit(connection,payload.tenant_id,actor,"workforce.certification.renewed","workforce_certification",renewed["id"],request,{"supersedes":str(certification_id)})
         return {"data":renewed}
 
+
+@router.get("/certifications/queue")
+async def list_certification_queue(
+    tenant_id: UUID,
+    request: Request,
+    status: str = Query(default="pending",pattern="^(pending|verified|rejected|expired|all)$"),
+    claims: dict = claims_dependency,
+):
+    await _authorize(claims,tenant_id,"certifications.verify",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("""
+          select c.id,c.tenant_id,c.workforce_profile_id,c.name,c.issuer,c.certificate_reference,
+                 c.valid_from,c.expires_at,c.verification_status,c.created_at,
+                 p.worker_code,p.display_name
+          from public.workforce_certifications c
+          join public.workforce_profiles p on p.id=c.workforce_profile_id and p.tenant_id=c.tenant_id
+          where c.tenant_id=:tenant and (:status='all' or c.verification_status=:status)
+          order by c.created_at asc limit 200
+        """),{"tenant":tenant_id,"status":status})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
+
