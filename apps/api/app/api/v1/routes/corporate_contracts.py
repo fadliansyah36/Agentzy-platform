@@ -260,14 +260,18 @@ async def audit_contract_event(
 
 
 
-async def find_contract_event_replay(
-    connection, *, tenant_id: UUID, idempotency_key: str, fingerprint: str,
-    expected_event_type: str,
-):
+async def lock_tenant_idempotency_key(connection, tenant_id: UUID, idempotency_key: str) -> None:
     await connection.execute(
         text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),
         {"lock_key": f"{tenant_id}:{idempotency_key}"},
     )
+
+
+async def find_contract_event_replay(
+    connection, *, tenant_id: UUID, idempotency_key: str, fingerprint: str,
+    expected_event_type: str,
+):
+    await lock_tenant_idempotency_key(connection, tenant_id, idempotency_key)
     result = await connection.execute(
         text("""
             select id,contract_id,event_type,metadata
@@ -525,6 +529,7 @@ async def create_contract_amendment(
         ).encode()
     ).hexdigest()
     async with engine.begin() as connection:
+        await lock_tenant_idempotency_key(connection, payload.tenant_id, idempotency_key)
         replay = await connection.execute(
             text("""
                 select id,metadata from public.contract_events
@@ -939,6 +944,7 @@ async def decide_policy_approval(
         f"{payload.approval_id}:{payload.decision}:{payload.reason}".encode()
     ).hexdigest()
     async with engine.begin() as connection:
+        await lock_tenant_idempotency_key(connection, payload.tenant_id, idempotency_key)
         old = await connection.execute(
             text("""
                 select id,decision_fingerprint,status from public.contract_approvals
@@ -1326,6 +1332,7 @@ async def request_contract_renewal(
         ).encode()
     ).hexdigest()
     async with engine.begin() as connection:
+        await lock_tenant_idempotency_key(connection, payload.tenant_id, idempotency_key)
         contract = await connection.execute(
             text("""
                 select status,effective_end from public.contracts
@@ -1616,6 +1623,7 @@ async def create_contract_invoice(
         ).encode()
     ).hexdigest()
     async with engine.begin() as connection:
+        await lock_tenant_idempotency_key(connection, payload.tenant_id, idempotency_key)
         existing = await connection.execute(
             text("""
                 select id,status,total_amount,idempotency_fingerprint
@@ -1846,6 +1854,7 @@ async def create_payment_reference(
         raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
     await require_tenant_permission(actor, payload.tenant_id, "corporate.finance.invoice.manage")
     async with engine.begin() as connection:
+        await lock_tenant_idempotency_key(connection, payload.tenant_id, idempotency_key)
         invoice = await connection.execute(
             text("""
                 select total_amount,status from public.contract_invoices
@@ -2188,6 +2197,7 @@ async def verify_payment_reference(
         f"{reference_id}:{payload.decision}:{payload.evidence_reference}:{payload.reason}".encode()
     ).hexdigest()
     async with engine.begin() as connection:
+        await lock_tenant_idempotency_key(connection, payload.tenant_id, idempotency_key)
         replay_result = await connection.execute(
             text("""
                 select id,status,verification_fingerprint
