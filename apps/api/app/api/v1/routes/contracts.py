@@ -712,4 +712,31 @@ async def activate_contract(
             metadata={"fingerprint": fingerprint},
             idempotency_key=idempotency_key,
         )
+        recipient_result = await connection.execute(
+            text("""
+                select billing_email from public.corporate_profiles
+                where tenant_id=:tenant and profile_status='active'
+            """),
+            {"tenant": tenant_id},
+        )
+        recipient = recipient_result.scalar_one_or_none()
+        if recipient:
+            await connection.execute(
+                text("""
+                    insert into public.notification_outbox(
+                      event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at
+                    ) values(
+                      'contract.activated','contract',:contract_id,:recipient,
+                      cast(:payload as jsonb),'pending',now()
+                    )
+                """),
+                {
+                    "contract_id": contract_id,
+                    "recipient": recipient,
+                    "payload": json.dumps({
+                        "tenant_id": str(tenant_id),
+                        "contract_id": str(contract_id),
+                    }),
+                },
+            )
     return {"data": {"id": str(contract_id), "status": "active"}}
