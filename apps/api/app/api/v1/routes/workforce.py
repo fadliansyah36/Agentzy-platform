@@ -1372,3 +1372,35 @@ async def list_skill_verification_queue(tenant_id: UUID,request: Request,claims:
         """),{"tenant":tenant_id})
         return {"data":[dict(row) for row in rows.mappings().all()]}
 
+
+@router.post("/documents/retention/purge")
+async def purge_expired_workforce_documents(payload: EngagementApproval,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"identity.review",request)
+    if not settings.supabase_service_role_key:
+        raise HTTPException(status_code=503,detail="Secure document storage belum dikonfigurasi.")
+    async with engine.connect() as connection:
+        result=await connection.execute(text("""
+          select id,storage_bucket,storage_path from public.workforce_identity_documents
+          where tenant_id=:tenant and redacted_at is null and retention_until is not null
+            and retention_until<=now()
+          order by retention_until asc limit 200
+        """),{"tenant":payload.tenant_id})
+        expired=[dict(row) for row in result.mappings().all()]
+    headers={"Authorization":f"Bearer {settings.supabase_service_role_key}","apikey":settings.supabase_service_role_key}
+    purged=[]
+    async with httpx.AsyncClient(timeout=15) as client:
+        for document in expired:
+            object_url=f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{document['storage_bucket']}/{quote(document['storage_path'],safe='/')}"
+            response=await client.delete(object_url,headers=headers)
+            if response.status_code not in (200,204,404):
+                continue
+            async with engine.begin() as connection:
+                await connection.execute(text("""
+                  update public.workforce_identity_documents set redacted_at=now()
+                  where tenant_id=:tenant and id=:id and redacted_at is null
+                """),{"tenant":payload.tenant_id,"id":document["id"]})
+                await _write_audit(connection,payload.tenant_id,actor,"workforce.identity.document_retention_purged","workforce_identity_document",document["id"],request,{"reason":payload.reason})
+            purged.append(str(document["id"]))
+    return {"data":{"purged_count":len(purged),"document_ids":purged}}
+
