@@ -1189,13 +1189,14 @@ async def upload_identity_document(
             result = await connection.execute(text("""
               insert into public.workforce_identity_documents(
                 id,tenant_id,verification_id,storage_path,document_type,original_filename,content_type,
-                file_size_bytes,sha256,scan_status,uploaded_by
-              ) values(:id,:tenant,:verification,:path,:type,:filename,:mime,:size,:sha,'clean',:actor)
+                file_size_bytes,sha256,scan_status,uploaded_by,retention_until
+              ) values(:id,:tenant,:verification,:path,:type,:filename,:mime,:size,:sha,'clean',:actor,
+                now()+make_interval(days=>:retention_days))
               returning *
             """), {
                 "id":document_id,"tenant":tenant_id,"verification":verification_id,"path":object_path,
                 "type":document_type,"filename":filename,"mime":content_type,"size":len(raw),
-                "sha":sha256(raw).hexdigest(),"actor":actor,
+                "sha":sha256(raw).hexdigest(),"actor":actor,"retention_days":settings.workforce_document_retention_days,
             })
             document = dict(result.mappings().one())
             await _write_audit(connection,tenant_id,actor,"workforce.identity.document_uploaded",
