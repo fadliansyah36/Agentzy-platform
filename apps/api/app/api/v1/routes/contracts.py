@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 
+from app.core.authorization import authorize_action
 from app.core.security import current_claims
-from app.db.session import engine
+from app.db.session import SessionFactory, engine
 
 router = APIRouter(prefix="/corporate/contracts", tags=["Corporate Contracts"])
 claims_dependency = Depends(current_claims)
@@ -69,34 +70,22 @@ class SubmitReview(BaseModel):
 
 class ApprovalDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    decision: Literal["approved", "rejected"]
-    reason: str = Field(min_length=3, max_length=2000)
-
-
-async def _require_permission(user_id: UUID, tenant_id: UUID, permission: str) -> None:
-    async with engine.connect() as connection:
-        result = await connection.execute(
-            text("""
-                select exists (
-                  select 1
-                  from public.memberships m
-                  join public.membership_roles mr on mr.membership_id=m.id
-                  join public.roles r on r.id=mr.role_id
-                  join public.role_permissions rp on rp.role_id=r.id
-                  where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active'
-                    and rp.permission_key=:permission
-                    and mr.scope_type='tenant' and mr.scope_id is null
-                    and (mr.valid_from is null or mr.valid_from<=now())
-                    and (mr.valid_until is null or mr.valid_until>now())
-                    and (r.tenant_id is null or r.tenant_id=m.tenant_id)
-                )
-            """),
-            {"user_id": user_id, "tenant_id": tenant_id, "permission": permission},
+    decision: Literal["approved", "async def _require_permission(user_id: UUID, tenant_id: UUID, permission: str) -> None:
+    if permission not in {"corporate.contracts.manage", "corporate.contracts.read"}:
+        raise HTTPException(status_code=403, detail="Akses kontrak untuk tenant ini tidak diizinkan.")
+    async with SessionFactory() as session:
+        await authorize_action(
+            session,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            permission_key=permission,
+            platform_permission=permission,
+            aal=None,
+            resource_type="corporate.contracts",
+            action="manage" if permission.endswith(".manage") else "read",
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
         )
-    if not result.scalar_one():
-        raise HTTPException(
-            status_code=403,
-            detail="Akses kontrak untuk tenant ini tidak diizinkan.",
+detail="Akses kontrak untuk tenant ini tidak diizinkan.",
         )
 
 
