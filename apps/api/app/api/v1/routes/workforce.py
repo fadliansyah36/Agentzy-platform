@@ -1335,3 +1335,19 @@ async def list_certification_queue(
         """),{"tenant":tenant_id,"status":status})
         return {"data":[dict(row) for row in rows.mappings().all()]}
 
+
+@router.get("/skills/verification-queue")
+async def list_skill_verification_queue(tenant_id: UUID,request: Request,claims: dict=claims_dependency):
+    await _authorize(claims,tenant_id,"skills.manage",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("""
+          select ws.id,ws.workforce_profile_id,ws.proficiency,ws.experience_months,ws.evidence_reference,
+                 s.skill_key,s.name as skill_name,p.worker_code,p.display_name
+          from public.workforce_worker_skills ws
+          join public.workforce_skill_registry s on s.id=ws.skill_id
+          join public.workforce_profiles p on p.id=ws.workforce_profile_id and p.tenant_id=ws.tenant_id
+          where ws.tenant_id=:tenant and not ws.verified
+          order by ws.created_at asc limit 200
+        """),{"tenant":tenant_id})
+        return {"data":[dict(row) for row in rows.mappings().all()]}
+
