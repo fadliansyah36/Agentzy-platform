@@ -70,7 +70,11 @@ class SubmitReview(BaseModel):
 
 class ApprovalDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    decision: Literal["approved", "async def _require_permission(user_id: UUID, tenant_id: UUID, permission: str) -> None:
+    decision: Literal["approved", "rejected"]
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+async def _require_permission(user_id: UUID, tenant_id: UUID, permission: str) -> None:
     if permission not in {"corporate.contracts.manage", "corporate.contracts.read"}:
         raise HTTPException(status_code=403, detail="Akses kontrak untuk tenant ini tidak diizinkan.")
     async with SessionFactory() as session:
@@ -84,8 +88,6 @@ class ApprovalDecision(BaseModel):
             resource_type="corporate.contracts",
             action="manage" if permission.endswith(".manage") else "read",
             resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
-        )
-detail="Akses kontrak untuk tenant ini tidak diizinkan.",
         )
 
 
