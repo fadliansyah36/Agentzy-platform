@@ -14,6 +14,7 @@ from app.api.v1.routes.partnership_notifications import router as partnership_no
 from app.api.v1.routes.security_lifecycle import router as security_lifecycle_router
 from app.api.v1.routes.tenant_structure import router as tenant_structure_router
 from app.api.v1.routes.tenants import router as tenants_router
+from app.api.v1.routes.workforce import router as workforce_router
 
 router = APIRouter()
 router.include_router(identity_router, tags=["Identity"])
@@ -30,3 +31,4 @@ router.include_router(corporate_contracts_router)
 router.include_router(access_policies_router)
 router.include_router(ai_workers_router)
 router.include_router(security_lifecycle_router)
+router.include_router(workforce_router)
