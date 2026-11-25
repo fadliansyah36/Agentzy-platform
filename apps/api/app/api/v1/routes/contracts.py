@@ -111,15 +111,18 @@ async def _audit_event(
     to_status,
     request_id,
     metadata=None,
+    idempotency_key=None,
 ):
     await connection.execute(
         text("""
             insert into public.contract_events(
-              tenant_id,contract_id,actor_user_id,event_type,from_status,to_status,metadata,request_id
+              tenant_id,contract_id,actor_user_id,event_type,from_status,to_status,
+              metadata,request_id,idempotency_key
             ) values(
               :tenant_id,:contract_id,:actor,:event_type,:from_status,:to_status,
-              cast(:metadata as jsonb),:request_id
-            )
+              cast(:metadata as jsonb),:request_id,:idempotency_key
+            ) on conflict (tenant_id,idempotency_key)
+              where idempotency_key is not null do nothing
         """),
         {
             "tenant_id": tenant_id,
@@ -130,6 +133,7 @@ async def _audit_event(
             "to_status": to_status,
             "metadata": json.dumps(metadata or {}, default=str),
             "request_id": request_id,
+            "idempotency_key": idempotency_key,
         },
     )
     await connection.execute(
@@ -623,10 +627,30 @@ async def activate_contract(
     tenant_id: UUID,
     request: Request,
     claims: dict = claims_dependency,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     actor = UUID(claims["sub"])
     await _require_permission(actor, tenant_id, "corporate.contracts.manage")
+    if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
+    fingerprint = hashlib.sha256(f"{contract_id}:activate".encode()).hexdigest()
     async with engine.begin() as connection:
+        await connection.execute(
+            text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),
+            {"lock_key": f"{tenant_id}:{idempotency_key}"},
+        )
+        replay = await connection.execute(
+            text("""
+                select event_type,metadata from public.contract_events
+                where tenant_id=:tenant and idempotency_key=:key
+            """),
+            {"tenant": tenant_id, "key": idempotency_key},
+        )
+        previous = replay.mappings().first()
+        if previous:
+            if previous["event_type"] != "contract.activated" or (previous["metadata"] or {}).get("fingerprint") != fingerprint:
+                raise HTTPException(status_code=409, detail="Idempotency-Key dipakai untuk aktivasi berbeda.")
+            return {"data": {"id": str(contract_id), "status": "active", "replayed": True}}
         result = await connection.execute(
             text("""
                 select status,effective_start,effective_end from public.contracts
@@ -646,7 +670,8 @@ async def activate_contract(
             raise HTTPException(status_code=409, detail="Tanggal akhir kontrak telah lewat.")
         await connection.execute(
             text("""
-                update public.contracts set status='active',updated_by=:actor,updated_at=now()
+                update public.contracts set status='active',updated_by=:actor,
+                  updated_at=now(),row_version=row_version+1
                 where id=:id and tenant_id=:tenant_id
             """),
             {"id": contract_id, "tenant_id": tenant_id, "actor": actor},
@@ -684,5 +709,7 @@ async def activate_contract(
             from_status="approved",
             to_status="active",
             request_id=getattr(request.state, "request_id", None),
+            metadata={"fingerprint": fingerprint},
+            idempotency_key=idempotency_key,
         )
     return {"data": {"id": str(contract_id), "status": "active"}}
