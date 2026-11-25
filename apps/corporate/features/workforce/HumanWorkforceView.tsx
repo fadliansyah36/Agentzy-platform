@@ -34,7 +34,7 @@ export function HumanWorkforceView({
   const [detailError,setDetailError]=useState<string|null>(null);
   const [engagementForm,setEngagementForm]=useState<{classification:WorkforceEngagementClassification;agreement_reference:string;contract_id:string;effective_from:string;effective_until:string;legal_review_reference:string;change_reason:string}>({classification:'employee',agreement_reference:'',contract_id:'',effective_from:'',effective_until:'',legal_review_reference:'',change_reason:''});
   const [factsAcknowledged,setFactsAcknowledged]=useState(false);
-  const [taskForm,setTaskForm]=useState({task_key:'',title:'',task_type:'approval',description:''});
+  const [taskForm,setTaskForm]=useState<{task_key:string;title:string;task_type:WorkforceOnboardingTaskType;description:string}>({task_key:'',title:'',task_type:'approval',description:''});
   const [lifecycleTarget,setLifecycleTarget]=useState<'onboarding'|'eligible'|'active'|'inactive'|'suspended'|'offboarded'>('onboarding');
   const [actionReason,setActionReason]=useState('');
 
