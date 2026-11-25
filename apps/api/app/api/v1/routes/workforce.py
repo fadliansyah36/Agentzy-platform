@@ -74,7 +74,7 @@ class SelfRegistrationInput(StrictModel):
 class ProfileCreate(StrictModel):
     tenant_id: UUID
     user_id: UUID
-    membership_id: UUID | None = None
+    membership_id: UUID
     worker_code: str = Field(min_length=2, max_length=48)
     display_name: str = Field(min_length=2, max_length=160)
     legal_name: str | None = Field(default=None, max_length=180)
