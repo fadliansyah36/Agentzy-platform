@@ -1,6 +1,5 @@
 """Application services for Human Workforce lifecycle rules."""
 
-from datetime import date
 from uuid import UUID
 
 from fastapi import HTTPException
