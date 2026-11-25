@@ -666,6 +666,7 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
           values(:tenant,:engagement,:profile,'created',null,'pending',:actor,:reason,cast(:metadata as jsonb))
         """),{"tenant":payload.tenant_id,"engagement":engagement["id"],"profile":profile_id,"actor":actor,"reason":payload.change_reason,"metadata":json.dumps({"classification":payload.classification,"agreement_reference":payload.agreement_reference})})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.created","workforce_engagement",engagement["id"],request,{"classification":payload.classification,"reason":payload.change_reason})
+        await _enqueue_workforce_notification(connection,payload.tenant_id,profile_id,"workforce.engagement.created",{"engagement_id":str(engagement["id"]),"classification":payload.classification})
         return {"data":engagement}
 
 @router.get("/skills")
@@ -733,6 +734,7 @@ async def verify_certification(certification_id: UUID,tenant_id: UUID,decision: 
         if not row:
             raise HTTPException(status_code=404,detail="Sertifikasi tidak ditemukan atau sudah diputuskan.")
         await _write_audit(connection,tenant_id,actor,"workforce.certification."+decision,"workforce_certification",certification_id,request,{"reason":reason})
+        await _enqueue_workforce_notification(connection,tenant_id,row["workforce_profile_id"],"workforce.certification."+decision,{"certification_id":str(certification_id),"reason":reason})
         return {"data":dict(row)}
 
 @router.get("/profiles/{profile_id}/availability")
@@ -871,6 +873,8 @@ async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,re
           certificate_expires_at=:expiry,updated_at=now() where tenant_id=:tenant and id=:id returning *
         """),{"progress":payload.progress_percent,"score":payload.assessment_score,"result":json.dumps(payload.assessment_result),"status":"completed" if complete else "in_progress","complete":complete,"certificate":payload.certificate_reference,"expiry":expiry,"tenant":payload.tenant_id,"id":enrollment_id})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.training.progress_updated","workforce_training_enrollment",enrollment_id,request,{"progress":payload.progress_percent,"completed":complete})
+        if complete:
+            await _enqueue_workforce_notification(connection,payload.tenant_id,enrollment["profile_id"],"workforce.training.completed",{"enrollment_id":str(enrollment_id),"course_id":str(enrollment["course_id"])})
         return {"data":dict(row.mappings().one())}
 
 @router.get("/profiles/{profile_id}/onboarding")
@@ -930,6 +934,8 @@ async def update_onboarding_task(task_id: UUID,payload: TaskCompletion,request: 
         if not task:
             raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
         await _write_audit(connection,payload.tenant_id,actor,"workforce.onboarding.task_"+payload.status,"workforce_onboarding_task",task_id,request,{"reason":payload.reason})
+        if payload.status in ("completed","waived"):
+            await _enqueue_workforce_notification(connection,payload.tenant_id,task["workforce_profile_id"],"workforce.onboarding.task_"+payload.status,{"task_id":str(task_id),"reason":payload.reason})
         return {"data":dict(task)}
 
 @router.post("/profiles/{profile_id}/lifecycle")
@@ -1028,6 +1034,7 @@ async def create_assignment(profile_id: UUID,payload: AssignmentInput,request: R
         """),{"tenant":payload.tenant_id,"profile":profile_id,"reference":payload.assignment_reference,"type":payload.assignment_type,"start":payload.starts_at,"end":payload.ends_at,"load":payload.workload_units,"actor":actor})
         record=dict(row.mappings().one())
         await _write_audit(connection,payload.tenant_id,actor,"workforce.assignment.created","workforce_assignment",record["id"],request)
+        await _enqueue_workforce_notification(connection,payload.tenant_id,profile_id,"workforce.assignment.created",{"assignment_id":str(record["id"]),"assignment_reference":payload.assignment_reference})
         return {"data":record}
 
 @router.get("/profiles/{profile_id}/history")
@@ -1250,6 +1257,7 @@ async def activate_engagement(
           values(:tenant,:engagement,:profile,:event,:previous,'active',:actor,:reason)
         """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"event":"activated" if previous_status=="pending" else "amended","previous":previous_status,"actor":actor,"reason":payload.reason})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.activated","workforce_engagement",engagement_id,request,{"reason":payload.reason})
+        await _enqueue_workforce_notification(connection,payload.tenant_id,engagement["workforce_profile_id"],"workforce.engagement.activated",{"engagement_id":str(engagement_id)})
         return {"data":dict(updated.mappings().one())}
 
 
@@ -1278,6 +1286,7 @@ async def change_engagement_status(
           values(:tenant,:engagement,:profile,:event,:old,:new,:actor,:reason)
         """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"event":target_status,"old":old,"new":target_status,"actor":actor,"reason":payload.reason})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement."+target_status,"workforce_engagement",engagement_id,request,{"reason":payload.reason})
+        await _enqueue_workforce_notification(connection,payload.tenant_id,engagement["workforce_profile_id"],"workforce.engagement."+target_status,{"engagement_id":str(engagement_id),"reason":payload.reason})
         return {"data":dict(updated.mappings().one())}
 
 
