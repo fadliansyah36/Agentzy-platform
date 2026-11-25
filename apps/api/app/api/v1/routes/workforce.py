@@ -514,22 +514,61 @@ async def register_identity_document(verification_id: UUID,payload: DocumentMeta
 
 @router.post("/documents/{document_id}/download")
 async def signed_document_download(document_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
-    await _authorize(claims,tenant_id,"identity.review",request,document_id)
+    actor=UUID(claims["sub"])
     if not settings.supabase_service_role_key:
         raise HTTPException(status_code=503,detail="Secure document storage belum dikonfigurasi.")
     async with engine.connect() as connection:
-        result=await connection.execute(text("select storage_bucket,storage_path,original_filename,scan_status from public.workforce_identity_documents where tenant_id=:tenant and id=:id and redacted_at is null and (retention_until is null or retention_until>now())"),{"tenant":tenant_id,"id":document_id})
+        result=await connection.execute(text("""
+          select d.storage_bucket,d.storage_path,d.original_filename,d.scan_status,p.user_id
+          from public.workforce_identity_documents d
+          join public.workforce_identity_verifications v on v.id=d.verification_id and v.tenant_id=d.tenant_id
+          join public.workforce_profiles p on p.id=v.workforce_profile_id and p.tenant_id=v.tenant_id
+          where d.tenant_id=:tenant and d.id=:id and d.redacted_at is null
+            and (d.retention_until is null or d.retention_until>now())
+        """),{"tenant":tenant_id,"id":document_id})
         doc=result.mappings().first()
-    if not doc or doc["scan_status"]!="clean": raise HTTPException(status_code=404,detail="Dokumen tidak tersedia atau belum lolos pemindaian.")
+    if not doc or doc["scan_status"]!="clean":
+        raise HTTPException(status_code=404,detail="Dokumen tidak tersedia atau belum lolos pemindaian.")
+    if doc["user_id"]==actor:
+        await _authorize(claims,tenant_id,"identity.submit",request,document_id)
+    else:
+        await _authorize(claims,tenant_id,"identity.review",request,document_id)
     url=f"{settings.supabase_url.rstrip('/')}/storage/v1/object/sign/{doc['storage_bucket']}/{quote(doc['storage_path'],safe='/')}"
     headers={"Authorization":f"Bearer {settings.supabase_service_role_key}","apikey":settings.supabase_service_role_key}
     async with httpx.AsyncClient(timeout=15) as client:
         response=await client.post(url,headers=headers,json={"expiresIn":60})
-    if response.status_code not in (200,201): raise HTTPException(status_code=503,detail="Signed URL dokumen gagal dibuat.")
+    if response.status_code not in (200,201):
+        raise HTTPException(status_code=503,detail="Signed URL dokumen gagal dibuat.")
     signed=response.json().get("signedURL")
     if not signed: raise HTTPException(status_code=503,detail="Signed URL tidak tersedia.")
     if not signed.startswith("http"): signed=f"{settings.supabase_url.rstrip('/')}/storage/v1{signed}"
+    async with engine.begin() as connection:
+        await _write_audit(connection,tenant_id,actor,"workforce.identity.document_download_authorized","workforce_identity_document",document_id,request,{"expires_in_seconds":60})
     return {"data":{"document_id":str(document_id),"filename":doc["original_filename"],"signed_url":signed,"expires_in_seconds":60}}
+
+@router.post("/documents/{document_id}/redact")
+async def redact_identity_document(document_id: UUID,tenant_id: UUID,payload: EngagementApproval,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,tenant_id,"identity.review",request,document_id)
+    if not settings.supabase_service_role_key:
+        raise HTTPException(status_code=503,detail="Secure document storage belum dikonfigurasi.")
+    async with engine.connect() as connection:
+        result=await connection.execute(text("""
+          select storage_bucket,storage_path from public.workforce_identity_documents
+          where tenant_id=:tenant and id=:id and redacted_at is null
+        """),{"tenant":tenant_id,"id":document_id})
+        doc=result.mappings().first()
+    if not doc: raise HTTPException(status_code=404,detail="Dokumen tidak ditemukan atau sudah di-redact.")
+    object_url=f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{doc['storage_bucket']}/{quote(doc['storage_path'],safe='/')}"
+    headers={"Authorization":f"Bearer {settings.supabase_service_role_key}","apikey":settings.supabase_service_role_key}
+    async with httpx.AsyncClient(timeout=15) as client:
+        response=await client.delete(object_url,headers=headers)
+    if response.status_code not in (200,204,404):
+        raise HTTPException(status_code=503,detail="Penghapusan object storage gagal; metadata tidak diubah.")
+    async with engine.begin() as connection:
+        await connection.execute(text("update public.workforce_identity_documents set redacted_at=now() where tenant_id=:tenant and id=:id"),{"tenant":tenant_id,"id":document_id})
+        await _write_audit(connection,tenant_id,actor,"workforce.identity.document_redacted","workforce_identity_document",document_id,request,{"reason":payload.reason})
+    return {"data":{"document_id":str(document_id),"redacted":True}}
 
 @router.get("/profiles/{profile_id}/engagements")
 async def list_engagements(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
