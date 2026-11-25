@@ -2,14 +2,17 @@
 """Human Workforce Passport, verification, engagement, skills, training and onboarding APIs."""
 import json
 from datetime import date, datetime, timezone
+from hashlib import sha256
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
+from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 
+from app.adapters.clamav import scan_bytes
 from app.core.authorization import authorize_action
 from app.core.config import get_settings
 from app.core.security import current_claims
@@ -370,6 +373,13 @@ async def decide_identity(verification_id: UUID,payload: VerificationDecision,re
         profile=await _profile(connection,payload.tenant_id,verification["workforce_profile_id"])
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if verification["status"] in ("verified","rejected"): raise HTTPException(status_code=409,detail="Keputusan verifikasi sudah final.")
+        if payload.decision == "verified":
+            evidence = await connection.execute(text("""
+              select exists(select 1 from public.workforce_identity_documents
+                where tenant_id=:tenant and verification_id=:verification and scan_status='clean' and redacted_at is null)
+            """), {"tenant":payload.tenant_id,"verification":verification_id})
+            if not evidence.scalar_one():
+                raise HTTPException(status_code=409,detail="Minimal satu dokumen identitas bersih wajib tersedia sebelum verifikasi.")
         reason=payload.reason if payload.decision=="rejected" else None
         result=await connection.execute(text("""
           update public.workforce_identity_verifications set status=:status,reviewed_by=:actor,reviewed_at=now(),
@@ -757,4 +767,84 @@ async def list_identity_verifications(tenant_id: UUID, request: Request, status:
           order by v.submitted_at asc limit 200
         """),{"tenant":tenant_id,"status":status})
         return {"data":[dict(row) for row in rows.mappings().all()]}
+
+
+@router.post("/identity/{verification_id}/upload", status_code=201)
+async def upload_identity_document(
+    verification_id: UUID,
+    request: Request,
+    tenant_id: UUID,
+    document_type: str = Query(min_length=2, max_length=80),
+    file: UploadFile = File(...),
+    claims: dict = claims_dependency,
+):
+    actor = UUID(claims["sub"])
+    await _authorize(claims, tenant_id, "identity.submit", request, verification_id)
+    if not settings.supabase_service_role_key:
+        raise HTTPException(status_code=503, detail="Private document storage belum dikonfigurasi.")
+    content_type = (file.content_type or "").lower()
+    if content_type not in {"application/pdf", "image/jpeg", "image/png"}:
+        raise HTTPException(status_code=415, detail="Format dokumen harus PDF, JPG, atau PNG.")
+    raw = await file.read(10 * 1024 * 1024 + 1)
+    if not raw or len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Ukuran dokumen maksimal 10 MB.")
+    try:
+        scan_status, scan_message = await scan_bytes(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Pemindaian antivirus dokumen belum tersedia.") from exc
+    if scan_status != "clean":
+        raise HTTPException(status_code=422, detail="Dokumen ditolak oleh pemindaian keamanan.")
+    verification = None
+    async with engine.connect() as connection:
+        result = await connection.execute(text("""
+          select workforce_profile_id from public.workforce_identity_verifications
+          where tenant_id=:tenant and id=:id and status in ('pending','in_review')
+        """), {"tenant":tenant_id,"id":verification_id})
+        verification = result.mappings().first()
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verifikasi tidak ditemukan atau sudah final.")
+    async with engine.connect() as connection:
+        profile = await _profile(connection, tenant_id, verification["workforce_profile_id"])
+        await _assert_profile_scope(connection, claims, tenant_id, profile, request)
+    filename = (file.filename or "identity-document").replace("\\", "/").split("/")[-1][:255]
+    extension = {"application/pdf":".pdf","image/jpeg":".jpg","image/png":".png"}[content_type]
+    object_path = f"{tenant_id}/{verification_id}/{uuid4()}{extension}"
+    encoded_path = quote(object_path, safe="/")
+    object_url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/workforce-private-documents/{encoded_path}"
+    headers = {
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": settings.supabase_service_role_key,
+        "Content-Type": content_type,
+        "x-upsert": "false",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        stored = await client.post(object_url, content=raw, headers=headers)
+    if stored.status_code not in (200,201):
+        raise HTTPException(status_code=503, detail="Penyimpanan dokumen privat gagal.")
+    document_id = uuid4()
+    try:
+        async with engine.begin() as connection:
+            result = await connection.execute(text("""
+              insert into public.workforce_identity_documents(
+                id,tenant_id,verification_id,storage_path,document_type,original_filename,content_type,
+                file_size_bytes,sha256,scan_status,uploaded_by
+              ) values(:id,:tenant,:verification,:path,:type,:filename,:mime,:size,:sha,'clean',:actor)
+              returning *
+            """), {
+                "id":document_id,"tenant":tenant_id,"verification":verification_id,"path":object_path,
+                "type":document_type,"filename":filename,"mime":content_type,"size":len(raw),
+                "sha":sha256(raw).hexdigest(),"actor":actor,
+            })
+            document = dict(result.mappings().one())
+            await _write_audit(connection,tenant_id,actor,"workforce.identity.document_uploaded",
+                                "workforce_identity_document",document_id,request,
+                                {"content_type":content_type,"size":len(raw),"scan":"clean"})
+            return {"data":document}
+    except Exception:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            await client.delete(object_url, headers={
+                "Authorization":f"Bearer {settings.supabase_service_role_key}",
+                "apikey":settings.supabase_service_role_key,
+            })
+        raise
 
