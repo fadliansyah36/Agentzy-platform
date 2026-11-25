@@ -93,6 +93,13 @@ jobs:
           assert "/api/v1/workforce/profiles/{profile_id}/lifecycle" in paths
           assert "/api/v1/workforce/profiles/{profile_id}/assignments" in paths
           assert "/api/v1/workforce/documents/retention/purge" in paths
+          assert "/api/v1/sales/dashboard" in paths
+          assert "/api/v1/sales/leads" in paths
+          assert "/api/v1/sales/providers" in paths
+          assert "/api/v1/sales/catalogue" in paths
+          assert "/api/v1/sales/orders" in paths
+          assert "/api/v1/sales/webhooks/providers/{provider_code}" in paths
+          assert "/api/v1/sales/reconciliation" in paths
           print(f"OpenAPI paths: {len(paths)}")
           PY
 

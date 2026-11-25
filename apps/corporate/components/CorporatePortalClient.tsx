@@ -7,7 +7,7 @@ import { useCorporatePortal } from '../hooks/useCorporatePortal';
 import { CorporateLoginView } from '../features/auth/CorporateLoginView';
 import { ExecutiveOverviewView } from '../features/overview/ExecutiveOverviewView';
 import { BusinessAnalyticsView } from '../features/analytics/BusinessAnalyticsView';
-import { SalesAffiliateAnalyticsView } from '../features/analytics/SalesAffiliateAnalyticsView';
+import { SalesCrmOrdersView } from '../features/sales/SalesCrmOrdersView';
 import { HumanWorkforceView } from '../features/workforce/HumanWorkforceView';
 import { AIWorkforceView } from '../features/workforce/AIWorkforceView';
 import { TechnicalOperationsView } from '../features/technical/TechnicalOperationsView';
@@ -76,30 +76,10 @@ export function CorporatePortalClient({
         )}
 
         {portal.activeSection === 'sales-affiliate' && (
-          <SalesAffiliateAnalyticsView
+          <SalesCrmOrdersView
+            tenantId={portal.activeTenantId}
+            accessToken={portal.accessToken ?? ''}
             onBack={backToOverview}
-            onSelectSalesStaff={(staff) =>
-              portal.setModal({
-                type: 'sales-staff-detail',
-                name: staff.name,
-                grade: staff.grade,
-                region: staff.region,
-                personalSA: staff.personalSA,
-                affiliateSA: staff.affiliateSA,
-                activeAffiliates: staff.activeAffiliates,
-                orders: staff.orders,
-              })
-            }
-            onSelectAffiliate={(aff) =>
-              portal.setModal({
-                type: 'affiliate-detail',
-                name: aff.name,
-                orders: aff.orders,
-                sponsorName: aff.sponsorStaffSales,
-                region: aff.region,
-                validRate: aff.validRate,
-              })
-            }
           />
         )}
 

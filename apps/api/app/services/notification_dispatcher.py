@@ -16,6 +16,18 @@ logger = structlog.get_logger()
 
 def _message_for(event_type: str, payload: dict) -> tuple[str, str]:
     reference = str(payload.get("reference_code") or "—")
+    if event_type == "sales.lead.assigned":
+        company = str(payload.get("customer_name") or "Pelanggan")
+        return (
+            "Lead Sales Agentzy Ditugaskan",
+            f"Lead {company} ditugaskan kepada Anda. Silakan tindak lanjuti melalui Corporate Portal.",
+        )
+    if event_type == "sales.order.submitted":
+        reference = str(payload.get("order_number") or "—")
+        return (
+            "Order Agentzy Diterima",
+            f"Order {reference} telah diterima oleh sistem Agentzy. Pengiriman dan validasi provider masih menunggu respons resmi provider.",
+        )
     if event_type == "partnership.application_received":
         return (
             "Pengajuan Kerja Sama Agentzy diterima",

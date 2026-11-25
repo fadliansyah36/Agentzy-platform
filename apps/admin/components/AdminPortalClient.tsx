@@ -10,6 +10,7 @@ import { GlobalOverviewView } from '../features/overview/GlobalOverviewView';
 import { TenantDirectoryView } from '../features/tenants/TenantDirectoryView';
 import { CorporateOnboardingView } from '../features/tenants/CorporateOnboardingView';
 import { PartnershipLeadsView } from '../features/partnership/PartnershipLeadsView';
+import { ProviderCatalogueAdminView } from '../features/partnership/ProviderCatalogueAdminView';
 import { MasterDataView } from '../features/master-data/MasterDataView';
 import { SubscriptionPlansView } from '../features/master-data/SubscriptionPlansView';
 import { OrganizationUsersView } from '../features/organization/OrganizationUsersView';
@@ -123,11 +124,17 @@ export function AdminPortalClient({
         )}
 
         {portal.activeSection === 'partnerships' && portal.accessToken && (
-          <PartnershipLeadsView
-            accessToken={portal.accessToken}
-            currentUserId={portal.currentUserId}
-            onBack={backToOverview}
-          />
+          <>
+            <PartnershipLeadsView
+              accessToken={portal.accessToken}
+              currentUserId={portal.currentUserId}
+              onBack={backToOverview}
+            />
+            <ProviderCatalogueAdminView
+              accessToken={portal.accessToken}
+              tenants={portal.tenants.map((tenant) => ({ id: tenant.id, name: tenant.name }))}
+            />
+          </>
         )}
 
         {portal.activeSection === 'master-data' && (

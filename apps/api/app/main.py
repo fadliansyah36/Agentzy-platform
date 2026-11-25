@@ -18,6 +18,7 @@ from app.db.session import engine
 from app.services.attachment_scanner import run_attachment_scanner_worker
 from app.services.contract_lifecycle_worker import run_contract_lifecycle_worker
 from app.services.notification_dispatcher import run_notification_worker
+from app.services.sales_worker import run_sales_worker
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -28,6 +29,7 @@ async def lifespan(_: FastAPI):
     notification_task = None
     attachment_scanner_task = None
     contract_lifecycle_task = None
+    sales_task = None
     if settings.smtp_configured:
         notification_task = asyncio.create_task(run_notification_worker())
     else:
@@ -43,10 +45,12 @@ async def lifespan(_: FastAPI):
         contract_lifecycle_task = asyncio.create_task(
             run_contract_lifecycle_worker(settings.contract_lifecycle_poll_seconds)
         )
+    if settings.sales_worker_enabled:
+        sales_task = asyncio.create_task(run_sales_worker(settings.sales_worker_poll_seconds))
     try:
         yield
     finally:
-        for task in (notification_task, attachment_scanner_task, contract_lifecycle_task):
+        for task in (notification_task, attachment_scanner_task, contract_lifecycle_task, sales_task):
             if task:
                 task.cancel()
                 with suppress(asyncio.CancelledError):

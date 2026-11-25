@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     contract_lifecycle_worker_enabled: bool = True
     contract_lifecycle_poll_seconds: int = 900
+    sales_worker_enabled: bool = True
+    sales_worker_poll_seconds: int = Field(default=10, ge=2, le=120)
     log_level: str = "INFO"
 
     @model_validator(mode="after")
