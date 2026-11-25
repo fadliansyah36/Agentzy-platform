@@ -5,6 +5,7 @@ import {
   ApiError, getMyWorkforcePassport, listWorkforceCourses, registerMyWorkforceProfile,
   submitWorkforceIdentity, uploadWorkforceIdentityDocument, enrollWorkforceTraining, updateWorkforceTrainingProgress,
   createWorkforceAvailability, updateWorkforceOnboardingTask,
+  listWorkforceSkills, addWorkforceSkill, addWorkforceCertification,
   type AgentzyWorkforceTenantContext, type WorkforcePassport,
 } from '@/apps/web/lib/api-client';
 
@@ -26,6 +27,9 @@ export function WorkforcePassportBackendView({
   const [tab,setTab]=useState<Tab>(initialTab);
   const [passport,setPassport]=useState<WorkforcePassport|null>(null);
   const [courses,setCourses]=useState<Course[]>([]);
+  const [skillRegistry,setSkillRegistry]=useState<Record<string,unknown>[]>([]);
+  const [skillForm,setSkillForm]=useState({skill_id:'',proficiency:'intermediate',experience_months:'0',evidence_reference:''});
+  const [certForm,setCertForm]=useState({name:'',issuer:'',certificate_reference:'',valid_from:'',expires_at:''});
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string|null>(null);
@@ -62,6 +66,7 @@ export function WorkforcePassportBackendView({
     void Promise.all([
       getMyWorkforcePassport(accessToken,tenantId).then(result=>({kind:'passport' as const,result})).catch(cause=>({kind:'passport-error' as const,cause})),
       listWorkforceCourses(accessToken,tenantId).then(result=>({kind:'courses' as const,result})).catch(cause=>({kind:'courses-error' as const,cause})),
+      listWorkforceSkills(accessToken,tenantId).then(result=>({kind:'skills' as const,result})).catch(cause=>({kind:'skills-error' as const,cause})),
     ]).then(results=>{
       if(!active)return;
       for(const item of results){
@@ -70,7 +75,8 @@ export function WorkforcePassportBackendView({
           if(item.cause instanceof ApiError&&item.cause.status===404){setPassport(null);setNotRegistered(true);}
           else setError(item.cause instanceof Error?item.cause.message:'Workforce Passport gagal dimuat.');
         } else if(item.kind==='courses') setCourses(item.result.data as Course[]);
-        else if(!(item.cause instanceof ApiError&&item.cause.status===403)) setError(item.cause instanceof Error?item.cause.message:'Training catalogue gagal dimuat.');
+        else if(item.kind==='skills') setSkillRegistry(item.result.data);
+        else if(!(item.cause instanceof ApiError&&item.cause.status===403)) setError(item.cause instanceof Error?item.cause.message:'Data Workforce gagal dimuat.');
       }
     }).finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
@@ -113,6 +119,15 @@ export function WorkforcePassportBackendView({
     assessment_result:{recorded_at:new Date().toISOString(),source:'workforce_portal'},
   }));
 
+  const submitSkill=()=>passport&&run(()=>addWorkforceSkill(accessToken!,passport.id,{
+    tenant_id:tenantId,skill_id:skillForm.skill_id,proficiency:skillForm.proficiency,
+    experience_months:Number(skillForm.experience_months),evidence_reference:skillForm.evidence_reference||undefined,
+  }));
+  const submitCertification=()=>passport&&run(()=>addWorkforceCertification(accessToken!,passport.id,{
+    tenant_id:tenantId,name:certForm.name,issuer:certForm.issuer,
+    certificate_reference:certForm.certificate_reference||undefined,
+    valid_from:certForm.valid_from||undefined,expires_at:certForm.expires_at||undefined,evidence_metadata:{},
+  }));
   const saveAvailability=()=>passport&&run(()=>createWorkforceAvailability(accessToken!,passport.id,{
     tenant_id:tenantId,availability_type:availability.type,
     starts_at:new Date(availability.starts_at).toISOString(),ends_at:new Date(availability.ends_at).toISOString(),
@@ -156,6 +171,16 @@ export function WorkforcePassportBackendView({
             <button type="button" disabled={busy||!identityFile||(!pendingVerificationId&&passport.lifecycle_status!=='registered')} onClick={()=>void submitIdentity()} className="h-10 rounded-lg border border-[#0284C7] px-4 text-xs font-semibold text-[#0284C7] disabled:opacity-40">{busy?'Mengunggah…':pendingVerificationId?'Unggah Dokumen':'Ajukan Verifikasi'}</button>
           </div></section>
           <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Passport Summary</h3><div className="mt-3 grid grid-cols-2 gap-3 text-xs">{[['Skills',passport.skills.length],['Certifications',passport.certifications.length],['Training',passport.training.length],['Assignments',passport.assignments.length],['Onboarding Tasks',passport.onboarding.length],['Lifecycle Events',passport.history.length]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-[#F5F8FA] p-3"><p className="text-[#718391]">{label}</p><p className="mt-1 text-lg font-bold text-[#17324D]">{value}</p></div>)}</div></section>
+          <div className="grid gap-4 lg:col-span-2 lg:grid-cols-2">
+            <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Skills & Proficiency</h3>
+              {passport.skills.map((item,index)=><p key={String(item.id??index)} className="mt-2 text-xs text-[#526675]">{String(item.skill_name??item.skill_id)} · {String(item.proficiency)} · {String(item.experience_months)} months{item.verified?' · Verified':''}</p>)}
+              <div className="mt-3 grid gap-2"><select value={skillForm.skill_id} onChange={e=>setSkillForm(v=>({...v,skill_id:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"><option value="">Pilih skill registry</option>{skillRegistry.map(skill=><option key={String(skill.id)} value={String(skill.id)}>{String(skill.name)} · {String(skill.category)}</option>)}</select><select value={skillForm.proficiency} onChange={e=>setSkillForm(v=>({...v,proficiency:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs">{['beginner','intermediate','advanced','expert'].map(x=><option key={x}>{x}</option>)}</select><input type="number" min="0" max="960" value={skillForm.experience_months} onChange={e=>setSkillForm(v=>({...v,experience_months:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs" placeholder="Experience months"/><input value={skillForm.evidence_reference} onChange={e=>setSkillForm(v=>({...v,evidence_reference:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs" placeholder="Evidence reference (optional)"/><button type="button" disabled={busy||!skillForm.skill_id} onClick={()=>void submitSkill()} className="h-9 rounded-lg bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Submit Skill</button></div>
+            </section>
+            <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5"><h3 className="text-sm font-bold text-[#17324D]">Certification & Renewal</h3>
+              {passport.certifications.map((item,index)=><p key={String(item.id??index)} className="mt-2 text-xs text-[#526675]">{String(item.name)} · {String(item.issuer)} · {String(item.verification_status)} · Expires {String(item.expires_at??'—')}</p>)}
+              <div className="mt-3 grid gap-2"><input value={certForm.name} onChange={e=>setCertForm(v=>({...v,name:e.target.value}))} placeholder="Certification name" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input value={certForm.issuer} onChange={e=>setCertForm(v=>({...v,issuer:e.target.value}))} placeholder="Issuer" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input value={certForm.certificate_reference} onChange={e=>setCertForm(v=>({...v,certificate_reference:e.target.value}))} placeholder="Certificate reference" className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={certForm.valid_from} onChange={e=>setCertForm(v=>({...v,valid_from:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><input type="date" value={certForm.expires_at} onChange={e=>setCertForm(v=>({...v,expires_at:e.target.value}))} className="h-9 rounded-lg border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={busy||!certForm.name||!certForm.issuer||!certForm.valid_from} onClick={()=>void submitCertification()} className="h-9 rounded-lg bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Submit Certification</button></div>
+            </section>
+          </div>
           <section className="rounded-[14px] border border-[#D8E3E9] bg-white p-5 lg:col-span-2"><h3 className="text-sm font-bold text-[#17324D]">Engagement Classification</h3>{passport.engagements.length===0?<p className="mt-2 text-xs text-[#718391]">Belum ada agreement classification yang ditetapkan Corporate.</p>:<div className="mt-3 space-y-2">{passport.engagements.map((item,index)=><div key={String(item.id??index)} className="flex flex-wrap justify-between gap-2 border-b border-[#EAF2F6] pb-2 text-xs"><span className="font-semibold text-[#17324D]">{String(item.classification)}</span><span className="text-[#526675]">{String(item.agreement_reference)} · {String(item.status)}</span></div>)}</div>}</section>
         </div>}
         {tab==='training'&&<div className="space-y-3">
