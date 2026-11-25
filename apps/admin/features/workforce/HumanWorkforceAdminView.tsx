@@ -6,11 +6,14 @@ import { AdminPageHeader, AdminSegmentedTabs, AdminStatusText } from '../../comp
 import {
   listWorkforceProfiles,
   listWorkforceIdentityVerifications,
+  listWorkforceCertificationQueue,
   decideWorkforceIdentity,
+  verifyWorkforceCertification,
   type WorkforceProfile,
 } from '@/apps/web/lib/api-client';
 
 type TenantOption = { id: string; name: string };
+type CertificationRow = {id:string;workforce_profile_id:string;name:string;issuer:string;certificate_reference:string|null;expires_at:string|null;verification_status:string;worker_code:string;display_name:string};
 type VerificationRow = {
   id:string; workforce_profile_id:string; status:string; verification_type:string;
   submitted_at:string; worker_code:string; display_name:string; job_title:string|null;
@@ -25,10 +28,11 @@ export function HumanWorkforceAdminView({
   tenants: TenantOption[];
   onBack: () => void;
 }) {
-  const [tab,setTab]=useState<'staff'|'verifikasi'|'assignment'>('staff');
+  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'assignment'>('staff');
   const [tenantId,setTenantId]=useState(tenants[0]?.id ?? '');
   const [profiles,setProfiles]=useState<WorkforceProfile[]>([]);
   const [verifications,setVerifications]=useState<VerificationRow[]>([]);
+  const [certifications,setCertifications]=useState<CertificationRow[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
   const [busyId,setBusyId]=useState<string|null>(null);
@@ -38,12 +42,14 @@ export function HumanWorkforceAdminView({
     if(!accessToken||!tenantId){setLoading(false);setError('Pilih tenant yang dapat dikelola.');return;}
     setLoading(true);setError(null);
     try{
-      const [profileResult,verificationResult]=await Promise.all([
+      const [profileResult,verificationResult,certificationResult]=await Promise.all([
         listWorkforceProfiles(accessToken,tenantId),
         listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
+        listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
       ]);
       setProfiles(profileResult.data);
       setVerifications(verificationResult.data as VerificationRow[]);
+      setCertifications(certificationResult.data as CertificationRow[]);
     }catch(cause){setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');}
     finally{setLoading(false);}
   };
@@ -53,10 +59,12 @@ export function HumanWorkforceAdminView({
     void Promise.all([
       listWorkforceProfiles(accessToken,tenantId),
       listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
-    ]).then(([profileResult,verificationResult])=>{
+      listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
+    ]).then(([profileResult,verificationResult,certificationResult])=>{
       if(!active)return;
       setProfiles(profileResult.data);
       setVerifications(verificationResult.data as VerificationRow[]);
+      setCertifications(certificationResult.data as CertificationRow[]);
       setError(null);
     }).catch(cause=>{
       if(active)setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');
@@ -76,11 +84,23 @@ export function HumanWorkforceAdminView({
     finally{setBusyId(null);}
   };
 
+  const decideCertification=async(row:CertificationRow,decision:'verified'|'rejected')=>{
+    if(!accessToken||!tenantId)return;
+    const decisionReason=reason.trim();
+    if(decisionReason.length<3){setError('Alasan keputusan minimal 3 karakter.');return;}
+    setBusyId(row.id);setError(null);
+    try{
+      await verifyWorkforceCertification(accessToken,tenantId,row.id,decision,decisionReason);
+      await load();
+    }catch(cause){setError(cause instanceof Error?cause.message:'Keputusan sertifikasi gagal disimpan.');}
+    finally{setBusyId(null);}
+  };
+
   return <div className="space-y-5">
     <AdminPageHeader title="Human Workforce Governance" subtitle="Passport, identity verification, lifecycle dan assignment visibility berbasis data backend." onBack={onBack}
       actions={<button type="button" onClick={()=>void load()} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs font-semibold text-[#17324D] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading?'animate-spin':''}`}/> Refresh</button>}/>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
+      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
       <select value={tenantId} onChange={e=>setTenantId(e.target.value)} className="h-10 min-w-56 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs text-[#17324D]" aria-label="Pilih tenant">
         {tenants.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
@@ -112,6 +132,11 @@ export function HumanWorkforceAdminView({
               <button type="button" disabled={busyId!==null} onClick={()=>void decide(row,'rejected')} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Tolak</button>
             </div>
           </div>)}
+      </div>}
+      {tab==='sertifikasi'&&<div className="space-y-3">
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><label className="block text-xs font-semibold text-[#17324D]">Alasan keputusan sertifikasi</label><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs text-[#17324D]"/></div>
+        {certifications.length===0?<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-8 text-center text-sm text-[#718391]">Tidak ada sertifikasi yang menunggu verifikasi.</div>:
+          certifications.map(row=><div key={row.id} className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><p className="text-sm font-bold text-[#17324D]">{row.name}</p><p className="mt-1 text-xs text-[#526675]">{row.display_name} · {row.worker_code} · {row.issuer}</p><p className="mt-1 text-[11px] text-[#718391]">Ref: {row.certificate_reference||'—'} · Expiry: {row.expires_at||'—'}</p><div className="mt-3 flex gap-2"><button type="button" disabled={busyId!==null} onClick={()=>void decideCertification(row,'verified')} className="rounded-lg bg-[#247A55] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Verify</button><button type="button" disabled={busyId!==null} onClick={()=>void decideCertification(row,'rejected')} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Reject</button></div></div>)}
       </div>}
       {tab==='assignment'&&<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
         <div className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-[#0284C7]"/><h3 className="text-sm font-bold text-[#17324D]">Lifecycle Workforce</h3></div>
