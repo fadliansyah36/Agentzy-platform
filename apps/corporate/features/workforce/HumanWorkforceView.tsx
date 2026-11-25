@@ -3,7 +3,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Users, RefreshCw, ShieldCheck, Clock } from 'lucide-react';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
-import { listWorkforceProfiles, type WorkforceProfile } from '@/apps/web/lib/api-client';
+import {
+  listWorkforceProfiles, listWorkforceEngagements, listWorkforceOnboarding,
+  createWorkforceEngagement, createWorkforceOnboardingTask, transitionWorkforceLifecycle,
+  activateWorkforceEngagement, changeWorkforceEngagementStatus,
+  type WorkforceProfile,
+} from '@/apps/web/lib/api-client';
 
 export function HumanWorkforceView({
   tenantId,
@@ -19,6 +24,15 @@ export function HumanWorkforceView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedProfileId,setSelectedProfileId]=useState<string|null>(null);
+  const [engagements,setEngagements]=useState<Record<string,unknown>[]>([]);
+  const [onboarding,setOnboarding]=useState<Record<string,unknown>[]>([]);
+  const [detailError,setDetailError]=useState<string|null>(null);
+  const [engagementForm,setEngagementForm]=useState({classification:'employee',agreement_reference:'',contract_id:'',effective_from:'',legal_review_reference:'',change_reason:''});
+  const [factsAcknowledged,setFactsAcknowledged]=useState(false);
+  const [taskForm,setTaskForm]=useState({task_key:'',title:'',task_type:'approval',description:''});
+  const [lifecycleTarget,setLifecycleTarget]=useState<'onboarding'|'eligible'|'active'|'inactive'|'suspended'|'offboarded'>('onboarding');
+  const [actionReason,setActionReason]=useState('');
 
   const load = async () => {
     if (!accessToken || !tenantId) return;
@@ -44,6 +58,66 @@ export function HumanWorkforceView({
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [accessToken, tenantId]);
+
+  useEffect(()=>{
+    if(!accessToken||!tenantId||!selectedProfileId)return;
+    let active=true;
+    void Promise.all([
+      listWorkforceEngagements(accessToken,tenantId,selectedProfileId),
+      listWorkforceOnboarding(accessToken,tenantId,selectedProfileId),
+    ]).then(([engagementResult,taskResult])=>{
+      if(!active)return;
+      setEngagements(engagementResult.data);
+      setOnboarding(taskResult.data);
+      setDetailError(null);
+    }).catch(cause=>{if(active)setDetailError(cause instanceof Error?cause.message:'Detail workforce gagal dimuat.');});
+    return ()=>{active=false;};
+  },[accessToken,tenantId,selectedProfileId]);
+
+  const selectedProfile=profiles.find(p=>p.id===selectedProfileId)??null;
+  const createEngagement=async()=>{
+    if(!accessToken||!selectedProfileId)return;
+    setDetailError(null);
+    try{
+      await createWorkforceEngagement(accessToken,selectedProfileId,{
+        tenant_id:tenantId,classification:engagementForm.classification,
+        agreement_reference:engagementForm.agreement_reference,contract_id:engagementForm.contract_id||null,
+        effective_from:engagementForm.effective_from,legal_review_reference:engagementForm.legal_review_reference||null,
+        facts_acknowledged:factsAcknowledged,change_reason:engagementForm.change_reason,
+      });
+      const result=await listWorkforceEngagements(accessToken,tenantId,selectedProfileId);setEngagements(result.data);
+      await load();
+    }catch(cause){setDetailError(cause instanceof Error?cause.message:'Engagement gagal disimpan.');}
+  };
+  const createTask=async()=>{
+    if(!accessToken||!selectedProfileId)return;
+    setDetailError(null);
+    try{
+      await createWorkforceOnboardingTask(accessToken,selectedProfileId,{
+        tenant_id:tenantId,...taskForm,required:true,
+      });
+      const result=await listWorkforceOnboarding(accessToken,tenantId,selectedProfileId);setOnboarding(result.data);
+      setTaskForm({task_key:'',title:'',task_type:'approval',description:''});
+    }catch(cause){setDetailError(cause instanceof Error?cause.message:'Onboarding task gagal dibuat.');}
+  };
+  const transition=async()=>{
+    if(!accessToken||!selectedProfileId||actionReason.trim().length<3)return;
+    setDetailError(null);
+    try{
+      await transitionWorkforceLifecycle(accessToken,selectedProfileId,{tenant_id:tenantId,to_status:lifecycleTarget,reason:actionReason});
+      setActionReason('');await load();
+    }catch(cause){setDetailError(cause instanceof Error?cause.message:'Lifecycle transition gagal.');}
+  };
+  const activateEngagement=async(engagementId:string)=>{
+    if(!accessToken)return;
+    try{await activateWorkforceEngagement(accessToken,engagementId,{tenant_id:tenantId,reason:'Corporate approval setelah review fakta dan dokumen.'});await listWorkforceEngagements(accessToken,tenantId,selectedProfileId!).then(x=>setEngagements(x.data));await load();}
+    catch(cause){setDetailError(cause instanceof Error?cause.message:'Engagement activation gagal.');}
+  };
+  const updateEngagement=async(engagementId:string,status:'suspended'|'ended')=>{
+    if(!accessToken)return;
+    try{await changeWorkforceEngagementStatus(accessToken,engagementId,tenantId,status,'Perubahan status disetujui Corporate.');await listWorkforceEngagements(accessToken,tenantId,selectedProfileId!).then(x=>setEngagements(x.data));await load();}
+    catch(cause){setDetailError(cause instanceof Error?cause.message:'Perubahan engagement gagal.');}
+  };
 
   const activeCount = profiles.filter((p) => p.lifecycle_status === 'active').length;
   const onboardingCount = profiles.filter((p) => ['registered','identity_pending','verified','onboarding','eligible'].includes(p.lifecycle_status)).length;
@@ -110,7 +184,7 @@ export function HumanWorkforceView({
                 <div className="overflow-x-auto"><table className="w-full text-left text-xs">
                   <thead className="bg-[#F5F8FA] text-[#526675]"><tr><th className="px-4 py-3">Worker</th><th className="px-4 py-3">Job Family</th><th className="px-4 py-3">Engagement</th><th className="px-4 py-3">Lifecycle</th><th className="px-4 py-3">Updated</th></tr></thead>
                   <tbody>{profiles.map((p)=><tr key={p.id} className="border-t border-[#EAF2F6]">
-                    <td className="px-4 py-3"><p className="font-semibold text-[#17324D]">{p.display_name}</p><p className="mt-1 font-mono text-[10px] text-[#718391]">{p.worker_code}</p></td>
+                    <td className="px-4 py-3"><button type="button" onClick={()=>setSelectedProfileId(p.id)} className="text-left"><p className="font-semibold text-[#17324D]">{p.display_name}</p><p className="mt-1 font-mono text-[10px] text-[#718391]">{p.worker_code} · Detail</p></button></td>
                     <td className="px-4 py-3 text-[#526675]">{p.job_family || p.job_title || '—'}</td>
                     <td className="px-4 py-3 text-[#526675]">{p.engagement_status}</td>
                     <td className="px-4 py-3"><span className="rounded-md bg-[#E6F4F9] px-2 py-1 font-semibold text-[#0284C7]">{p.lifecycle_status}</span></td>
@@ -119,6 +193,30 @@ export function HumanWorkforceView({
                 </table></div>}
             </div>
           )}
+          {selectedProfile&&<section className="space-y-4 rounded-[14px] border border-[#D8E3E9] bg-white p-4">
+            <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-[#17324D]">{selectedProfile.display_name} · Workforce Operations</h3><p className="text-[11px] text-[#718391]">{selectedProfile.worker_code} · {selectedProfile.lifecycle_status}</p></div><button type="button" onClick={()=>setSelectedProfileId(null)} className="text-xs text-[#526675]">Tutup</button></div>
+            {detailError&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-800">{detailError}</p>}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Engagement & Contract</h4>
+                {engagements.map((item,index)=><div key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-xs"><p className="font-semibold text-[#17324D]">{String(item.classification)} · {String(item.status)}</p><p className="mt-1 text-[#526675]">{String(item.agreement_reference)} · {String(item.contract_id??'External agreement')}</p>{item.status==='pending'&&<button type="button" onClick={()=>void activateEngagement(String(item.id))} className="mt-2 rounded-md bg-[#0284C7] px-2 py-1 text-[10px] font-semibold text-white">Activate</button>}{item.status==='active'&&<div className="mt-2 flex gap-2"><button type="button" onClick={()=>void updateEngagement(String(item.id),'suspended')} className="rounded-md border border-[#D8E3E9] px-2 py-1 text-[10px]">Suspend</button><button type="button" onClick={()=>void updateEngagement(String(item.id),'ended')} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">End</button></div>}</div>)}
+                <div className="mt-3 grid gap-2">
+                  <select value={engagementForm.classification} onChange={e=>setEngagementForm(v=>({...v,classification:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['employee','outsourced_worker','independent_contractor','freelance','affiliate','technical_partner','project_based_worker'].map(x=><option key={x}>{x}</option>)}</select>
+                  <input value={engagementForm.agreement_reference} onChange={e=>setEngagementForm(v=>({...v,agreement_reference:e.target.value}))} placeholder="Agreement / Contract number" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
+                  <input value={engagementForm.contract_id} onChange={e=>setEngagementForm(v=>({...v,contract_id:e.target.value}))} placeholder="Contract UUID (optional)" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
+                  <input type="date" value={engagementForm.effective_from} onChange={e=>setEngagementForm(v=>({...v,effective_from:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
+                  <input value={engagementForm.legal_review_reference} onChange={e=>setEngagementForm(v=>({...v,legal_review_reference:e.target.value}))} placeholder="Legal review reference" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
+                  <input value={engagementForm.change_reason} onChange={e=>setEngagementForm(v=>({...v,change_reason:e.target.value}))} placeholder="Reason for classification change" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/>
+                  <label className="flex items-center gap-2 text-[11px] text-[#526675]"><input type="checkbox" checked={factsAcknowledged} onChange={e=>setFactsAcknowledged(e.target.checked)}/> Acknowledged actual engagement facts</label>
+                  <button type="button" disabled={!engagementForm.agreement_reference||!engagementForm.effective_from||engagementForm.change_reason.length<3||!factsAcknowledged} onClick={()=>void createEngagement()} className="h-9 rounded-md bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Save Engagement</button>
+                </div>
+              </div>
+              <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Onboarding Checklist</h4>
+                {onboarding.map((item,index)=><p key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-xs text-[#526675]">{String(item.title)} · {String(item.status)}</p>)}
+                <div className="mt-3 grid gap-2"><input value={taskForm.task_key} onChange={e=>setTaskForm(v=>({...v,task_key:e.target.value}))} placeholder="Task key" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input value={taskForm.title} onChange={e=>setTaskForm(v=>({...v,title:e.target.value}))} placeholder="Task title" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><select value={taskForm.task_type} onChange={e=>setTaskForm(v=>({...v,task_type:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['document','agreement_acknowledgement','training','verification','approval','other'].map(x=><option key={x}>{x}</option>)}</select><textarea value={taskForm.description} onChange={e=>setTaskForm(v=>({...v,description:e.target.value}))} placeholder="Task description" className="rounded-md border border-[#D8E3E9] p-2 text-xs"/><button type="button" disabled={!taskForm.task_key||!taskForm.title} onClick={()=>void createTask()} className="h-9 rounded-md bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Add Task</button></div>
+              </div>
+            </div>
+            <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Lifecycle transition</h4><div className="mt-2 flex flex-wrap gap-2"><select value={lifecycleTarget} onChange={e=>setLifecycleTarget(e.target.value as typeof lifecycleTarget)} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['onboarding','eligible','active','inactive','suspended','offboarded'].map(x=><option key={x}>{x}</option>)}</select><input value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="Reason (required)" className="h-9 min-w-48 flex-1 rounded-md border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={actionReason.trim().length<3} onClick={()=>void transition()} className="h-9 rounded-md bg-[#17324D] px-3 text-xs font-semibold text-white disabled:opacity-40">Transition</button></div></div>
+          </section>}
         </>
       )}
     </div>
