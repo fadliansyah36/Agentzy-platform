@@ -293,11 +293,15 @@ async def create_sales_lead(payload: LeadCreate,request: Request,claims: dict = 
             prospect=source.mappings().first()
             if not prospect:
                 raise HTTPException(status_code=404,detail="Prospek Phase 02 tidak ditemukan.")
-            customer_name=prospect["company_name"]; contact_name=prospect["contact_name"]
-            email=prospect["business_email"]; phone=prospect["business_phone"]
+            customer_name=prospect["company_name"]
+            contact_name=prospect["contact_name"]
+            email=prospect["business_email"]
+            phone=prospect["business_phone"]
         else:
-            customer_name=payload.customer_name; contact_name=payload.contact_name
-            email=payload.email; phone=payload.phone
+            customer_name=payload.customer_name
+            contact_name=payload.contact_name
+            email=payload.email
+            phone=payload.phone
         customer=await connection.execute(text("""
           insert into public.sales_customers(tenant_id,customer_name,contact_name,email,phone,service_address,region_code,created_by)
           values(:tenant,:name,:contact,:email,:phone,:address,:region,:actor) returning id
@@ -327,7 +331,7 @@ async def update_sales_lead(lead_id: UUID,payload: LeadPatch,request: Request,cl
     context=await _authorize(claims,payload.tenant_id,"leads.manage",request,lead_id)
     actor=UUID(claims["sub"])
     async with engine.begin() as connection:
-        lead=await _lead_scope(connection,payload.tenant_id,lead_id,actor,context)
+        await _lead_scope(connection,payload.tenant_id,lead_id,actor,context)
         await connection.execute(text("""
           update public.sales_leads set follow_up_at=coalesce(:followup,follow_up_at),
             qualification=coalesce(cast(:qualification as jsonb),qualification),
@@ -394,7 +398,7 @@ async def transition_sales_lead(lead_id: UUID,request: Request,tenant_id: UUID,
         lead=await _lead_scope(connection,tenant_id,lead_id,actor,context)
         SalesService.assert_lead_transition(lead["stage"],to_stage)
         key=idempotency_key or str(uuid4())
-        updated=await connection.execute(text("""
+        await connection.execute(text("""
           update public.sales_leads set stage=:stage,last_activity_at=now(),updated_at=now()
           where tenant_id=:tenant and id=:id returning stage
         """),{"stage":to_stage,"tenant":tenant_id,"id":lead_id})
@@ -596,7 +600,11 @@ async def check_sales_coverage(lead_id: UUID,payload: CoverageInput,request: Req
           where tenant_id=:tenant and provider_profile_id=:provider
         """),{"tenant":payload.tenant_id,"provider":product_row["provider_profile_id"]})
         config=config_result.mappings().first()
-    result_status="unknown"; source="provider_unconfigured"; provider_reference=None; response_meta={}; error_code="PROVIDER_NOT_CONFIGURED"
+    result_status="unknown"
+    source="provider_unconfigured"
+    provider_reference=None
+    response_meta={}
+    error_code="PROVIDER_NOT_CONFIGURED"
     if config and config["enabled"] and config["adapter_key"]=="http_json" and config["endpoint_url"] and config["auth_env_key"]:
         try:
             from app.adapters.provider_adapter import _assert_authorized_endpoint
@@ -611,15 +619,21 @@ async def check_sales_coverage(lead_id: UUID,payload: CoverageInput,request: Req
                     body=response.json()
                 value=str(body.get("coverage_status","")).lower()
                 if value in ("available","unavailable"):
-                    result_status=value; source="authorized_provider_api"; error_code=None
+                    result_status=value
+                    source="authorized_provider_api"
+                    error_code=None
                     provider_reference=str(body.get("reference") or "")[:160] or None
                     response_meta={"response_hash":hashlib.sha256(json.dumps(body,sort_keys=True,default=str).encode()).hexdigest()}
                 else:
-                    result_status="unknown"; source="authorized_provider_api"; error_code="PROVIDER_RESPONSE_UNMAPPED"
+                    result_status="unknown"
+                    source="authorized_provider_api"
+                    error_code="PROVIDER_RESPONSE_UNMAPPED"
             else:
                 error_code="PROVIDER_CREDENTIAL_NOT_CONFIGURED"
         except (httpx.HTTPError,ValueError):
-            result_status="failed"; source="authorized_provider_api"; error_code="PROVIDER_REQUEST_FAILED"
+            result_status="failed"
+            source="authorized_provider_api"
+            error_code="PROVIDER_REQUEST_FAILED"
     async with engine.begin() as connection:
         saved=await connection.execute(text("""
           insert into public.sales_coverage_checks(tenant_id,lead_id,provider_profile_id,product_id,
