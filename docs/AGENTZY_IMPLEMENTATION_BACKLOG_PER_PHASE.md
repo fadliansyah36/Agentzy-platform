@@ -1089,3 +1089,14 @@ Implemented in the current main branch:
 - Frontend lint/type-check, Python compile, Ruff, focused deterministic tests, FastAPI import/OpenAPI assertions and migration source consistency all passed.
 - No staging, UAT, load test, penetration test, production deployment, real payment transaction, or external SMTP/Google OAuth activation was performed.
 - Phase 04 — Human Workforce Passport & Onboarding is next in backlog order.
+
+
+## 25. Phase 03 ABAC enforcement hardening — 2026-11-25
+
+- Phase 02 remains **DONE — implementation complete**. Its minimum engineering gate was previously verified by Agentzy Minimum Engineering Checks run [45590318180](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45590318180) — SUCCESS. SMTP and Google OAuth credentials remain deployment configuration only.
+- Phase 03 remains **DONE — implementation complete; verified**. Corporate profile, contracts/SOW, amendments, approval, documents, lifecycle, finance references, entitlements, AI Worker limits and Corporate Portal integration remain implemented as recorded in `docs/phase-03/PHASE_03_IMPLEMENTATION_CONTINUATION_2026-11-25.md`.
+- Authorization hardening now routes Corporate Profile/Contract/Approval/Document/Renewal/Finance/Entitlement/Provider and AI Worker operations through the central `authorize_action` RBAC + ABAC evaluator. Contract create/read/approval/activation routes use the same evaluator.
+- Added live, source-controlled policy migrations `20261125101028_phase_03_abac_enforcement_hardening` and `20261125101124_phase_03_ai_worker_abac_policy_hardening`. Do not modify these applied migration files.
+- Live verification: 17/17 Phase 03 tables exist with RLS enabled; direct anon/authenticated business grants are absent. All 15 route permission keys are registered and mapped to one or more roles.
+- Final hardening code commit: `7329be889ae779a80e263b07195e3892cc24e57a`. Agentzy Minimum Engineering Checks run [45592736547](https://github.com/fadliansyah36/Agentzy-platform/actions/runs/45592736547) — SUCCESS; lint, type-check, Python compile, Ruff, focused deterministic checks, FastAPI/OpenAPI and migration consistency all passed.
+- Phase 04 — Human Workforce Passport & Onboarding remains the next backlog phase; do not infer its implementation has started from this closure update.
