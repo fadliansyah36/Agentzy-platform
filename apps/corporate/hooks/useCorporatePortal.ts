@@ -649,6 +649,7 @@ export function useCorporatePortal(initialSection: CorporateSectionId = 'overvie
 
   return {
     isAuthenticated,
+    accessToken: auth.session?.access_token ?? null,
     authLoading: auth.loading,
     authError: auth.error,
     activeTenant,
