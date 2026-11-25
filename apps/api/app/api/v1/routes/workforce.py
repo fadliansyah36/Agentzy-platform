@@ -257,6 +257,21 @@ async def _assert_profile_scope(connection, claims: dict, tenant_id: UUID, profi
         return
     await _authorize(claims, tenant_id, "profile.manage", request, UUID(str(profile["id"])))
 
+
+async def _enqueue_workforce_notification(connection, tenant_id: UUID, profile_id: UUID, event_type: str, payload: dict):
+    result = await connection.execute(text("""
+      select u.email from public.workforce_profiles p join auth.users u on u.id=p.user_id
+      where p.tenant_id=:tenant and p.id=:profile
+    """), {"tenant":tenant_id,"profile":profile_id})
+    recipient = result.scalar_one_or_none()
+    if not recipient:
+        return
+    await connection.execute(text("""
+      insert into public.notification_outbox(event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at)
+      values(:event,'workforce_profile',:profile,:recipient,cast(:payload as jsonb),'pending',now())
+    """), {"event":event_type,"profile":profile_id,"recipient":recipient,
+           "payload":json.dumps({"tenant_id":str(tenant_id),"workforce_profile_id":str(profile_id),**payload},default=str)})
+
 @router.get("/passport")
 async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = claims_dependency):
     actor=UUID(claims["sub"])
@@ -341,6 +356,7 @@ async def submit_identity(profile_id: UUID,payload: VerificationInput,request: R
         verification=dict(row.mappings().one())
         await connection.execute(text("update public.workforce_profiles set lifecycle_status='identity_pending',updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant and lifecycle_status in ('registered','identity_pending')"),{"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.identity.submitted","workforce_identity_verification",verification["id"],request)
+        await _enqueue_workforce_notification(connection,payload.tenant_id,profile_id,"workforce.identity.submitted",{"verification_id":str(verification["id"])})
         return {"data":verification}
 
 @router.post("/identity/{verification_id}/decision")
@@ -363,6 +379,7 @@ async def decide_identity(verification_id: UUID,payload: VerificationDecision,re
         profile_status="verified" if payload.decision=="verified" else "registered" if payload.decision=="rejected" else "identity_pending"
         await connection.execute(text("update public.workforce_profiles set lifecycle_status=:status,updated_by=:actor,updated_at=now() where id=:profile and tenant_id=:tenant"),{"status":profile_status,"actor":actor,"profile":verification["workforce_profile_id"],"tenant":payload.tenant_id})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.identity."+payload.decision,"workforce_identity_verification",verification_id,request,{"reason":payload.reason})
+        await _enqueue_workforce_notification(connection,payload.tenant_id,verification["workforce_profile_id"],"workforce.identity."+payload.decision,{"reason":payload.reason})
         return {"data":dict(result.mappings().one())}
 
 @router.post("/identity/{verification_id}/documents",status_code=201)
@@ -652,6 +669,7 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
           values(:tenant,:profile,:old,:new,:actor,:reason,'workforce.lifecycle.transition',:request,cast(:metadata as jsonb))
         """),{"tenant":payload.tenant_id,"profile":profile_id,"old":old,"new":target,"actor":actor,"reason":payload.reason,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({**payload.metadata,"idempotency_key":idempotency_key})})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.lifecycle.transitioned","workforce_profile",profile_id,request,{"from":old,"to":target,"reason":payload.reason})
+        await _enqueue_workforce_notification(connection,payload.tenant_id,profile_id,"workforce.lifecycle."+target,{"from_status":old,"to_status":target,"reason":payload.reason})
         return {"data":dict(updated.mappings().one())}
 
 @router.get("/profiles/{profile_id}/assignments")
