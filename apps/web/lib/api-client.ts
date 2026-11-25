@@ -1403,3 +1403,9 @@ export const listWorkforceCertificationQueue=(accessToken:string,tenantId:string
 
 export const listWorkforceSkillVerificationQueue=(accessToken:string,tenantId:string)=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/skills/verification-queue?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
+
+export const purgeExpiredWorkforceDocuments=(accessToken:string,tenantId:string,reason:string)=>
+  apiRequest<{data:{purged_count:number;document_ids:string[]}}>("/workforce/documents/retention/purge",{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},
+    body:JSON.stringify({tenant_id:tenantId,reason}),
+  });
