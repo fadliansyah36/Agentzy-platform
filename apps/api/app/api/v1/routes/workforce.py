@@ -638,7 +638,12 @@ async def redact_identity_document(document_id: UUID,tenant_id: UUID,payload: En
     if response.status_code not in (200,204,404):
         raise HTTPException(status_code=503,detail="Penghapusan object storage gagal; metadata tidak diubah.")
     async with engine.begin() as connection:
-        await connection.execute(text("update public.workforce_identity_documents set redacted_at=now() where tenant_id=:tenant and id=:id"),{"tenant":tenant_id,"id":document_id})
+        await connection.execute(text("""
+          update public.workforce_identity_documents
+          set redacted_at=now(),storage_path='redacted/'||id::text,
+              original_filename='redacted',sha256=repeat('0',64),file_size_bytes=1,scan_status='rejected'
+          where tenant_id=:tenant and id=:id and redacted_at is null
+        """),{"tenant":tenant_id,"id":document_id})
         await _write_audit(connection,tenant_id,actor,"workforce.identity.document_redacted","workforce_identity_document",document_id,request,{"reason":payload.reason})
     return {"data":{"document_id":str(document_id),"redacted":True}}
 
@@ -1442,7 +1447,9 @@ async def purge_expired_workforce_documents(payload: EngagementApproval,request:
                 continue
             async with engine.begin() as connection:
                 await connection.execute(text("""
-                  update public.workforce_identity_documents set redacted_at=now()
+                  update public.workforce_identity_documents
+                  set redacted_at=now(),storage_path='redacted/'||id::text,
+                      original_filename='redacted',sha256=repeat('0',64),file_size_bytes=1,scan_status='rejected'
                   where tenant_id=:tenant and id=:id and redacted_at is null
                 """),{"tenant":payload.tenant_id,"id":document["id"]})
                 await _write_audit(connection,payload.tenant_id,actor,"workforce.identity.document_retention_purged","workforce_identity_document",document["id"],request,{"reason":payload.reason})
