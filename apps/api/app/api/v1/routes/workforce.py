@@ -120,6 +120,7 @@ class DocumentMetadata(StrictModel):
 
 class EngagementInput(StrictModel):
     tenant_id: UUID
+    contract_id: UUID | None = None
     classification: str = Field(pattern="^(employee|outsourced_worker|independent_contractor|freelance|affiliate|technical_partner|project_based_worker)$")
     agreement_reference: str = Field(min_length=3, max_length=160)
     effective_from: date
@@ -295,7 +296,7 @@ async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = clai
         if not row:
             raise HTTPException(status_code=404,detail="Workforce Passport belum tersedia.")
         profile=dict(row)
-        for key,table in [("engagements","workforce_engagements"),("skills","workforce_worker_skills"),("certifications","workforce_certifications"),("availability","workforce_availability"),("training","workforce_training_enrollments"),("assignments","workforce_assignments"),("onboarding","workforce_onboarding_tasks"),("history","workforce_lifecycle_events")]:
+        for key,table in [("engagements","workforce_engagements"),("engagement_history","workforce_engagement_events"),("skills","workforce_worker_skills"),("certifications","workforce_certifications"),("availability","workforce_availability"),("training","workforce_training_enrollments"),("assignments","workforce_assignments"),("onboarding","workforce_onboarding_tasks"),("history","workforce_lifecycle_events")]:
             rows=await connection.execute(text(f"select * from public.{table} where tenant_id=:tenant and workforce_profile_id=:profile order by created_at desc limit 100" if key not in ("history",) else "select * from public.workforce_lifecycle_events where tenant_id=:tenant and workforce_profile_id=:profile order by occurred_at desc limit 100"),{"tenant":tenant_id,"profile":profile["id"]})
             profile[key]=[dict(item) for item in rows.mappings().all()]
         return {"data":profile}
@@ -479,6 +480,16 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
     async with engine.begin() as connection:
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
+        if payload.contract_id:
+            contract=await connection.execute(text("""
+              select contract_number,status from public.contracts
+              where id=:contract and tenant_id=:tenant
+            """),{"contract":payload.contract_id,"tenant":payload.tenant_id})
+            contract_row=contract.mappings().first()
+            if not contract_row or contract_row["status"] not in ("approved","active"):
+                raise HTTPException(status_code=422,detail="Contract harus approved/active dan dimiliki tenant.")
+            if payload.agreement_reference not in (contract_row["contract_number"],str(payload.contract_id)):
+                raise HTTPException(status_code=422,detail="Agreement reference harus cocok dengan contract number atau ID.")
         superseded=await connection.execute(text("""
           update public.workforce_engagements set status='superseded',updated_at=now()
           where tenant_id=:tenant and workforce_profile_id=:profile and status in ('pending','active')
@@ -490,10 +501,11 @@ async def create_engagement(profile_id: UUID,payload: EngagementInput,request: R
               values(:tenant,:engagement,:profile,'superseded',:from_status,'superseded',:actor,:reason)
             """),{"tenant":payload.tenant_id,"engagement":previous["id"],"profile":profile_id,"from_status":previous["status"],"actor":actor,"reason":payload.change_reason})
         row=await connection.execute(text("""
-          insert into public.workforce_engagements(tenant_id,workforce_profile_id,classification,agreement_reference,effective_from,effective_until,legal_review_reference,facts_acknowledged,change_reason,created_by)
-          values(:tenant,:profile,:classification,:agreement,:start,:end,:legal,:facts,:reason,:actor) returning *
-        """),{"tenant":payload.tenant_id,"profile":profile_id,"classification":payload.classification,"agreement":payload.agreement_reference,"start":payload.effective_from,"end":payload.effective_until,"legal":payload.legal_review_reference,"facts":payload.facts_acknowledged,"reason":payload.change_reason,"actor":actor})
+          insert into public.workforce_engagements(tenant_id,workforce_profile_id,contract_id,classification,agreement_reference,effective_from,effective_until,legal_review_reference,facts_acknowledged,change_reason,created_by)
+          values(:tenant,:profile,:contract,:classification,:agreement,:start,:end,:legal,:facts,:reason,:actor) returning *
+        """),{"tenant":payload.tenant_id,"profile":profile_id,"contract":payload.contract_id,"classification":payload.classification,"agreement":payload.agreement_reference,"start":payload.effective_from,"end":payload.effective_until,"legal":payload.legal_review_reference,"facts":payload.facts_acknowledged,"reason":payload.change_reason,"actor":actor})
         engagement=dict(row.mappings().one())
+        await connection.execute(text("update public.workforce_profiles set engagement_status='pending',updated_at=now() where tenant_id=:tenant and id=:profile"),{"tenant":payload.tenant_id,"profile":profile_id})
         await connection.execute(text("""
           insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason,metadata)
           values(:tenant,:engagement,:profile,'created',null,'pending',:actor,:reason,cast(:metadata as jsonb))
@@ -973,6 +985,10 @@ async def activate_engagement(
             raise HTTPException(status_code=409,detail="Engagement belum atau tidak lagi berada dalam periode efektif.")
         if not engagement["facts_acknowledged"] or not engagement["legal_review_reference"]:
             raise HTTPException(status_code=409,detail="Acknowledgement fakta kerja dan legal review reference wajib sebelum aktivasi.")
+        if engagement["contract_id"]:
+            contract=await connection.execute(text("select status from public.contracts where id=:id and tenant_id=:tenant"),{"id":engagement["contract_id"],"tenant":payload.tenant_id})
+            if contract.scalar_one_or_none() != "active":
+                raise HTTPException(status_code=409,detail="Corporate contract harus berstatus active sebelum engagement diaktifkan.")
         updated=await connection.execute(text("""
           update public.workforce_engagements set status='active',updated_at=now()
           where tenant_id=:tenant and id=:id returning *
@@ -986,5 +1002,31 @@ async def activate_engagement(
           values(:tenant,:engagement,:profile,'activated','pending','active',:actor,:reason)
         """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"actor":actor,"reason":payload.reason})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.activated","workforce_engagement",engagement_id,request,{"reason":payload.reason})
+        return {"data":dict(updated.mappings().one())}
+
+
+@router.post("/engagements/{engagement_id}/status")
+async def change_engagement_status(
+    engagement_id: UUID,
+    payload: EngagementApproval,
+    target_status: str = Query(pattern="^(suspended|ended)$"),
+    request: Request = None,
+    claims: dict = claims_dependency,
+):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"engagement.manage",request,engagement_id)
+    async with engine.begin() as connection:
+        result=await connection.execute(text("select * from public.workforce_engagements where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":engagement_id})
+        engagement=result.mappings().first()
+        if not engagement: raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
+        if engagement["status"] not in ("active","suspended"): raise HTTPException(status_code=409,detail="Status engagement tidak dapat diubah.")
+        old=engagement["status"]
+        updated=await connection.execute(text("update public.workforce_engagements set status=:status,updated_at=now() where tenant_id=:tenant and id=:id returning *"),{"status":target_status,"tenant":payload.tenant_id,"id":engagement_id})
+        await connection.execute(text("update public.workforce_profiles set engagement_status=:status,updated_at=now() where tenant_id=:tenant and id=:profile"),{"status":target_status,"tenant":payload.tenant_id,"profile":engagement["workforce_profile_id"]})
+        await connection.execute(text("""
+          insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason)
+          values(:tenant,:engagement,:profile,:event,:old,:new,:actor,:reason)
+        """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"event":target_status,"old":old,"new":target_status,"actor":actor,"reason":payload.reason})
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement."+target_status,"workforce_engagement",engagement_id,request,{"reason":payload.reason})
         return {"data":dict(updated.mappings().one())}
 
