@@ -518,7 +518,7 @@ async def signed_document_download(document_id: UUID,tenant_id: UUID,request: Re
     if not settings.supabase_service_role_key:
         raise HTTPException(status_code=503,detail="Secure document storage belum dikonfigurasi.")
     async with engine.connect() as connection:
-        result=await connection.execute(text("select storage_bucket,storage_path,original_filename,scan_status from public.workforce_identity_documents where tenant_id=:tenant and id=:id and redacted_at is null"),{"tenant":tenant_id,"id":document_id})
+        result=await connection.execute(text("select storage_bucket,storage_path,original_filename,scan_status from public.workforce_identity_documents where tenant_id=:tenant and id=:id and redacted_at is null and (retention_until is null or retention_until>now())"),{"tenant":tenant_id,"id":document_id})
         doc=result.mappings().first()
     if not doc or doc["scan_status"]!="clean": raise HTTPException(status_code=404,detail="Dokumen tidak tersedia atau belum lolos pemindaian.")
     url=f"{settings.supabase_url.rstrip('/')}/storage/v1/object/sign/{doc['storage_bucket']}/{quote(doc['storage_path'],safe='/')}"
@@ -638,7 +638,7 @@ async def verify_certification(certification_id: UUID,tenant_id: UUID,decision: 
     async with engine.begin() as connection:
         result=await connection.execute(text("""
           update public.workforce_certifications set verification_status=:decision,verified_by=:actor,verified_at=now(),rejection_reason=:reason,updated_at=now()
-          where tenant_id=:tenant and id=:id and verification_status='pending' returning *
+          where tenant_id=:tenant and id=:id and verification_status='pending' and (expires_at is null or expires_at>=current_date) returning *
         """),{"decision":decision,"actor":actor,"reason":reason if decision=="rejected" else None,"tenant":tenant_id,"id":certification_id})
         row=result.mappings().first()
         if not row: raise HTTPException(status_code=404,detail="Sertifikasi tidak ditemukan atau sudah diputuskan.")
@@ -713,7 +713,31 @@ async def enroll_training(profile_id: UUID,payload: EnrollmentInput,request: Req
         profile=await _profile(connection,payload.tenant_id,profile_id)
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         course=await connection.execute(text("select id,eligibility_rules from public.workforce_training_courses where id=:id and status='published' and (tenant_id is null or tenant_id=:tenant)"),{"id":payload.course_id,"tenant":payload.tenant_id})
-        if not course.mappings().first(): raise HTTPException(status_code=404,detail="Training course tidak tersedia.")
+        course_row=course.mappings().first()
+        if not course_row: raise HTTPException(status_code=404,detail="Training course tidak tersedia.")
+        rules=course_row["eligibility_rules"] or {}
+        if rules.get("required_lifecycle_statuses") and profile["lifecycle_status"] not in rules["required_lifecycle_statuses"]:
+            raise HTTPException(status_code=403,detail="Lifecycle status belum memenuhi eligibility course.")
+        if rules.get("required_job_families") and profile["job_family"] not in rules["required_job_families"]:
+            raise HTTPException(status_code=403,detail="Job family belum memenuhi eligibility course.")
+        required_skills=rules.get("required_skills",[])
+        if required_skills:
+            skill_check=await connection.execute(text("""
+              select count(distinct s.skill_key) from public.workforce_worker_skills ws
+              join public.workforce_skill_registry s on s.id=ws.skill_id
+              where ws.tenant_id=:tenant and ws.workforce_profile_id=:profile and s.skill_key=any(:skills)
+            """),{"tenant":payload.tenant_id,"profile":profile_id,"skills":required_skills})
+            if skill_check.scalar_one()<len(set(required_skills)):
+                raise HTTPException(status_code=403,detail="Skill prerequisite belum terpenuhi.")
+        required_classes=rules.get("required_classifications",[])
+        if required_classes:
+            class_check=await connection.execute(text("""
+              select exists(select 1 from public.workforce_engagements
+                where tenant_id=:tenant and workforce_profile_id=:profile and status='active'
+                  and classification=any(:classes))
+            """),{"tenant":payload.tenant_id,"profile":profile_id,"classes":required_classes})
+            if not class_check.scalar_one():
+                raise HTTPException(status_code=403,detail="Engagement classification belum memenuhi eligibility course.")
         row=await connection.execute(text("""
           insert into public.workforce_training_enrollments(tenant_id,workforce_profile_id,course_id)
           values(:tenant,:profile,:course) on conflict(tenant_id,workforce_profile_id,course_id) do update set status='enrolled',updated_at=now()
@@ -729,7 +753,7 @@ async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,re
     await _authorize(claims,payload.tenant_id,"training.read",request,enrollment_id)
     async with engine.begin() as connection:
         existing=await connection.execute(text("""
-          select e.*,c.validity_days,p.id as profile_id,p.user_id from public.workforce_training_enrollments e
+          select e.*,c.validity_days,c.assessment,p.id as profile_id,p.user_id from public.workforce_training_enrollments e
           join public.workforce_training_courses c on c.id=e.course_id
           join public.workforce_profiles p on p.id=e.workforce_profile_id and p.tenant_id=e.tenant_id
           where e.tenant_id=:tenant and e.id=:id for update
@@ -739,8 +763,10 @@ async def update_training_progress(enrollment_id: UUID,payload: ProgressInput,re
         profile=await _profile(connection,payload.tenant_id,enrollment["profile_id"])
         await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         if enrollment["status"] in ("completed","cancelled","expired"): raise HTTPException(status_code=409,detail="Enrollment sudah final.")
-        complete=payload.progress_percent==100 and payload.assessment_score is not None and payload.assessment_score>=70
-        if payload.progress_percent==100 and not complete: raise HTTPException(status_code=422,detail="Assessment score minimal 70 diperlukan untuk completion.")
+        assessment_rules=enrollment["assessment"] or {}
+        pass_score=float(assessment_rules.get("pass_score",70))
+        complete=payload.progress_percent==100 and payload.assessment_score is not None and payload.assessment_score>=pass_score
+        if payload.progress_percent==100 and not complete: raise HTTPException(status_code=422,detail=f"Assessment score minimal {pass_score:g} diperlukan untuk completion.")
         expiry=None
         if complete and enrollment["validity_days"]: expiry=datetime.now(timezone.utc)+__import__("datetime").timedelta(days=enrollment["validity_days"])
         row=await connection.execute(text("""
@@ -827,7 +853,7 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
             required_training=await connection.execute(text("""
               select count(*) from public.workforce_training_courses c
               where c.status='published' and (c.tenant_id is null or c.tenant_id=:tenant)
-                and coalesce((c.eligibility_rules->>'required_for_activation')::boolean,false)
+                and coalesce(c.eligibility_rules->>'required_for_activation','false')='true'
                 and not exists(
                   select 1 from public.workforce_training_enrollments e
                   where e.tenant_id=:tenant and e.workforce_profile_id=:profile and e.course_id=c.id
