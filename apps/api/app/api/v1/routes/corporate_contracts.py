@@ -258,6 +258,34 @@ async def audit_contract_event(
     )
 
 
+
+
+async def find_contract_event_replay(
+    connection, *, tenant_id: UUID, idempotency_key: str, fingerprint: str,
+    expected_event_type: str,
+):
+    result = await connection.execute(
+        text("""
+            select id,contract_id,event_type,metadata
+            from public.contract_events
+            where tenant_id=:tenant and idempotency_key=:key
+        """),
+        {"tenant": tenant_id, "key": idempotency_key},
+    )
+    event = result.mappings().first()
+    if not event:
+        return None
+    metadata = event["metadata"] or {}
+    if (
+        event["event_type"] != expected_event_type
+        or metadata.get("fingerprint") != fingerprint
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency-Key telah digunakan untuk transisi kontrak yang berbeda.",
+        )
+    return event
+
 async def enqueue_contract_event(connection, *, tenant_id, contract_id, event_type, payload):
     await connection.execute(
         text("""
@@ -1354,10 +1382,22 @@ async def decide_contract_renewal(
     decision: str = Query(pattern="^(approved|rejected)$"),
     reason: str = Query(min_length=3, max_length=2000),
     claims: dict = claims_dependency,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     actor = UUID(claims["sub"])
     await require_tenant_permission(actor, tenant_id, "corporate.contracts.lifecycle")
+    if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
+    fingerprint = hashlib.sha256(
+        f"{renewal_id}:{decision}:{reason}".encode()
+    ).hexdigest()
     async with engine.begin() as connection:
+        replay = await find_contract_event_replay(
+            connection, tenant_id=tenant_id, idempotency_key=idempotency_key,
+            fingerprint=fingerprint, expected_event_type=f"contract.renewal.{decision}",
+        )
+        if replay:
+            return {"data": {"id": str(renewal_id), "status": decision, "replayed": True}}
         result = await connection.execute(
             text("""
                 select r.*,c.status as contract_status
@@ -1395,18 +1435,34 @@ async def decide_contract_renewal(
             connection, tenant_id=tenant_id, actor=actor, contract_id=renewal["contract_id"],
             event_type=f"contract.renewal.{decision}", request_id=_request_id(request),
             from_status=renewal["contract_status"], to_status=renewal["contract_status"],
-            metadata={"renewal_id": str(renewal_id), "reason": reason},
+            metadata={"renewal_id": str(renewal_id), "reason": reason, "fingerprint": fingerprint},
+            idempotency_key=idempotency_key,
         )
     return {"data": {"id": str(renewal_id), "status": decision}}
 
 
 @router.post("/contracts/{contract_id}/suspend")
 async def suspend_contract(
-    contract_id: UUID, payload: LifecycleReason, request: Request, claims: dict = claims_dependency
+    contract_id: UUID,
+    payload: LifecycleReason,
+    request: Request,
+    claims: dict = claims_dependency,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     actor = UUID(claims["sub"])
     await require_tenant_permission(actor, payload.tenant_id, "corporate.contracts.lifecycle")
+    if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
+    fingerprint = hashlib.sha256(
+        f"{contract_id}:suspend:{payload.reason}".encode()
+    ).hexdigest()
     async with engine.begin() as connection:
+        replay = await find_contract_event_replay(
+            connection, tenant_id=payload.tenant_id, idempotency_key=idempotency_key,
+            fingerprint=fingerprint, expected_event_type="contract.suspended",
+        )
+        if replay:
+            return {"data": {"id": str(contract_id), "status": "suspended", "replayed": True}}
         result = await connection.execute(
             text("""
                 update public.contracts set status='suspended',suspended_at=now(),
@@ -1429,7 +1485,9 @@ async def suspend_contract(
         await audit_contract_event(
             connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
             event_type="contract.suspended", request_id=_request_id(request),
-            from_status="active", to_status="suspended", metadata={"reason": payload.reason},
+            from_status="active", to_status="suspended",
+            metadata={"reason": payload.reason, "fingerprint": fingerprint},
+            idempotency_key=idempotency_key,
         )
         await enqueue_contract_event(
             connection, tenant_id=payload.tenant_id, contract_id=contract_id,
@@ -1440,11 +1498,26 @@ async def suspend_contract(
 
 @router.post("/contracts/{contract_id}/terminate")
 async def terminate_contract(
-    contract_id: UUID, payload: LifecycleReason, request: Request, claims: dict = claims_dependency
+    contract_id: UUID,
+    payload: LifecycleReason,
+    request: Request,
+    claims: dict = claims_dependency,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     actor = UUID(claims["sub"])
     await require_tenant_permission(actor, payload.tenant_id, "corporate.contracts.lifecycle")
+    if not idempotency_key or not 8 <= len(idempotency_key) <= 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key wajib diisi.")
+    fingerprint = hashlib.sha256(
+        f"{contract_id}:terminate:{payload.reason}:{payload.effective_at}".encode()
+    ).hexdigest()
     async with engine.begin() as connection:
+        replay = await find_contract_event_replay(
+            connection, tenant_id=payload.tenant_id, idempotency_key=idempotency_key,
+            fingerprint=fingerprint, expected_event_type="contract.terminated",
+        )
+        if replay:
+            return {"data": {"id": str(contract_id), "status": "terminated", "replayed": True}}
         result = await connection.execute(
             text("""
                 update public.contracts set status='terminated',terminated_at=now(),
@@ -1469,7 +1542,12 @@ async def terminate_contract(
             connection, tenant_id=payload.tenant_id, actor=actor, contract_id=contract_id,
             event_type="contract.terminated", request_id=_request_id(request),
             from_status="active/suspended/approved", to_status="terminated",
-            metadata={"reason": payload.reason, "effective_at": payload.effective_at.isoformat() if payload.effective_at else None},
+            metadata={
+                "reason": payload.reason,
+                "effective_at": payload.effective_at.isoformat() if payload.effective_at else None,
+                "fingerprint": fingerprint,
+            },
+            idempotency_key=idempotency_key,
         )
         await enqueue_contract_event(
             connection, tenant_id=payload.tenant_id, contract_id=contract_id,
