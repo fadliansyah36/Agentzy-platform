@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, ShieldCheck, Users, ClipboardCheck } from 'lucide-react';
+import { RefreshCw, ClipboardCheck } from 'lucide-react';
 import { AdminPageHeader, AdminSegmentedTabs, AdminStatusText } from '../../components/data-display/AdminDataDisplay';
 import {
   listWorkforceProfiles,
@@ -47,7 +47,22 @@ export function HumanWorkforceAdminView({
     }catch(cause){setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');}
     finally{setLoading(false);}
   };
-  useEffect(()=>{void load();},[accessToken,tenantId]);
+  useEffect(()=>{
+    if(!accessToken||!tenantId)return;
+    let active=true;
+    void Promise.all([
+      listWorkforceProfiles(accessToken,tenantId),
+      listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
+    ]).then(([profileResult,verificationResult])=>{
+      if(!active)return;
+      setProfiles(profileResult.data);
+      setVerifications(verificationResult.data as VerificationRow[]);
+      setError(null);
+    }).catch(cause=>{
+      if(active)setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');
+    }).finally(()=>{if(active)setLoading(false);});
+    return ()=>{active=false;};
+  },[accessToken,tenantId]);
 
   const decide=async(row:VerificationRow,decision:'verified'|'rejected')=>{
     if(!accessToken||!tenantId)return;
