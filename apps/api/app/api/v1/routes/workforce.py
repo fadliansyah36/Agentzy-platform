@@ -319,19 +319,21 @@ async def create_profile(payload: ProfileCreate, request: Request, claims: dict 
         )
         if reservation.replay:
             return reservation.replay_body
-        membership=await connection.execute(text("select id from public.memberships where id=:id and tenant_id=:tenant and user_id=:user and status in ('invited','active')"),{"id":payload.membership_id,"tenant":payload.tenant_id,"user":payload.user_id}) if payload.membership_id else None
-        if payload.membership_id and not membership.scalar_one_or_none():
+        membership=await connection.execute(text("select id,status from public.memberships where id=:id and tenant_id=:tenant and user_id=:user and status in ('invited','active')"),{"id":payload.membership_id,"tenant":payload.tenant_id,"user":payload.user_id})
+        membership_row=membership.mappings().first()
+        if not membership_row:
             raise HTTPException(status_code=422,detail="Membership tidak valid untuk tenant dan user.")
+        initial_status = "invited" if membership_row["status"] == "invited" else "registered"
         row=await connection.execute(text("""
-          insert into public.workforce_profiles(tenant_id,user_id,membership_id,worker_code,display_name,legal_name,job_family,job_title,timezone,locale,experience_years,profile_metadata,created_by,updated_by)
-          values(:tenant,:user,:membership,:code,:name,:legal,:family,:title,:timezone,:locale,:experience,cast(:metadata as jsonb),:actor,:actor)
+          insert into public.workforce_profiles(tenant_id,user_id,membership_id,worker_code,display_name,legal_name,job_family,job_title,timezone,locale,experience_years,profile_metadata,lifecycle_status,created_by,updated_by)
+          values(:tenant,:user,:membership,:code,:name,:legal,:family,:title,:timezone,:locale,:experience,cast(:metadata as jsonb),:status,:actor,:actor)
           returning *
-        """),{"tenant":payload.tenant_id,"user":payload.user_id,"membership":payload.membership_id,"code":payload.worker_code,"name":payload.display_name,"legal":payload.legal_name,"family":payload.job_family,"title":payload.job_title,"timezone":payload.timezone,"locale":payload.locale,"experience":payload.experience_years,"metadata":json.dumps(payload.profile_metadata),"actor":actor})
+        """),{"tenant":payload.tenant_id,"user":payload.user_id,"membership":payload.membership_id,"code":payload.worker_code,"name":payload.display_name,"legal":payload.legal_name,"family":payload.job_family,"title":payload.job_title,"timezone":payload.timezone,"locale":payload.locale,"experience":payload.experience_years,"metadata":json.dumps(payload.profile_metadata),"status":initial_status,"actor":actor})
         profile=dict(row.mappings().one())
         await connection.execute(text("""
           insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id,metadata)
-          values(:tenant,:profile,null,'registered',:actor,'Profile registered','workforce.profile.manage',:request,cast(:metadata as jsonb))
-        """),{"tenant":payload.tenant_id,"profile":profile["id"],"actor":actor,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({"idempotency_key":idempotency_key})})
+          values(:tenant,:profile,null,:status,:actor,'Workforce profile invited or registered','workforce.profile.manage',:request,cast(:metadata as jsonb))
+        """),{"tenant":payload.tenant_id,"profile":profile["id"],"status":initial_status,"actor":actor,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({"idempotency_key":idempotency_key})})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.created","workforce_profile",profile["id"],request)
         response = {"data":profile}
         await complete_idempotency(
@@ -783,18 +785,39 @@ async def register_workforce(
         membership_id = membership.scalar_one_or_none()
         if not membership_id:
             raise HTTPException(status_code=403, detail="Membership Workforce aktif diperlukan untuk registrasi.")
-        result = await connection.execute(text("""
-          insert into public.workforce_profiles(tenant_id,user_id,membership_id,worker_code,display_name,legal_name,job_family,job_title,timezone,experience_years,created_by,updated_by)
-          values(:tenant,:actor,:membership,:code,:name,:legal,:family,:title,:timezone,:experience,:actor,:actor)
-          returning *
-        """), {"tenant":payload.tenant_id,"actor":actor,"membership":membership_id,"code":payload.worker_code,
-               "name":payload.display_name,"legal":payload.legal_name,"family":payload.job_family,
-               "title":payload.job_title,"timezone":payload.timezone,"experience":payload.experience_years})
+        existing_result = await connection.execute(text("""
+          select * from public.workforce_profiles
+          where tenant_id=:tenant and user_id=:actor for update
+        """), {"tenant":payload.tenant_id,"actor":actor})
+        existing = existing_result.mappings().first()
+        if existing and existing["lifecycle_status"] != "invited":
+            raise HTTPException(status_code=409, detail="Workforce Passport sudah terdaftar.")
+        if existing:
+            from_status = "invited"
+            result = await connection.execute(text("""
+              update public.workforce_profiles set membership_id=:membership,worker_code=:code,
+                display_name=:name,legal_name=:legal,job_family=:family,job_title=:title,
+                timezone=:timezone,experience_years=:experience,lifecycle_status='registered',
+                updated_by=:actor,updated_at=now()
+              where tenant_id=:tenant and id=:id returning *
+            """), {"tenant":payload.tenant_id,"id":existing["id"],"actor":actor,"membership":membership_id,
+                   "code":payload.worker_code,"name":payload.display_name,"legal":payload.legal_name,
+                   "family":payload.job_family,"title":payload.job_title,"timezone":payload.timezone,
+                   "experience":payload.experience_years})
+        else:
+            from_status = None
+            result = await connection.execute(text("""
+              insert into public.workforce_profiles(tenant_id,user_id,membership_id,worker_code,display_name,legal_name,job_family,job_title,timezone,experience_years,created_by,updated_by)
+              values(:tenant,:actor,:membership,:code,:name,:legal,:family,:title,:timezone,:experience,:actor,:actor)
+              returning *
+            """), {"tenant":payload.tenant_id,"actor":actor,"membership":membership_id,"code":payload.worker_code,
+                   "name":payload.display_name,"legal":payload.legal_name,"family":payload.job_family,
+                   "title":payload.job_title,"timezone":payload.timezone,"experience":payload.experience_years})
         profile = dict(result.mappings().one())
         await connection.execute(text("""
           insert into public.workforce_lifecycle_events(tenant_id,workforce_profile_id,from_status,to_status,actor_user_id,reason,permission_key,request_id)
-          values(:tenant,:profile,null,'registered',:actor,'Self registration','workforce.identity.submit',:request)
-        """), {"tenant":payload.tenant_id,"profile":profile["id"],"actor":actor,"request":getattr(request.state,"request_id",None)})
+          values(:tenant,:profile,:from_status,'registered',:actor,'Self registration','workforce.identity.submit',:request)
+        """), {"tenant":payload.tenant_id,"profile":profile["id"],"from_status":from_status,"actor":actor,"request":getattr(request.state,"request_id",None)})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.self_registered","workforce_profile",profile["id"],request)
         response = {"data":profile}
         await complete_idempotency(
