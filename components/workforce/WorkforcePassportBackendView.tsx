@@ -84,7 +84,7 @@ export function WorkforcePassportBackendView({
     tenant_id:tenantId,worker_code:registration.worker_code.trim(),display_name:registration.display_name.trim(),
     job_family:registration.job_family||undefined,job_title:registration.job_title||undefined,
     experience_years:Number(registration.experience_years),
-  }), 'Registrasi tersimpan');
+  }));
 
   const submitIdentity=()=>passport&&run(()=>submitWorkforceIdentity(accessToken!,passport.id,{
     tenant_id:tenantId,verification_type:'identity',
