@@ -1462,7 +1462,7 @@ async def list_certification_queue(
     async with engine.connect() as connection:
         rows=await connection.execute(text("""
           select c.id,c.tenant_id,c.workforce_profile_id,c.name,c.issuer,c.certificate_reference,
-                 c.valid_from,c.expires_at,c.verification_status,c.created_at,
+                 c.valid_from,c.expires_at,c.verification_status,c.evidence_metadata,c.created_at,
                  p.worker_code,p.display_name
           from public.workforce_certifications c
           join public.workforce_profiles p on p.id=c.workforce_profile_id and p.tenant_id=c.tenant_id
