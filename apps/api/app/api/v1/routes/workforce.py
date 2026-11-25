@@ -1409,3 +1409,23 @@ async def purge_expired_workforce_documents(payload: EngagementApproval,request:
             purged.append(str(document["id"]))
     return {"data":{"purged_count":len(purged),"document_ids":purged}}
 
+
+@router.get("/observability/metrics")
+async def workforce_metrics(
+    tenant_id: UUID,
+    request: Request,
+    days: int = Query(default=30,ge=1,le=90),
+    claims: dict = claims_dependency,
+):
+    await _authorize(claims,tenant_id,"profile.manage",request)
+    async with engine.connect() as connection:
+        rows=await connection.execute(text("""
+          select metric_day,action,sum(event_count)::bigint as event_count
+          from public.workforce_operation_metrics
+          where tenant_id=:tenant and metric_day>=current_date-make_interval(days=>:days)::interval
+          group by metric_day,action order by metric_day desc,action
+        """),{"tenant":tenant_id,"days":days})
+        metrics=[dict(row) for row in rows.mappings().all()]
+        total=sum(int(row["event_count"]) for row in metrics)
+        return {"data":{"days":days,"total_events":total,"metrics":metrics}}
+
