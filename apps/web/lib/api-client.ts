@@ -1292,6 +1292,44 @@ export type WorkforcePassport = WorkforceProfile & {
   onboarding:Record<string,unknown>[]; history:Record<string,unknown>[];
 };
 export type WorkforcePage<T> = {data:T[]};
+export type WorkforceEngagementClassification =
+  | "employee" | "outsourced_worker" | "independent_contractor" | "freelance"
+  | "affiliate" | "technical_partner" | "project_based_worker";
+export type WorkforceAvailabilityType = "working_hours" | "unavailable" | "leave" | "preferred_shift";
+export type WorkforceOnboardingTaskType =
+  | "document" | "agreement_acknowledgement" | "training" | "verification" | "approval" | "other";
+export type WorkforceEngagementInput = {
+  tenant_id:string; classification:WorkforceEngagementClassification; agreement_reference:string;
+  contract_id?:string|null; effective_from:string; effective_until?:string|null;
+  legal_review_reference?:string|null; facts_acknowledged:boolean; change_reason:string;
+};
+export type WorkforceAvailabilityInput = {
+  tenant_id:string; availability_type:WorkforceAvailabilityType; starts_at:string; ends_at:string;
+  timezone:string; recurrence_rule?:string; reason?:string;
+};
+export type WorkforceCourseInput = {
+  tenant_id?:string|null; course_key:string; title:string; description?:string|null;
+  materials?:Record<string,unknown>[]; assessment?:Record<string,unknown>;
+  eligibility_rules?:Record<string,unknown>; validity_days?:number; status?:"draft"|"published"|"archived";
+};
+export type WorkforceTrainingProgressInput = {
+  tenant_id:string; progress_percent:number; assessment_score?:number;
+  assessment_result?:Record<string,unknown>; certificate_reference?:string;
+};
+export type WorkforceOnboardingTaskInput = {
+  tenant_id:string; task_key:string; title:string; description?:string;
+  required?:boolean; task_type:WorkforceOnboardingTaskType; assigned_to?:string; due_at?:string;
+};
+export type WorkforceAssignmentInput = {
+  tenant_id:string; assignment_reference:string; assignment_type:string;
+  starts_at:string; ends_at?:string; workload_units?:number;
+};
+export type WorkforceCertificationInput = {
+  tenant_id:string; skill_id?:string|null; name:string; issuer:string;
+  certificate_reference?:string|null; issued_at?:string|null; valid_from?:string|null;
+  expires_at?:string|null; evidence_metadata?:Record<string,unknown>;
+};
+
 const workforcePath=(path:string,tenantId:string)=>`/workforce/${path}${path.includes("?")?"&":"?"}tenant_id=${encodeURIComponent(tenantId)}`;
 export const getMyWorkforcePassport=(accessToken:string,tenantId:string)=>
   apiRequest<{data:WorkforcePassport}>(workforcePath("passport",tenantId),{method:"GET",accessToken});
@@ -1324,7 +1362,7 @@ export const getWorkforceDocumentDownload=(accessToken:string,tenantId:string,do
     `/workforce/documents/${encodeURIComponent(documentId)}/download?tenant_id=${encodeURIComponent(tenantId)}`,{method:"POST",accessToken});
 export const listWorkforceEngagements=(accessToken:string,tenantId:string,profileId:string)=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/engagements?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
-export const createWorkforceEngagement=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const createWorkforceEngagement=(accessToken:string,profileId:string,payload:WorkforceEngagementInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/engagements`,{
     method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const listWorkforceSkills=(accessToken:string,tenantId:string)=>
@@ -1333,7 +1371,7 @@ export const createWorkforceSkill=(accessToken:string,payload:{tenant_id:string;
   apiRequest<{data:Record<string,unknown>}>("/workforce/skills",{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const addWorkforceSkill=(accessToken:string,profileId:string,payload:{tenant_id:string;skill_id:string;proficiency:string;experience_months:number;evidence_reference?:string})=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/skills`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
-export const addWorkforceCertification=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const addWorkforceCertification=(accessToken:string,profileId:string,payload:WorkforceCertificationInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/certifications`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const verifyWorkforceCertification=(accessToken:string,tenantId:string,certificationId:string,decision:"verified"|"rejected",reason:string)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/certifications/${encodeURIComponent(certificationId)}/verify?${new URLSearchParams({tenant_id:tenantId,decision,reason})}`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()}});
@@ -1341,19 +1379,19 @@ export const listWorkforceAvailability=(accessToken:string,tenantId:string,profi
   const q=new URLSearchParams({tenant_id:tenantId});if(startsAt)q.set("starts_at",startsAt);if(endsAt)q.set("ends_at",endsAt);
   return apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/availability?${q}`,{method:"GET",accessToken});
 };
-export const createWorkforceAvailability=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const createWorkforceAvailability=(accessToken:string,profileId:string,payload:WorkforceAvailabilityInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/availability`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const listWorkforceCourses=(accessToken:string,tenantId:string)=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/training/courses?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
-export const createWorkforceCourse=(accessToken:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const createWorkforceCourse=(accessToken:string,payload:WorkforceCourseInput)=>
   apiRequest<{data:Record<string,unknown>}>("/workforce/training/courses",{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const enrollWorkforceTraining=(accessToken:string,profileId:string,payload:{tenant_id:string;course_id:string})=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/training/enroll`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
-export const updateWorkforceTrainingProgress=(accessToken:string,enrollmentId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const updateWorkforceTrainingProgress=(accessToken:string,enrollmentId:string,payload:WorkforceTrainingProgressInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/training/enrollments/${encodeURIComponent(enrollmentId)}`,{method:"PATCH",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const listWorkforceOnboarding=(accessToken:string,tenantId:string,profileId:string)=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/onboarding?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
-export const createWorkforceOnboardingTask=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const createWorkforceOnboardingTask=(accessToken:string,profileId:string,payload:WorkforceOnboardingTaskInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/onboarding`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const updateWorkforceOnboardingTask=(accessToken:string,taskId:string,payload:{tenant_id:string;status:"in_progress"|"completed"|"waived"|"blocked";reason:string;completion_reference?:string})=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/onboarding/tasks/${encodeURIComponent(taskId)}`,{method:"PATCH",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
@@ -1361,7 +1399,7 @@ export const transitionWorkforceLifecycle=(accessToken:string,profileId:string,p
   apiRequest<{data:WorkforceProfile}>(`/workforce/profiles/${encodeURIComponent(profileId)}/lifecycle`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 export const listWorkforceAssignments=(accessToken:string,tenantId:string,profileId:string)=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/profiles/${encodeURIComponent(profileId)}/assignments?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
-export const createWorkforceAssignment=(accessToken:string,profileId:string,payload:Record<string,unknown>&{tenant_id:string})=>
+export const createWorkforceAssignment=(accessToken:string,profileId:string,payload:WorkforceAssignmentInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/assignments`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
 
 export const registerMyWorkforceProfile=(accessToken:string,payload:{
