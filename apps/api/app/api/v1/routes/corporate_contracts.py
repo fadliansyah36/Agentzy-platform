@@ -20,8 +20,9 @@ from app.adapters.contract_storage import (
     delete_contract_document,
     upload_contract_document,
 )
+from app.core.authorization import authorize_action
 from app.core.security import current_claims
-from app.db.session import engine
+from app.db.session import SessionFactory, engine
 from app.services.contract_entitlement_service import resolve_effective_entitlements
 
 router = APIRouter(prefix="/corporate", tags=["Corporate & Contract Management"])
@@ -180,29 +181,44 @@ class PaymentReferenceInput(BaseModel):
     amount: Decimal = Field(gt=0, max_digits=18, decimal_places=2)
 
 
+_PERMISSION_POLICY_TARGETS: dict[str, tuple[str, str]] = {
+    "corporate.profiles.read": ("corporate.profiles", "read"),
+    "corporate.profiles.manage": ("corporate.profiles", "manage"),
+    "corporate.contracts.read": ("corporate.contracts", "read"),
+    "corporate.contracts.manage": ("corporate.contracts", "manage"),
+    "corporate.contracts.policy.manage": ("corporate.contracts", "manage"),
+    "corporate.contracts.approve": ("corporate.contracts", "approve"),
+    "corporate.contracts.documents": ("corporate.contracts", "manage"),
+    "corporate.contracts.lifecycle": ("corporate.contracts", "manage"),
+    "corporate.finance.invoice.read": ("corporate.finance", "read"),
+    "corporate.finance.invoice.manage": ("corporate.finance", "manage"),
+    "corporate.entitlements.read": ("corporate.workforce", "read"),
+    "corporate.providers.read": ("corporate.providers", "read"),
+    "corporate.providers.manage": ("corporate.providers", "manage"),
+}
+
+
+def _permission_policy_target(permission: str) -> tuple[str, str] | None:
+    return _PERMISSION_POLICY_TARGETS.get(permission)
+
+
 async def require_tenant_permission(user_id: UUID, tenant_id: UUID, permission: str) -> None:
-    async with engine.connect() as connection:
-        result = await connection.execute(
-            text("""
-                select exists (
-                  select 1
-                  from public.memberships m
-                  join public.membership_roles mr on mr.membership_id=m.id
-                  join public.roles r on r.id=mr.role_id
-                  join public.role_permissions rp on rp.role_id=r.id
-                  where m.user_id=:user_id and m.tenant_id=:tenant_id and m.status='active'
-                    and rp.permission_key=:permission
-                    and mr.scope_type='tenant' and mr.scope_id is null
-                    and r.scope_type='tenant'
-                    and (r.tenant_id is null or r.tenant_id=m.tenant_id)
-                    and mr.valid_from<=now()
-                    and (mr.valid_until is null or mr.valid_until>now())
-                )
-            """),
-            {"user_id": user_id, "tenant_id": tenant_id, "permission": permission},
-        )
-    if not result.scalar_one():
+    target = _permission_policy_target(permission)
+    if target is None:
         raise HTTPException(status_code=403, detail="Akses tenant tidak diizinkan.")
+    resource_type, action = target
+    async with SessionFactory() as session:
+        await authorize_action(
+            session,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            permission_key=permission,
+            platform_permission=permission,
+            aal=None,
+            resource_type=resource_type,
+            action=action,
+            resource={"id": str(tenant_id), "tenant_id": str(tenant_id)},
+        )
 
 
 async def audit_contract_event(
