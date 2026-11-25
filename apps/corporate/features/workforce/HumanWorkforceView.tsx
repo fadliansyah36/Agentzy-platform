@@ -21,11 +21,7 @@ export function HumanWorkforceView({
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
-    if (!accessToken || !tenantId) {
-      setError('Sesi atau tenant context tidak tersedia.');
-      setLoading(false);
-      return;
-    }
+    if (!accessToken || !tenantId) return;
     setRefreshing(true);
     setError(null);
     try {
@@ -41,11 +37,7 @@ export function HumanWorkforceView({
 
   useEffect(() => {
     let active = true;
-    if (!accessToken || !tenantId) {
-      setError('Sesi atau tenant context tidak tersedia.');
-      setLoading(false);
-      return;
-    }
+    if (!accessToken || !tenantId) return;
     setLoading(true);
     void listWorkforceProfiles(accessToken, tenantId)
       .then((result) => { if (active) { setProfiles(result.data); setError(null); } })
@@ -84,6 +76,7 @@ export function HumanWorkforceView({
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing?'animate-spin':''}`} /> Refresh
         </button>
       </div>
+      {(!accessToken || !tenantId) && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Sesi atau tenant context tidak tersedia.</div>}
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
       {loading ? (
         <div className="rounded-xl border border-[#D8E3E9] bg-white p-8 text-center text-sm text-[#526675]">Memuat workforce dari FastAPI…</div>
