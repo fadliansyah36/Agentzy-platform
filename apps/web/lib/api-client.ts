@@ -1397,3 +1397,6 @@ export const changeWorkforceEngagementStatus=(accessToken:string,engagementId:st
 export const redactWorkforceDocument=(accessToken:string,tenantId:string,documentId:string,reason:string)=>
   apiRequest<{data:{document_id:string;redacted:boolean}}>(`/workforce/documents/${encodeURIComponent(documentId)}/redact?tenant_id=${encodeURIComponent(tenantId)}`,{
     method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify({tenant_id:tenantId,reason})});
+
+export const listWorkforceCertificationQueue=(accessToken:string,tenantId:string,status:"pending"|"verified"|"rejected"|"expired"|"all"="pending")=>
+  apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/certifications/queue?tenant_id=${encodeURIComponent(tenantId)}&status=${status}`,{method:"GET",accessToken});
