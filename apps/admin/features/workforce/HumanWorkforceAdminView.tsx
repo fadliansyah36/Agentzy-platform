@@ -50,7 +50,7 @@ export function HumanWorkforceAdminView({
     if(!accessToken||!tenantId){setLoading(false);setError('Pilih tenant yang dapat dikelola.');return;}
     setLoading(true);setError(null);
     try{
-      const [profileResult,verificationResult,certificationResult]=await Promise.all([
+      const [profileResult,verificationResult,certificationResult,skillQueueResult,skillRegistryResult]=await Promise.all([
         listWorkforceProfiles(accessToken,tenantId),
         listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
         listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
