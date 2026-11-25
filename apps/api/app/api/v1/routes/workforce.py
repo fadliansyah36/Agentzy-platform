@@ -15,6 +15,7 @@ from sqlalchemy import text
 from app.adapters.clamav import scan_bytes
 from app.core.authorization import authorize_action
 from app.core.config import get_settings
+from app.core.idempotency import complete_idempotency, reserve_idempotency
 from app.core.security import current_claims
 from app.db.session import engine
 
@@ -310,9 +311,14 @@ async def list_profiles(tenant_id: UUID, request: Request, status: str | None = 
 async def create_profile(payload: ProfileCreate, request: Request, claims: dict = claims_dependency, idempotency_key: str | None = Header(default=None,alias="Idempotency-Key")):
     actor=UUID(claims["sub"])
     await _authorize(claims,payload.tenant_id,"profile.manage",request)
-    if not idempotency_key or len(idempotency_key)<8:
-        raise HTTPException(status_code=428,detail="Idempotency-Key wajib untuk pembuatan profile.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=payload.tenant_id,
+            command_key="workforce.profile.create", idempotency_key=idempotency_key,
+            payload=payload.model_dump(),
+        )
+        if reservation.replay:
+            return reservation.replay_body
         membership=await connection.execute(text("select id from public.memberships where id=:id and tenant_id=:tenant and user_id=:user and status in ('invited','active')"),{"id":payload.membership_id,"tenant":payload.tenant_id,"user":payload.user_id}) if payload.membership_id else None
         if payload.membership_id and not membership.scalar_one_or_none():
             raise HTTPException(status_code=422,detail="Membership tidak valid untuk tenant dan user.")
@@ -327,7 +333,12 @@ async def create_profile(payload: ProfileCreate, request: Request, claims: dict 
           values(:tenant,:profile,null,'registered',:actor,'Profile registered','workforce.profile.manage',:request,cast(:metadata as jsonb))
         """),{"tenant":payload.tenant_id,"profile":profile["id"],"actor":actor,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({"idempotency_key":idempotency_key})})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.created","workforce_profile",profile["id"],request)
-        return {"data":profile}
+        response = {"data":profile}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id, response_status=201,
+            response_body=response,
+        )
+        return response
 
 @router.patch("/profiles/{profile_id}")
 async def update_profile(profile_id: UUID,payload: ProfilePatch,request: Request,claims: dict=claims_dependency):
@@ -670,8 +681,14 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
     actor=UUID(claims["sub"])
     if payload.to_status not in LIFECYCLE: raise HTTPException(status_code=422,detail="Lifecycle status tidak valid.")
     await _authorize(claims,payload.tenant_id,"lifecycle.transition",request,profile_id)
-    if not idempotency_key or len(idempotency_key)<8: raise HTTPException(status_code=428,detail="Idempotency-Key wajib untuk transisi lifecycle.")
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=payload.tenant_id,
+            command_key=f"workforce.lifecycle.{profile_id}", idempotency_key=idempotency_key,
+            payload=payload.model_dump(),
+        )
+        if reservation.replay:
+            return reservation.replay_body
         current=await connection.execute(text("select * from public.workforce_profiles where tenant_id=:tenant and id=:id for update"),{"tenant":payload.tenant_id,"id":profile_id})
         profile=current.mappings().first()
         if not profile: raise HTTPException(status_code=404,detail="Workforce profile tidak ditemukan.")
@@ -694,7 +711,12 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
         """),{"tenant":payload.tenant_id,"profile":profile_id,"old":old,"new":target,"actor":actor,"reason":payload.reason,"request":getattr(request.state,"request_id",None),"metadata":json.dumps({**payload.metadata,"idempotency_key":idempotency_key})})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.lifecycle.transitioned","workforce_profile",profile_id,request,{"from":old,"to":target,"reason":payload.reason})
         await _enqueue_workforce_notification(connection,payload.tenant_id,profile_id,"workforce.lifecycle."+target,{"from_status":old,"to_status":target,"reason":payload.reason})
-        return {"data":dict(updated.mappings().one())}
+        response = {"data":dict(updated.mappings().one())}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id, response_status=200,
+            response_body=response,
+        )
+        return response
 
 @router.get("/profiles/{profile_id}/assignments")
 async def list_assignments(profile_id: UUID,tenant_id: UUID,request: Request,claims: dict=claims_dependency):
@@ -737,10 +759,22 @@ async def get_workforce_history(profile_id: UUID,tenant_id: UUID,request: Reques
         return {"data":[dict(r) for r in rows.mappings().all()]}
 
 @router.post("/register", status_code=201)
-async def register_workforce(payload: SelfRegistrationInput, request: Request, claims: dict = claims_dependency):
+async def register_workforce(
+    payload: SelfRegistrationInput,
+    request: Request,
+    claims: dict = claims_dependency,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     actor = UUID(claims["sub"])
     await _authorize(claims, payload.tenant_id, "identity.submit", request)
     async with engine.begin() as connection:
+        reservation = await reserve_idempotency(
+            connection, actor_user_id=actor, tenant_id=payload.tenant_id,
+            command_key="workforce.profile.self_register", idempotency_key=idempotency_key,
+            payload=payload.model_dump(),
+        )
+        if reservation.replay:
+            return reservation.replay_body
         membership = await connection.execute(text("""
           select id from public.memberships
           where tenant_id=:tenant and user_id=:actor and status='active'
@@ -762,7 +796,12 @@ async def register_workforce(payload: SelfRegistrationInput, request: Request, c
           values(:tenant,:profile,null,'registered',:actor,'Self registration','workforce.identity.submit',:request)
         """), {"tenant":payload.tenant_id,"profile":profile["id"],"actor":actor,"request":getattr(request.state,"request_id",None)})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.profile.self_registered","workforce_profile",profile["id"],request)
-        return {"data":profile}
+        response = {"data":profile}
+        await complete_idempotency(
+            connection, record_id=reservation.record_id, response_status=201,
+            response_body=response,
+        )
+        return response
 
 
 @router.get("/identity/verifications")
