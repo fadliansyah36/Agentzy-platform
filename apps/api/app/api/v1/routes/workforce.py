@@ -847,7 +847,7 @@ async def transition_lifecycle(profile_id: UUID,payload: LifecycleTransition,req
             """),{"tenant":payload.tenant_id,"profile":profile_id})
             if active_assignments.scalar_one()>0 or active_engagements.scalar_one()>0:
                 raise HTTPException(status_code=409,detail="Offboarding readiness gagal: assignment dan engagement harus ditutup terlebih dahulu.")
-        updated=await connection.execute(text("update public.workforce_profiles set lifecycle_status=:target,engagement_status=case when :target='active' then 'active' when :target in ('inactive','suspended','offboarded') then :target else engagement_status end,updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant returning *"),{"target":target,"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
+        updated=await connection.execute(text("update public.workforce_profiles set lifecycle_status=:target,engagement_status=case when :target='active' then 'active' when :target='offboarded' then 'ended' when :target in ('inactive','suspended') then :target else engagement_status end,updated_by=:actor,updated_at=now() where id=:id and tenant_id=:tenant returning *"),{"target":target,"actor":actor,"id":profile_id,"tenant":payload.tenant_id})
         if target == "suspended":
             rows=await connection.execute(text("""
               update public.workforce_engagements set status='suspended',updated_at=now()
@@ -1100,7 +1100,8 @@ async def activate_engagement(
         """),{"tenant":payload.tenant_id,"id":engagement_id})
         engagement=result.mappings().first()
         if not engagement: raise HTTPException(status_code=404,detail="Engagement tidak ditemukan.")
-        if engagement["status"]!="pending": raise HTTPException(status_code=409,detail="Hanya engagement pending yang dapat diaktifkan.")
+        if engagement["status"] not in ("pending","suspended"): raise HTTPException(status_code=409,detail="Engagement harus pending atau suspended untuk aktivasi/resume.")
+        previous_status=engagement["status"]
         if engagement["effective_from"]>date.today() or (engagement["effective_until"] and engagement["effective_until"]<date.today()):
             raise HTTPException(status_code=409,detail="Engagement belum atau tidak lagi berada dalam periode efektif.")
         if not engagement["facts_acknowledged"] or not engagement["legal_review_reference"]:
@@ -1119,8 +1120,8 @@ async def activate_engagement(
         """),{"tenant":payload.tenant_id,"profile":engagement["workforce_profile_id"]})
         await connection.execute(text("""
           insert into public.workforce_engagement_events(tenant_id,engagement_id,workforce_profile_id,event_type,from_status,to_status,actor_user_id,reason)
-          values(:tenant,:engagement,:profile,'activated','pending','active',:actor,:reason)
-        """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"actor":actor,"reason":payload.reason})
+          values(:tenant,:engagement,:profile,:event,:previous,'active',:actor,:reason)
+        """),{"tenant":payload.tenant_id,"engagement":engagement_id,"profile":engagement["workforce_profile_id"],"event":"activated" if previous_status=="pending" else "amended","previous":previous_status,"actor":actor,"reason":payload.reason})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.engagement.activated","workforce_engagement",engagement_id,request,{"reason":payload.reason})
         return {"data":dict(updated.mappings().one())}
 
