@@ -1383,6 +1383,11 @@ export const listWorkforceAvailability=(accessToken:string,tenantId:string,profi
 };
 export const createWorkforceAvailability=(accessToken:string,profileId:string,payload:WorkforceAvailabilityInput)=>
   apiRequest<{data:Record<string,unknown>}>(`/workforce/profiles/${encodeURIComponent(profileId)}/availability`,{method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},body:JSON.stringify(payload)});
+export const cancelWorkforceAvailability=(accessToken:string,tenantId:string,availabilityId:string,reason:string)=>
+  apiRequest<{data:Record<string,unknown>}>(`/workforce/availability/${encodeURIComponent(availabilityId)}/cancel`,{
+    method:"POST",accessToken,headers:{"Idempotency-Key":createIdempotencyKey()},
+    body:JSON.stringify({tenant_id:tenantId,reason}),
+  });
 export const listWorkforceCourses=(accessToken:string,tenantId:string)=>
   apiRequest<WorkforcePage<Record<string,unknown>>>(`/workforce/training/courses?tenant_id=${encodeURIComponent(tenantId)}`,{method:"GET",accessToken});
 export const createWorkforceCourse=(accessToken:string,payload:WorkforceCourseInput)=>
