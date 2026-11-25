@@ -5,7 +5,7 @@ import { Briefcase, Users, RefreshCw, ShieldCheck, Clock } from 'lucide-react';
 import { CorporatePageHeader, CorporateSegmentedTabs } from '../../components/data-display/CorporateDataDisplay';
 import {
   listWorkforceProfiles, listWorkforceEngagements, listWorkforceOnboarding,
-  listWorkforceAssignments, listWorkforceAvailability, createWorkforceAssignment,
+  listWorkforceAssignments, listWorkforceAvailability, createWorkforceAssignment, cancelWorkforceAvailability,
   createWorkforceEngagement, createWorkforceOnboardingTask, transitionWorkforceLifecycle,
   activateWorkforceEngagement, changeWorkforceEngagementStatus,
   type WorkforceProfile, type WorkforceEngagementClassification, type WorkforceOnboardingTaskType,
@@ -97,6 +97,16 @@ export function HumanWorkforceView({
       await load();
     }catch(cause){setDetailError(cause instanceof Error?cause.message:'Engagement gagal disimpan.');}
   };
+  const cancelAvailability=async(availabilityId:string)=>{
+    if(!accessToken||!selectedProfileId||actionReason.trim().length<3)return;
+    setDetailError(null);
+    try{
+      await cancelWorkforceAvailability(accessToken,tenantId,availabilityId,actionReason.trim());
+      const result=await listWorkforceAvailability(accessToken,tenantId,selectedProfileId);
+      setAvailability(result.data);
+    }catch(cause){setDetailError(cause instanceof Error?cause.message:'Availability cancellation gagal.');}
+  };
+
   const createAssignment=async()=>{
     if(!accessToken||!selectedProfileId)return;
     setDetailError(null);
@@ -243,7 +253,7 @@ export function HumanWorkforceView({
               </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Availability Calendar</h4>{availability.map((item,index)=><p key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-[11px] text-[#526675]">{String(item.availability_type)} · {new Date(String(item.starts_at)).toLocaleString('id-ID')} – {new Date(String(item.ends_at)).toLocaleString('id-ID')}</p>)}</div>
+              <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Availability Calendar</h4>{availability.map((item,index)=><div key={String(item.id??index)} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-b border-[#D8E3E9] pb-2"><p className="text-[11px] text-[#526675]">{String(item.availability_type)} · {new Date(String(item.starts_at)).toLocaleString('id-ID')} – {new Date(String(item.ends_at)).toLocaleString('id-ID')} · {String(item.status)}</p>{item.status==='active'&&<button type="button" disabled={actionReason.trim().length<3} onClick={()=>void cancelAvailability(String(item.id))} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700 disabled:opacity-40">Cancel</button>}</div>)}</div>
               <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Assignment & Workload</h4>{assignments.map((item,index)=><p key={String(item.id??index)} className="mt-2 border-b border-[#D8E3E9] pb-2 text-[11px] text-[#526675]">{String(item.assignment_reference)} · {String(item.status)} · workload {String(item.workload_units)}</p>)}<div className="mt-3 grid gap-2"><input value={assignmentForm.assignment_reference} onChange={e=>setAssignmentForm(v=>({...v,assignment_reference:e.target.value}))} placeholder="Assignment reference" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input value={assignmentForm.assignment_type} onChange={e=>setAssignmentForm(v=>({...v,assignment_type:e.target.value}))} placeholder="Assignment type" className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input type="datetime-local" value={assignmentForm.starts_at} onChange={e=>setAssignmentForm(v=>({...v,starts_at:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input type="datetime-local" value={assignmentForm.ends_at} onChange={e=>setAssignmentForm(v=>({...v,ends_at:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><input type="number" min="0" value={assignmentForm.workload_units} onChange={e=>setAssignmentForm(v=>({...v,workload_units:e.target.value}))} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={!assignmentForm.assignment_reference||!assignmentForm.assignment_type||!assignmentForm.starts_at} onClick={()=>void createAssignment()} className="h-9 rounded-md bg-[#0284C7] text-xs font-semibold text-white disabled:opacity-40">Schedule Assignment</button></div></div>
             </div>
             <div className="rounded-lg bg-[#F5F8FA] p-3"><h4 className="text-xs font-bold text-[#17324D]">Lifecycle transition</h4><div className="mt-2 flex flex-wrap gap-2"><select value={lifecycleTarget} onChange={e=>setLifecycleTarget(e.target.value as typeof lifecycleTarget)} className="h-9 rounded-md border border-[#D8E3E9] px-2 text-xs">{['onboarding','eligible','active','inactive','suspended','offboarded'].map(x=><option key={x}>{x}</option>)}</select><input value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="Reason (required)" className="h-9 min-w-48 flex-1 rounded-md border border-[#D8E3E9] px-2 text-xs"/><button type="button" disabled={actionReason.trim().length<3} onClick={()=>void transition()} className="h-9 rounded-md bg-[#17324D] px-3 text-xs font-semibold text-white disabled:opacity-40">Transition</button></div></div>
