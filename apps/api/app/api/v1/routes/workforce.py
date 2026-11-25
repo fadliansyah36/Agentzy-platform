@@ -319,20 +319,6 @@ async def _assert_profile_scope(connection, claims: dict, tenant_id: UUID, profi
     await _authorize(claims, tenant_id, "profile.manage", request, UUID(str(profile["id"])))
 
 
-async def _enqueue_workforce_notification(connection, tenant_id: UUID, profile_id: UUID, event_type: str, payload: dict):
-    result = await connection.execute(text("""
-      select u.email from public.workforce_profiles p join auth.users u on u.id=p.user_id
-      where p.tenant_id=:tenant and p.id=:profile
-    """), {"tenant":tenant_id,"profile":profile_id})
-    recipient = result.scalar_one_or_none()
-    if not recipient:
-        return
-    await connection.execute(text("""
-      insert into public.notification_outbox(event_type,aggregate_type,aggregate_id,recipient_email,payload,status,available_at)
-      values(:event,'workforce_profile',:profile,:recipient,cast(:payload as jsonb),'pending',now())
-    """), {"event":event_type,"profile":profile_id,"recipient":recipient,
-           "payload":json.dumps({"tenant_id":str(tenant_id),"workforce_profile_id":str(profile_id),**payload},default=str)})
-
 @router.get("/passport")
 async def get_my_passport(tenant_id: UUID, request: Request, claims: dict = claims_dependency):
     actor=UUID(claims["sub"])
@@ -1126,7 +1112,14 @@ async def list_identity_verifications(tenant_id: UUID, request: Request, status:
     async with engine.connect() as connection:
         rows=await connection.execute(text("""
           select v.id,v.tenant_id,v.workforce_profile_id,v.status,v.verification_type,v.submitted_at,v.reviewed_by,v.reviewed_at,v.rejection_reason,
-                 p.worker_code,p.display_name,p.job_title
+                 p.worker_code,p.display_name,p.job_title,
+                 coalesce((select jsonb_agg(jsonb_build_object(
+                   'id',d.id,'document_type',d.document_type,'original_filename',d.original_filename,
+                   'content_type',d.content_type,'file_size_bytes',d.file_size_bytes,
+                   'scan_status',d.scan_status,'retention_until',d.retention_until,'redacted_at',d.redacted_at,
+                   'created_at',d.created_at
+                 ) order by d.created_at) from public.workforce_identity_documents d
+                   where d.tenant_id=v.tenant_id and d.verification_id=v.id),'[]'::jsonb) as documents
           from public.workforce_identity_verifications v
           join public.workforce_profiles p on p.id=v.workforce_profile_id and p.tenant_id=v.tenant_id
           where v.tenant_id=:tenant and (:status='all' or v.status=:status)
