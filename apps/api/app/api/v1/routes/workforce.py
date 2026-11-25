@@ -188,6 +188,19 @@ class CertificationInput(StrictModel):
     expires_at: date | None = None
     evidence_metadata: dict[str, Any] = Field(default_factory=dict)
 
+class CertificationRenewal(StrictModel):
+    tenant_id: UUID
+    certificate_reference: str = Field(min_length=2, max_length=160)
+    issued_at: date | None = None
+    valid_from: date
+    expires_at: date | None = None
+    evidence_metadata: dict[str, Any] = Field(default_factory=dict)
+    @model_validator(mode="after")
+    def renewal_dates(self):
+        if self.expires_at and self.expires_at < self.valid_from:
+            raise ValueError("expires_at must be on or after valid_from")
+        return self
+
 class AvailabilityInput(StrictModel):
     tenant_id: UUID
     availability_type: str = Field(pattern="^(working_hours|unavailable|leave|preferred_shift)$")
@@ -1270,4 +1283,34 @@ async def verify_worker_skill(worker_skill_id: UUID,payload: SkillVerification,r
         """),{"actor":actor,"tenant":payload.tenant_id,"id":worker_skill_id})
         await _write_audit(connection,payload.tenant_id,actor,"workforce.skill.verified","workforce_worker_skill",worker_skill_id,request,{"reason":payload.reason})
         return {"data":dict(updated.mappings().one())}
+
+
+@router.post("/certifications/{certification_id}/renew",status_code=201)
+async def renew_certification(certification_id: UUID,payload: CertificationRenewal,request: Request,claims: dict=claims_dependency):
+    actor=UUID(claims["sub"])
+    await _authorize(claims,payload.tenant_id,"skills.read",request,certification_id)
+    async with engine.begin() as connection:
+        old_result=await connection.execute(text("""
+          select * from public.workforce_certifications
+          where tenant_id=:tenant and id=:id for update
+        """),{"tenant":payload.tenant_id,"id":certification_id})
+        old=old_result.mappings().first()
+        if not old: raise HTTPException(status_code=404,detail="Sertifikasi sebelumnya tidak ditemukan.")
+        profile=await _profile(connection,payload.tenant_id,old["workforce_profile_id"])
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
+        if old["expires_at"] and payload.valid_from<=old["expires_at"]:
+            raise HTTPException(status_code=409,detail="Renewal harus memiliki periode validitas setelah sertifikat sebelumnya.")
+        result=await connection.execute(text("""
+          insert into public.workforce_certifications(
+            tenant_id,workforce_profile_id,skill_id,name,issuer,certificate_reference,
+            issued_at,valid_from,expires_at,evidence_metadata,verification_status,supersedes_certification_id
+          ) values(:tenant,:profile,:skill,:name,:issuer,:reference,:issued,:valid,:expires,
+            cast(:evidence as jsonb),'pending',:old_id) returning *
+        """),{"tenant":payload.tenant_id,"profile":old["workforce_profile_id"],"skill":old["skill_id"],
+              "name":old["name"],"issuer":old["issuer"],"reference":payload.certificate_reference,
+              "issued":payload.issued_at,"valid":payload.valid_from,"expires":payload.expires_at,
+              "evidence":json.dumps(payload.evidence_metadata),"old_id":certification_id})
+        renewed=dict(result.mappings().one())
+        await _write_audit(connection,payload.tenant_id,actor,"workforce.certification.renewed","workforce_certification",renewed["id"],request,{"supersedes":str(certification_id)})
+        return {"data":renewed}
 
