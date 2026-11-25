@@ -629,8 +629,13 @@ async def add_onboarding_task(profile_id: UUID,payload: OnboardingTaskInput,requ
 @router.patch("/onboarding/tasks/{task_id}")
 async def update_onboarding_task(task_id: UUID,payload: TaskCompletion,request: Request,claims: dict=claims_dependency):
     actor=UUID(claims["sub"])
-    await _authorize(claims,payload.tenant_id,"onboarding.manage",request,task_id)
+    await _authorize(claims,payload.tenant_id,"onboarding.read",request,task_id)
     async with engine.begin() as connection:
+        task_scope=await connection.execute(text("select workforce_profile_id from public.workforce_onboarding_tasks where tenant_id=:tenant and id=:id"),{"tenant":payload.tenant_id,"id":task_id})
+        task_scope_row=task_scope.mappings().first()
+        if not task_scope_row: raise HTTPException(status_code=404,detail="Onboarding task tidak ditemukan.")
+        profile=await _profile(connection,payload.tenant_id,task_scope_row["workforce_profile_id"])
+        await _assert_profile_scope(connection,claims,payload.tenant_id,profile,request)
         row=await connection.execute(text("""
           update public.workforce_onboarding_tasks set status=:status,completed_by=case when :status in ('completed','waived') then :actor else completed_by end,
           completed_at=case when :status in ('completed','waived') then now() else null end,completion_reference=:reference,reason=:reason,updated_at=now()
