@@ -1,9 +1,9 @@
+# ruff: noqa: E501
 """Human Workforce Passport, verification, engagement, skills, training and onboarding APIs."""
 import json
 from datetime import date, datetime, timezone
 from typing import Any
-from uuid import UUID, uuid4
-from urllib.parse import quote
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
