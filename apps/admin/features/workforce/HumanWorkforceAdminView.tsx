@@ -7,12 +7,17 @@ import {
   listWorkforceProfiles,
   listWorkforceIdentityVerifications,
   listWorkforceCertificationQueue,
+  listWorkforceSkillVerificationQueue,
+  listWorkforceSkills,
+  createWorkforceSkill,
   decideWorkforceIdentity,
   verifyWorkforceCertification,
+  verifyWorkforceSkill,
   type WorkforceProfile,
 } from '@/apps/web/lib/api-client';
 
 type TenantOption = { id: string; name: string };
+type SkillQueueRow = {id:string;workforce_profile_id:string;proficiency:string;experience_months:number;skill_name:string;skill_key:string;worker_code:string;display_name:string};
 type CertificationRow = {id:string;workforce_profile_id:string;name:string;issuer:string;certificate_reference:string|null;expires_at:string|null;verification_status:string;worker_code:string;display_name:string};
 type VerificationRow = {
   id:string; workforce_profile_id:string; status:string; verification_type:string;
@@ -28,11 +33,14 @@ export function HumanWorkforceAdminView({
   tenants: TenantOption[];
   onBack: () => void;
 }) {
-  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'assignment'>('staff');
+  const [tab,setTab]=useState<'staff'|'verifikasi'|'sertifikasi'|'skills'|'assignment'>('staff');
   const [tenantId,setTenantId]=useState(tenants[0]?.id ?? '');
   const [profiles,setProfiles]=useState<WorkforceProfile[]>([]);
   const [verifications,setVerifications]=useState<VerificationRow[]>([]);
   const [certifications,setCertifications]=useState<CertificationRow[]>([]);
+  const [skillQueue,setSkillQueue]=useState<SkillQueueRow[]>([]);
+  const [skillRegistry,setSkillRegistry]=useState<Record<string,unknown>[]>([]);
+  const [newSkill,setNewSkill]=useState({skill_key:'',name:'',category:'technical',description:''});
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
   const [busyId,setBusyId]=useState<string|null>(null);
@@ -46,10 +54,14 @@ export function HumanWorkforceAdminView({
         listWorkforceProfiles(accessToken,tenantId),
         listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
         listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
+        listWorkforceSkillVerificationQueue(accessToken,tenantId),
+        listWorkforceSkills(accessToken,tenantId),
       ]);
       setProfiles(profileResult.data);
       setVerifications(verificationResult.data as VerificationRow[]);
       setCertifications(certificationResult.data as CertificationRow[]);
+      setSkillQueue(skillQueueResult.data as SkillQueueRow[]);
+      setSkillRegistry(skillRegistryResult.data);
     }catch(cause){setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');}
     finally{setLoading(false);}
   };
@@ -60,11 +72,15 @@ export function HumanWorkforceAdminView({
       listWorkforceProfiles(accessToken,tenantId),
       listWorkforceIdentityVerifications(accessToken,tenantId,'pending'),
       listWorkforceCertificationQueue(accessToken,tenantId,'pending'),
-    ]).then(([profileResult,verificationResult,certificationResult])=>{
+      listWorkforceSkillVerificationQueue(accessToken,tenantId),
+      listWorkforceSkills(accessToken,tenantId),
+    ]).then(([profileResult,verificationResult,certificationResult,skillQueueResult,skillRegistryResult])=>{
       if(!active)return;
       setProfiles(profileResult.data);
       setVerifications(verificationResult.data as VerificationRow[]);
       setCertifications(certificationResult.data as CertificationRow[]);
+      setSkillQueue(skillQueueResult.data as SkillQueueRow[]);
+      setSkillRegistry(skillRegistryResult.data);
       setError(null);
     }).catch(cause=>{
       if(active)setError(cause instanceof Error?cause.message:'Data Human Workforce gagal dimuat dari FastAPI.');
@@ -96,11 +112,31 @@ export function HumanWorkforceAdminView({
     finally{setBusyId(null);}
   };
 
+  const verifySkill=async(row:SkillQueueRow)=>{
+    if(!accessToken||!tenantId)return;
+    const decisionReason=reason.trim();
+    if(decisionReason.length<3){setError('Alasan verifikasi minimal 3 karakter.');return;}
+    setBusyId(row.id);setError(null);
+    try{await verifyWorkforceSkill(accessToken,tenantId,row.id,decisionReason);await load();}
+    catch(cause){setError(cause instanceof Error?cause.message:'Verifikasi skill gagal.');}
+    finally{setBusyId(null);}
+  };
+  const addSkill=async()=>{
+    if(!accessToken||!tenantId)return;
+    setBusyId('new-skill');setError(null);
+    try{
+      await createWorkforceSkill(accessToken,{tenant_id:tenantId,...newSkill});
+      setNewSkill({skill_key:'',name:'',category:'technical',description:''});
+      await load();
+    }catch(cause){setError(cause instanceof Error?cause.message:'Skill registry gagal disimpan.');}
+    finally{setBusyId(null);}
+  };
+
   return <div className="space-y-5">
     <AdminPageHeader title="Human Workforce Governance" subtitle="Passport, identity verification, lifecycle dan assignment visibility berbasis data backend." onBack={onBack}
       actions={<button type="button" onClick={()=>void load()} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs font-semibold text-[#17324D] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading?'animate-spin':''}`}/> Refresh</button>}/>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
+      <AdminSegmentedTabs tabs={[{id:'staff',label:`Staff (${profiles.length})`},{id:'verifikasi',label:`Verifikasi (${verifications.length})`},{id:'sertifikasi',label:`Sertifikasi (${certifications.length})`},{id:'skills',label:`Skills (${skillQueue.length})`},{id:'assignment',label:'Lifecycle'}]} activeTab={tab} onChange={setTab}/>
       <select value={tenantId} onChange={e=>setTenantId(e.target.value)} className="h-10 min-w-56 rounded-[10px] border border-[#D8E3E9] bg-white px-3 text-xs text-[#17324D]" aria-label="Pilih tenant">
         {tenants.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
@@ -137,6 +173,10 @@ export function HumanWorkforceAdminView({
         <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><label className="block text-xs font-semibold text-[#17324D]">Alasan keputusan sertifikasi</label><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs text-[#17324D]"/></div>
         {certifications.length===0?<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-8 text-center text-sm text-[#718391]">Tidak ada sertifikasi yang menunggu verifikasi.</div>:
           certifications.map(row=><div key={row.id} className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><p className="text-sm font-bold text-[#17324D]">{row.name}</p><p className="mt-1 text-xs text-[#526675]">{row.display_name} · {row.worker_code} · {row.issuer}</p><p className="mt-1 text-[11px] text-[#718391]">Ref: {row.certificate_reference||'—'} · Expiry: {row.expires_at||'—'}</p><div className="mt-3 flex gap-2"><button type="button" disabled={busyId!==null} onClick={()=>void decideCertification(row,'verified')} className="rounded-lg bg-[#247A55] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Verify</button><button type="button" disabled={busyId!==null} onClick={()=>void decideCertification(row,'rejected')} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Reject</button></div></div>)}
+      </div>}
+      {tab==='skills'&&<div className="space-y-3">
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Skill Registry</h3><div className="mt-3 grid gap-2 sm:grid-cols-2"><input value={newSkill.skill_key} onChange={e=>setNewSkill(v=>({...v,skill_key:e.target.value}))} placeholder="Skill key" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={newSkill.name} onChange={e=>setNewSkill(v=>({...v,name:e.target.value}))} placeholder="Skill name" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={newSkill.category} onChange={e=>setNewSkill(v=>({...v,category:e.target.value}))} placeholder="Category" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/><input value={newSkill.description} onChange={e=>setNewSkill(v=>({...v,description:e.target.value}))} placeholder="Description" className="h-9 rounded-lg border border-[#D8E3E9] px-3 text-xs"/></div><button type="button" disabled={busyId!==null||!newSkill.skill_key||!newSkill.name} onClick={()=>void addSkill()} className="mt-3 h-9 rounded-lg bg-[#0284C7] px-3 text-xs font-semibold text-white disabled:opacity-50">Create Skill</button><div className="mt-3 flex flex-wrap gap-2">{skillRegistry.map(skill=><span key={String(skill.id)} className="rounded-md bg-[#F5F8FA] px-2 py-1 text-[10px] text-[#526675]">{String(skill.name)} · {String(skill.category)}</span>)}</div></div>
+        <div className="rounded-[14px] border border-[#D8E3E9] bg-white p-4"><h3 className="text-xs font-bold text-[#17324D]">Skill Verification Queue</h3><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-[#D8E3E9] p-3 text-xs" placeholder="Verification reason"/>{skillQueue.length===0?<p className="mt-3 text-xs text-[#718391]">Tidak ada skill yang menunggu verifikasi.</p>:skillQueue.map(row=><div key={row.id} className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[#EAF2F6] pt-3"><div><p className="text-xs font-semibold text-[#17324D]">{row.skill_name} · {row.proficiency}</p><p className="text-[11px] text-[#718391]">{row.display_name} · {row.worker_code} · {row.experience_months} months</p></div><button type="button" disabled={busyId!==null||reason.trim().length<3} onClick={()=>void verifySkill(row)} className="rounded-lg border border-[#0284C7] px-3 py-2 text-xs font-semibold text-[#0284C7] disabled:opacity-50">Verify Skill</button></div>)}</div>
       </div>}
       {tab==='assignment'&&<div className="rounded-[14px] border border-[#D8E3E9] bg-white p-5">
         <div className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-[#0284C7]"/><h3 className="text-sm font-bold text-[#17324D]">Lifecycle Workforce</h3></div>
